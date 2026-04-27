@@ -1,0 +1,31 @@
+{
+  "name": "agentic-support-system",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "lucide-react": "^0.468.0",
+    "next": "^16.2.4",
+    "openai": "^4.76.1",
+    "postcss": "8.5.10",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.4",
+    "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "postcss": "8.5.10"
+  }
+}
