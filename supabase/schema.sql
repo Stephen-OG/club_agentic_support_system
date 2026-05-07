@@ -1,6 +1,6 @@
 create extension if not exists "pgcrypto";
 
-create type request_status as enum ('new', 'acknowledged', 'in_progress', 'resolved', 'cancelled');
+create type request_status as enum ('new', 'acknowledged', 'declined', 'in_progress', 'completed', 'resolved', 'cancelled');
 create type request_priority as enum ('low', 'normal', 'high', 'urgent');
 create type sender_type as enum ('guest', 'assistant', 'staff', 'system');
 
@@ -23,7 +23,7 @@ create table club_tables (
 );
 
 create table staff_profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
+  id uuid primary key default gen_random_uuid(),
   club_id uuid not null references clubs(id) on delete cascade,
   display_name text not null,
   role text not null default 'staff',
@@ -130,4 +130,3 @@ for each row execute function set_updated_at();
 create trigger support_requests_updated_at
 before update on support_requests
 for each row execute function set_updated_at();
-

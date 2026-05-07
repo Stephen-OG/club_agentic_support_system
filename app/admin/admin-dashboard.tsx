@@ -1,22 +1,42 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Clock3, MessageSquareReply, RefreshCw, Siren } from "lucide-react";
-import type { Message, RequestStatus, SupportRequest } from "@/lib/types";
+import { CheckCircle2, Clock3, MessageSquareReply, Play, RefreshCw, Siren, UserPlus, XCircle } from "lucide-react";
+import type { Message, RequestStatus, StaffProfile, StaffRole, SupportRequest } from "@/lib/types";
 
-const statuses: RequestStatus[] = ["acknowledged", "in_progress", "resolved"];
+const roleLabels: Record<StaffRole, string> = {
+  manager: "Manager",
+  admin: "Admin",
+  staff: "Staff"
+};
 
 export function AdminDashboard() {
   const [requests, setRequests] = useState<SupportRequest[]>([]);
+  const [staff, setStaff] = useState<StaffProfile[]>([]);
+  const [role, setRole] = useState<StaffRole>("admin");
+  const [actingStaffId, setActingStaffId] = useState<string>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [reply, setReply] = useState("");
   const [loading, setLoading] = useState(false);
+  const [staffName, setStaffName] = useState("");
+  const [staffRole, setStaffRole] = useState<StaffRole>("staff");
+  const [staffSaving, setStaffSaving] = useState(false);
+  const [staffError, setStaffError] = useState<string | null>(null);
 
   const selected = useMemo(
     () => requests.find((request) => request.id === selectedId) || requests[0] || null,
     [requests, selectedId]
   );
+  const assignableStaff = staff.filter((person) => person.role === "staff");
+  const actingStaff = staff.find((person) => person.id === actingStaffId) || assignableStaff[0] || null;
+  const visibleRequests =
+    role === "staff" && actingStaff
+      ? requests.filter((request) => request.assigned_to === actingStaff.id)
+      : requests;
+
+  const canManage = role === "manager" || role === "admin";
+  const canStaffAct = role === "staff" && selected?.assigned_to === actingStaff?.id;
 
   async function loadRequests() {
     setLoading(true);
@@ -30,13 +50,21 @@ export function AdminDashboard() {
     }
   }
 
+  async function loadStaff() {
+    const response = await fetch("/api/admin/staff", { cache: "no-store" });
+    const result = (await response.json()) as { staff: StaffProfile[] };
+    const nextStaff = result.staff || [];
+    setStaff(nextStaff);
+    setActingStaffId((current) => current || nextStaff.find((person) => person.role === "staff")?.id || "");
+  }
+
   async function loadMessages(conversationId: string) {
     const response = await fetch(`/api/admin/messages?conversationId=${conversationId}`, { cache: "no-store" });
     const result = (await response.json()) as { messages: Message[] };
     setMessages(result.messages || []);
   }
 
-  async function updateStatus(status: RequestStatus) {
+  async function updateRequest(input: { status?: RequestStatus; assignedTo?: string | null }) {
     if (!selected) {
       return;
     }
@@ -44,10 +72,13 @@ export function AdminDashboard() {
     const response = await fetch("/api/admin/requests", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: selected.id, status })
+      body: JSON.stringify({ id: selected.id, ...input })
     });
     const result = (await response.json()) as { request: SupportRequest };
     setRequests((current) => current.map((item) => (item.id === selected.id ? result.request : item)));
+    if (selected.conversation_id) {
+      await loadMessages(selected.conversation_id);
+    }
   }
 
   async function sendReply(event: FormEvent<HTMLFormElement>) {
@@ -67,7 +98,44 @@ export function AdminDashboard() {
     setReply("");
   }
 
+  async function createStaff(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const displayName = staffName.trim();
+
+    if (!displayName || staffSaving) {
+      return;
+    }
+
+    setStaffSaving(true);
+    setStaffError(null);
+
+    try {
+      const response = await fetch("/api/admin/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName, role: staffRole })
+      });
+
+      if (!response.ok) {
+        throw new Error("Staff create failed");
+      }
+
+      const result = (await response.json()) as { staff: StaffProfile };
+      setStaff((current) => [...current, result.staff].sort((a, b) => a.display_name.localeCompare(b.display_name)));
+      if (result.staff.role === "staff") {
+        setActingStaffId((current) => current || result.staff.id);
+      }
+      setStaffName("");
+      setStaffRole("staff");
+    } catch {
+      setStaffError("Could not add that staff member. Please try again.");
+    } finally {
+      setStaffSaving(false);
+    }
+  }
+
   useEffect(() => {
+    void loadStaff();
     void loadRequests();
     const interval = window.setInterval(() => void loadRequests(), 5000);
     return () => window.clearInterval(interval);
@@ -84,9 +152,77 @@ export function AdminDashboard() {
   return (
     <section className="grid">
       <div>
-        <h1 className="page-title">Staff Dashboard</h1>
-        <p className="lead">Track table requests, reply to guests, and keep the queue moving.</p>
+        <h1 className="page-title">Operations Dashboard</h1>
+        <p className="lead">Receive table orders, assign staff, and move each request through completion.</p>
+        <div className="toolbar">
+          {(["manager", "admin", "staff"] as StaffRole[]).map((nextRole) => (
+            <button
+              className={`button ghost ${role === nextRole ? "selected" : ""}`}
+              key={nextRole}
+              onClick={() => setRole(nextRole)}
+              type="button"
+            >
+              {roleLabels[nextRole]}
+            </button>
+          ))}
+          {role === "staff" ? (
+            <select
+              aria-label="Acting staff member"
+              onChange={(event) => setActingStaffId(event.target.value)}
+              value={actingStaff?.id || ""}
+            >
+              {assignableStaff.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.display_name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
       </div>
+
+      {canManage ? (
+        <div className="panel team-panel">
+          <div>
+            <h2>Team</h2>
+            <div className="meta">Add staff for assignment and role testing.</div>
+          </div>
+
+          <form className="staff-form" onSubmit={createStaff}>
+            <input
+              aria-label="Staff display name"
+              onChange={(event) => setStaffName(event.target.value)}
+              placeholder="Display name"
+              value={staffName}
+            />
+            <select
+              aria-label="Staff role"
+              onChange={(event) => setStaffRole(event.target.value as StaffRole)}
+              value={staffRole}
+            >
+              {(["staff", "admin", "manager"] as StaffRole[]).map((nextRole) => (
+                <option key={nextRole} value={nextRole}>
+                  {roleLabels[nextRole]}
+                </option>
+              ))}
+            </select>
+            <button className="button secondary" disabled={staffSaving || !staffName.trim()} type="submit">
+              <UserPlus size={16} />
+              Add
+            </button>
+          </form>
+
+          <div className="staff-list">
+            {staff.map((person) => (
+              <span className="staff-chip" key={person.id}>
+                <strong>{person.display_name}</strong>
+                <span>{roleLabels[person.role]}</span>
+              </span>
+            ))}
+          </div>
+          {staffError ? <div className="form-error">{staffError}</div> : null}
+        </div>
+      ) : null}
 
       <div className="dashboard">
         <aside className="panel">
@@ -98,10 +234,10 @@ export function AdminDashboard() {
           </div>
 
           <div className="request-list">
-            {requests.length === 0 ? (
+            {visibleRequests.length === 0 ? (
               <div className="empty">{loading ? "Loading requests..." : "No active requests yet."}</div>
             ) : (
-              requests.map((request) => (
+              visibleRequests.map((request) => (
                 <button
                   className={`request-card ${request.id === selected?.id ? "active" : ""}`}
                   key={request.id}
@@ -112,9 +248,14 @@ export function AdminDashboard() {
                   <div className="meta">
                     {request.club_tables?.label || "Table"} · {new Date(request.created_at).toLocaleTimeString()}
                   </div>
+                  <div className="meta">
+                    {request.staff_profiles?.display_name
+                      ? `Assigned to ${request.staff_profiles.display_name}`
+                      : "Unassigned"}
+                  </div>
                   <div className="pill-row">
-                    <span className={`pill ${request.priority}`}>{request.priority}</span>
-                    <span className="pill">{request.status.replace("_", " ")}</span>
+                    <span className={`pill priority-${request.priority}`}>{request.priority}</span>
+                    <span className={`pill status-${request.status}`}>{request.status.replace("_", " ")}</span>
                     <span className="pill">{request.category}</span>
                   </div>
                 </button>
@@ -132,18 +273,72 @@ export function AdminDashboard() {
                   <div className="meta">
                     {selected.club_tables?.label || "Table"} · {selected.club_tables?.zone || "Floor"} · {selected.category}
                   </div>
+                  <div className="meta">
+                    {selected.staff_profiles?.display_name
+                      ? `Assigned to ${selected.staff_profiles.display_name}`
+                      : "Waiting for assignment"}
+                  </div>
                 </div>
                 {selected.priority === "urgent" ? <Siren color="var(--danger)" /> : <Clock3 color="var(--accent)" />}
               </div>
 
-              <div className="status-controls">
-                {statuses.map((status) => (
-                  <button className="button ghost" key={status} onClick={() => void updateStatus(status)} type="button">
-                    {status === "resolved" ? <CheckCircle2 size={16} /> : <Clock3 size={16} />}
-                    {status.replace("_", " ")}
+              {canManage ? (
+                <div className="assignment-controls">
+                  <select
+                    aria-label="Assign staff"
+                    defaultValue=""
+                    onChange={(event) => {
+                      if (event.target.value) {
+                        void updateRequest({ assignedTo: event.target.value, status: "acknowledged" });
+                        event.target.value = "";
+                      }
+                    }}
+                  >
+                    <option value="">Assign to staff...</option>
+                    {assignableStaff.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.display_name}
+                      </option>
+                    ))}
+                  </select>
+                  <button className="button ghost" onClick={() => void updateRequest({ status: "cancelled" })} type="button">
+                    <XCircle size={16} />
+                    Cancel
                   </button>
-                ))}
-              </div>
+                </div>
+              ) : null}
+
+              {role === "staff" ? (
+                <div className="status-controls">
+                  <button
+                    className="button ghost"
+                    disabled={!canStaffAct || selected.status !== "acknowledged"}
+                    onClick={() => void updateRequest({ status: "in_progress" })}
+                    type="button"
+                  >
+                    <Play size={16} />
+                    Accept
+                  </button>
+                  <button
+                    className="button ghost"
+                    disabled={!canStaffAct || selected.status !== "acknowledged"}
+                    onClick={() => void updateRequest({ assignedTo: null, status: "declined" })}
+                    type="button"
+                  >
+                    <XCircle size={16} />
+                    Decline
+                  </button>
+                  <button
+                    className="button ghost"
+                    disabled={!canStaffAct || selected.status !== "in_progress"}
+                    onClick={() => void updateRequest({ status: "completed" })}
+                    type="button"
+                  >
+                    <CheckCircle2 size={16} />
+                    Complete
+                  </button>
+                </div>
+              ) : null}
 
               <div className="chat-messages" style={{ minHeight: 280 }}>
                 {messages.map((message) => (

@@ -1,6 +1,14 @@
-export type RequestStatus = "new" | "acknowledged" | "in_progress" | "resolved" | "cancelled";
+export type RequestStatus =
+  | "new"
+  | "acknowledged"
+  | "declined"
+  | "in_progress"
+  | "completed"
+  | "resolved"
+  | "cancelled";
 export type RequestPriority = "low" | "normal" | "high" | "urgent";
 export type SenderType = "guest" | "assistant" | "staff" | "system";
+export type StaffRole = "manager" | "admin" | "staff";
 
 export type ClubTable = {
   id: string;
@@ -19,11 +27,21 @@ export type SupportRequest = {
   category: string;
   status: RequestStatus;
   priority: RequestPriority;
+  assigned_to: string | null;
   summary: string | null;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
   club_tables?: Pick<ClubTable, "label" | "zone"> | null;
+  staff_profiles?: Pick<StaffProfile, "display_name" | "role"> | null;
+};
+
+export type StaffProfile = {
+  id: string;
+  club_id: string;
+  display_name: string;
+  role: StaffRole;
+  created_at: string;
 };
 
 export type Message = {
