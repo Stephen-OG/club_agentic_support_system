@@ -7,7 +7,7 @@
     "lint": "npm run build -w @guestos/shared && tsc --noEmit -p tsconfig.json",
     "start": "node dist/main.js",
     "start:dev": "ts-node -r tsconfig-paths/register src/main.ts",
-    "test": "node --test -r ts-node/register -r tsconfig-paths/register src/**/*.test.ts"
+    "test": "node scripts/run-tests.cjs"
   },
   "dependencies": {
     "@guestos/shared": "0.1.0",
