@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { canTransitionRequest, getNextGuestActionStatus } from "./request-workflow";
 
 describe("request workflow", () => {
-  it("allows staff to move assigned requests into progress and completion", () => {
+  it("allows staff to move acknowledged or in-progress requests forward", () => {
     assert.equal(canTransitionRequest("acknowledged", "in_progress", "staff"), true);
     assert.equal(canTransitionRequest("in_progress", "completed", "staff"), true);
   });
@@ -19,5 +19,9 @@ describe("request workflow", () => {
 
   it("rejects guest actions from the wrong state", () => {
     assert.throws(() => getNextGuestActionStatus("new", "confirm_resolved"), /not awaiting satisfaction/);
+  });
+
+  it("prevents guests from cancelling escalated requests", () => {
+    assert.throws(() => getNextGuestActionStatus("escalated", "cancel"), /can no longer be cancelled/);
   });
 });

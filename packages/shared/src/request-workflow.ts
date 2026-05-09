@@ -63,7 +63,7 @@ export function canTransitionRequest(from: RequestStatus, to: RequestStatus, act
 
 export function getNextGuestActionStatus(current: RequestStatus, action: GuestRequestAction): RequestStatus {
   if (action === "cancel") {
-    if (["completed", "resolved", "cancelled"].includes(current)) {
+    if (["completed", "resolved", "cancelled", "escalated"].includes(current)) {
       throw new Error("This request can no longer be cancelled");
     }
     return "cancelled";
