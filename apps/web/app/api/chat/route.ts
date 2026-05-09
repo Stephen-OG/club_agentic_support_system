@@ -378,10 +378,10 @@ export async function PATCH(request: Request) {
   const startedAt = Date.now();
   const { requestId, action } = (await request.json()) as {
     requestId?: string;
-    action?: "cancel" | "confirm_resolved" | "not_satisfied";
+    action?: unknown;
   };
 
-  if (!requestId || !action) {
+  if (!requestId || !isGuestRequestAction(action)) {
     logger.warn("chat.action.invalid_request", {
       hasRequestId: Boolean(requestId),
       action
@@ -516,8 +516,16 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ request: updatedRequest, message });
 }
 
+type GuestRequestAction = "cancel" | "confirm_resolved" | "not_satisfied";
+
+const guestRequestActions = new Set<GuestRequestAction>(["cancel", "confirm_resolved", "not_satisfied"]);
+
+function isGuestRequestAction(action: unknown): action is GuestRequestAction {
+  return typeof action === "string" && guestRequestActions.has(action as GuestRequestAction);
+}
+
 function getClientActionResult(
-  action: "cancel" | "confirm_resolved" | "not_satisfied",
+  action: GuestRequestAction,
   currentStatus: string
 ):
   | { allowed: true; status: "cancelled" | "resolved" | "in_progress"; message: string }
