@@ -24,4 +24,8 @@ describe("request workflow", () => {
   it("prevents guests from cancelling escalated requests", () => {
     assert.throws(() => getNextGuestActionStatus("escalated", "cancel"), /can no longer be cancelled/);
   });
+
+  it("rejects unknown guest actions at runtime", () => {
+    assert.throws(() => getNextGuestActionStatus("completed", "reopen" as any), /Unknown guest request action/);
+  });
 });

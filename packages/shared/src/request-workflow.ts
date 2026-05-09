@@ -73,5 +73,13 @@ export function getNextGuestActionStatus(current: RequestStatus, action: GuestRe
     throw new Error("This request is not awaiting satisfaction confirmation");
   }
 
-  return action === "confirm_resolved" ? "resolved" : "in_progress";
+  if (action === "confirm_resolved") {
+    return "resolved";
+  }
+
+  if (action === "not_satisfied") {
+    return "in_progress";
+  }
+
+  throw new Error("Unknown guest request action");
 }
