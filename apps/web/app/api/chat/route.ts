@@ -457,10 +457,11 @@ export async function PATCH(request: Request) {
       resolved_at: next.status === "resolved" ? new Date().toISOString() : null
     })
     .eq("id", requestId)
+    .eq("status", supportRequest.status)
     .select("*, club_tables(label, zone), staff_profiles(display_name, role)")
-    .single();
+    .maybeSingle();
 
-  if (updateError || !updatedRequest) {
+  if (updateError) {
     logger.error("chat.action.update_error", {
       requestId,
       action,
@@ -469,6 +470,17 @@ export async function PATCH(request: Request) {
       error: updateError
     });
     return NextResponse.json({ error: "Could not update request" }, { status: 500 });
+  }
+
+  if (!updatedRequest) {
+    logger.warn("chat.action.status_conflict", {
+      requestId,
+      action,
+      previousStatus: supportRequest.status,
+      nextStatus: next.status,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json({ error: "Request status changed. Please refresh and try again." }, { status: 409 });
   }
 
   const { data: message, error: messageError } = await supabase
