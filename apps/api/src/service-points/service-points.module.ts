@@ -1,11 +1,14 @@
 import { Module } from "@nestjs/common";
 import { TriageModule } from "../triage/triage.module";
+import { VenuesModule } from "../venues/venues.module";
+import { AdminVenuesController } from "./admin-venues.controller";
 import { PublicQrController } from "./public-qr.controller";
 import { ServicePointsService } from "./service-points.service";
 
 @Module({
-  controllers: [PublicQrController],
-  imports: [TriageModule],
+  controllers: [PublicQrController, AdminVenuesController],
+  exports: [ServicePointsService],
+  imports: [TriageModule, VenuesModule],
   providers: [ServicePointsService]
 })
 export class ServicePointsModule {}
