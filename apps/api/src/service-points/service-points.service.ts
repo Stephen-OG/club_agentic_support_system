@@ -96,112 +96,114 @@ export class ServicePointsService {
       throw new NotFoundException("Service point not found");
     }
 
-    const conversation = input.conversationId
-      ? await this.prisma.conversation.findFirst({
-          where: {
-            id: input.conversationId,
-            servicePointId: servicePoint.id,
-            venueId: servicePoint.venueId
-          }
-        })
-      : await this.prisma.conversation.create({
-          data: {
-            guestSessionId: input.sessionId || null,
-            servicePointId: servicePoint.id,
-            venueId: servicePoint.venueId
-          }
-        });
+    return this.prisma.$transaction(async (tx) => {
+      const conversation = input.conversationId
+        ? await tx.conversation.findFirst({
+            where: {
+              id: input.conversationId,
+              servicePointId: servicePoint.id,
+              venueId: servicePoint.venueId
+            }
+          })
+        : await tx.conversation.create({
+            data: {
+              guestSessionId: input.sessionId || null,
+              servicePointId: servicePoint.id,
+              venueId: servicePoint.venueId
+            }
+          });
 
-    if (!conversation) {
-      throw new NotFoundException("Service point not found");
-    }
-
-    const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
-    const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
-    const triage = this.aiTriage.createFallback({
-      deterministicPriority,
-      message: input.message,
-      servicePointLabel: servicePoint.label
-    });
-    const status = deterministicPriority === "urgent" ? RequestStatus.ESCALATED : RequestStatus.NEW;
-    const eventType = deterministicPriority === "urgent" ? "request.escalated" : "request.created";
-    const supportRequest = await this.prisma.supportRequest.create({
-      data: {
-        venueId: servicePoint.venueId,
-        servicePointId: servicePoint.id,
-        conversationId: conversation.id,
-        title: triage.title,
-        category: triage.category,
-        summary: triage.summary || input.message,
-        priority: prismaPriority,
-        deterministicPriority: prismaPriority,
-        status
+      if (!conversation) {
+        throw new NotFoundException("Service point not found");
       }
-    });
 
-    await this.prisma.message.create({
-      data: {
-        venueId: servicePoint.venueId,
-        servicePointId: servicePoint.id,
-        conversationId: conversation.id,
-        requestId: supportRequest.id,
-        sender: SenderType.GUEST,
-        body: input.message,
-        metadata: {
-          source: "public_qr",
-          qrToken: token
+      const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
+      const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
+      const triage = this.aiTriage.createFallback({
+        deterministicPriority,
+        message: input.message,
+        servicePointLabel: servicePoint.label
+      });
+      const status = deterministicPriority === "urgent" ? RequestStatus.ESCALATED : RequestStatus.NEW;
+      const eventType = deterministicPriority === "urgent" ? "request.escalated" : "request.created";
+      const supportRequest = await tx.supportRequest.create({
+        data: {
+          venueId: servicePoint.venueId,
+          servicePointId: servicePoint.id,
+          conversationId: conversation.id,
+          title: triage.title,
+          category: triage.category,
+          summary: triage.summary || input.message,
+          priority: prismaPriority,
+          deterministicPriority: prismaPriority,
+          status
         }
-      }
-    });
+      });
 
-    await this.prisma.message.create({
-      data: {
-        venueId: servicePoint.venueId,
-        servicePointId: servicePoint.id,
-        conversationId: conversation.id,
-        requestId: supportRequest.id,
-        sender: SenderType.ASSISTANT,
-        body: triage.assistantReply,
-        metadata: {
-          source: "public_qr",
-          triage: {
-            category: triage.category,
-            needsStaff: triage.needsStaff,
-            priority: triage.priority,
-            summary: triage.summary,
-            title: triage.title
+      await tx.message.create({
+        data: {
+          venueId: servicePoint.venueId,
+          servicePointId: servicePoint.id,
+          conversationId: conversation.id,
+          requestId: supportRequest.id,
+          sender: SenderType.GUEST,
+          body: input.message,
+          metadata: {
+            source: "public_qr",
+            qrToken: token
           }
         }
-      }
-    });
+      });
 
-    await this.prisma.requestEvent.create({
-      data: {
-        venueId: servicePoint.venueId,
-        requestId: supportRequest.id,
-        type: eventType,
-        toStatus: status,
-        metadata: {
-          source: "public_qr",
-          qrToken: token
+      await tx.message.create({
+        data: {
+          venueId: servicePoint.venueId,
+          servicePointId: servicePoint.id,
+          conversationId: conversation.id,
+          requestId: supportRequest.id,
+          sender: SenderType.ASSISTANT,
+          body: triage.assistantReply,
+          metadata: {
+            source: "public_qr",
+            triage: {
+              category: triage.category,
+              needsStaff: triage.needsStaff,
+              priority: triage.priority,
+              summary: triage.summary,
+              title: triage.title
+            }
+          }
         }
-      }
-    });
+      });
 
-    const messages = await this.prisma.message.findMany({
-      where: {
-        conversationId: conversation.id
-      },
-      orderBy: {
-        createdAt: "asc"
-      }
-    });
+      await tx.requestEvent.create({
+        data: {
+          venueId: servicePoint.venueId,
+          requestId: supportRequest.id,
+          type: eventType,
+          toStatus: status,
+          metadata: {
+            source: "public_qr",
+            qrToken: token
+          }
+        }
+      });
 
-    return {
-      conversationId: conversation.id,
-      messages,
-      request: supportRequest,
-      servicePoint
-    };
+      const messages = await tx.message.findMany({
+        where: {
+          conversationId: conversation.id
+        },
+        orderBy: {
+          createdAt: "asc"
+        }
+      });
+
+      return {
+        conversationId: conversation.id,
+        messages,
+        request: supportRequest,
+        servicePoint
+      };
+    });
   }
 }

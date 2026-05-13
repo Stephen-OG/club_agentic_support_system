@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { NotFoundException } from "@nestjs/common";
 import { RequestPriority, RequestStatus, SenderType } from "@prisma/client";
+import { plainToInstance } from "class-transformer";
+import { validate } from "class-validator";
+import { PublicGuestMessageDto } from "./dto/public-guest-message.dto";
 import { ServicePointsService } from "./service-points.service";
 
 type PublicGuestMessageResult = {
@@ -56,13 +59,7 @@ describe("ServicePointsService public QR workflow", () => {
     ];
 
     const calls: Array<{ model: string; args: unknown }> = [];
-    const prisma = {
-      servicePoint: {
-        findFirst: async (args: unknown) => {
-          calls.push({ model: "servicePoint.findFirst", args });
-          return servicePoint;
-        }
-      },
+    const tx = {
       conversation: {
         create: async (args: unknown) => {
           calls.push({ model: "conversation.create", args });
@@ -90,6 +87,22 @@ describe("ServicePointsService public QR workflow", () => {
           calls.push({ model: "requestEvent.create", args });
           return args;
         }
+      }
+    };
+    const prisma = {
+      servicePoint: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "servicePoint.findFirst", args });
+          return servicePoint;
+        }
+      },
+      conversation: tx.conversation,
+      supportRequest: tx.supportRequest,
+      message: tx.message,
+      requestEvent: tx.requestEvent,
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => {
+        calls.push({ model: "$transaction", args: "callback" });
+        return callback(tx);
       }
     };
     const service = new ServicePointsService(
@@ -128,6 +141,10 @@ describe("ServicePointsService public QR workflow", () => {
             isActive: true
           }
         }
+      },
+      {
+        model: "$transaction",
+        args: "callback"
       },
       {
         model: "conversation.create",
@@ -268,13 +285,7 @@ describe("ServicePointsService public QR workflow", () => {
     ];
 
     const calls: Array<{ model: string; args: unknown }> = [];
-    const prisma = {
-      servicePoint: {
-        findFirst: async (args: unknown) => {
-          calls.push({ model: "servicePoint.findFirst", args });
-          return servicePoint;
-        }
-      },
+    const tx = {
       conversation: {
         findFirst: async (args: unknown) => {
           calls.push({ model: "conversation.findFirst", args });
@@ -306,6 +317,22 @@ describe("ServicePointsService public QR workflow", () => {
           calls.push({ model: "requestEvent.create", args });
           return args;
         }
+      }
+    };
+    const prisma = {
+      servicePoint: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "servicePoint.findFirst", args });
+          return servicePoint;
+        }
+      },
+      conversation: tx.conversation,
+      supportRequest: tx.supportRequest,
+      message: tx.message,
+      requestEvent: tx.requestEvent,
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => {
+        calls.push({ model: "$transaction", args: "callback" });
+        return callback(tx);
       }
     };
     const service = new ServicePointsService(
@@ -346,6 +373,10 @@ describe("ServicePointsService public QR workflow", () => {
             isActive: true
           }
         }
+      },
+      {
+        model: "$transaction",
+        args: "callback"
       },
       {
         model: "conversation.findFirst",
@@ -451,13 +482,7 @@ describe("ServicePointsService public QR workflow", () => {
       isActive: true
     };
     const calls: Array<{ model: string; args: unknown }> = [];
-    const prisma = {
-      servicePoint: {
-        findFirst: async (args: unknown) => {
-          calls.push({ model: "servicePoint.findFirst", args });
-          return servicePoint;
-        }
-      },
+    const tx = {
       conversation: {
         findFirst: async (args: unknown) => {
           calls.push({ model: "conversation.findFirst", args });
@@ -485,6 +510,22 @@ describe("ServicePointsService public QR workflow", () => {
           calls.push({ model: "requestEvent.create", args });
           throw new Error("requestEvent.create should not be called for a missing conversation");
         }
+      }
+    };
+    const prisma = {
+      servicePoint: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "servicePoint.findFirst", args });
+          return servicePoint;
+        }
+      },
+      conversation: tx.conversation,
+      supportRequest: tx.supportRequest,
+      message: tx.message,
+      requestEvent: tx.requestEvent,
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => {
+        calls.push({ model: "$transaction", args: "callback" });
+        return callback(tx);
       }
     };
     const service = new ServicePointsService(
@@ -520,6 +561,10 @@ describe("ServicePointsService public QR workflow", () => {
         }
       },
       {
+        model: "$transaction",
+        args: "callback"
+      },
+      {
         model: "conversation.findFirst",
         args: {
           where: {
@@ -530,5 +575,153 @@ describe("ServicePointsService public QR workflow", () => {
         }
       }
     ]);
+  });
+
+  it("rejects through the transaction when a later request write fails", async () => {
+    const servicePoint = {
+      id: "sp_failed_write",
+      venueId: "venue_failed_write",
+      label: "Patio 9",
+      qrToken: "qr_failed_write_123",
+      isActive: true
+    };
+    const conversation = {
+      id: "conversation_failed_write_1",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      guestSessionId: "session_failed_write_123"
+    };
+    const calls: Array<{ model: string; args: unknown }> = [];
+    const failure = new Error("request write failed");
+    const rootWriteFailure = () => {
+      throw new Error("writes must use the transaction delegate");
+    };
+    const tx = {
+      conversation: {
+        create: async (args: unknown) => {
+          calls.push({ model: "tx.conversation.create", args });
+          return conversation;
+        }
+      },
+      supportRequest: {
+        create: async (args: unknown) => {
+          calls.push({ model: "tx.supportRequest.create", args });
+          throw failure;
+        }
+      },
+      message: {
+        create: async (args: unknown) => {
+          calls.push({ model: "tx.message.create", args });
+          return args;
+        }
+      },
+      requestEvent: {
+        create: async (args: unknown) => {
+          calls.push({ model: "tx.requestEvent.create", args });
+          return args;
+        }
+      }
+    };
+    const prisma = {
+      servicePoint: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "servicePoint.findFirst", args });
+          return servicePoint;
+        }
+      },
+      conversation: {
+        create: rootWriteFailure
+      },
+      supportRequest: {
+        create: rootWriteFailure
+      },
+      message: {
+        create: rootWriteFailure
+      },
+      requestEvent: {
+        create: rootWriteFailure
+      },
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => {
+        calls.push({ model: "$transaction", args: "callback" });
+        return callback(tx);
+      }
+    };
+    const service = new ServicePointsService(
+      {
+        createFallback: () => ({
+          assistantReply: "The team has your request.",
+          category: "general",
+          needsStaff: true,
+          priority: "normal",
+          summary: "Could we get more water?",
+          title: "Guest support request"
+        })
+      } as never,
+      {
+        classifyOrDefault: () => "normal"
+      } as never,
+      prisma as never,
+      {} as never
+    );
+
+    await assert.rejects(
+      service.createGuestMessage("qr_failed_write_123", {
+        message: "Could we get more water?",
+        sessionId: "session_failed_write_123"
+      }),
+      failure
+    );
+    assert.deepEqual(calls, [
+      {
+        model: "servicePoint.findFirst",
+        args: {
+          where: {
+            qrToken: "qr_failed_write_123",
+            isActive: true
+          }
+        }
+      },
+      {
+        model: "$transaction",
+        args: "callback"
+      },
+      {
+        model: "tx.conversation.create",
+        args: {
+          data: {
+            guestSessionId: "session_failed_write_123",
+            servicePointId: servicePoint.id,
+            venueId: servicePoint.venueId
+          }
+        }
+      },
+      {
+        model: "tx.supportRequest.create",
+        args: {
+          data: {
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            conversationId: conversation.id,
+            title: "Guest support request",
+            category: "general",
+            summary: "Could we get more water?",
+            priority: RequestPriority.NORMAL,
+            deterministicPriority: RequestPriority.NORMAL,
+            status: RequestStatus.NEW
+          }
+        }
+      }
+    ]);
+  });
+
+  it("trims whitespace-only DTO messages before validating length", async () => {
+    const input = plainToInstance(PublicGuestMessageDto, {
+      message: "   "
+    });
+
+    const errors = await validate(input);
+
+    assert.equal(input.message, "");
+    assert.equal(errors.some((error) => error.property === "message"), true);
   });
 });
