@@ -1,5 +1,5 @@
 import { Transform } from "class-transformer";
-import { IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
 
 export class CreateServicePointDto {
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
@@ -10,5 +10,6 @@ export class CreateServicePointDto {
 
   @IsOptional()
   @IsString()
+  @IsUUID()
   locationId?: string;
 }

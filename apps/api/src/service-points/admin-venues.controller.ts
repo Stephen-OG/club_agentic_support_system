@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiCreatedResponse, ApiTags } from "@nestjs/swagger";
 import { CurrentAuth } from "../auth/auth-context.decorator";
 import { DevAuthGuard } from "../auth/dev-auth.guard";
@@ -24,7 +24,7 @@ export class AdminVenuesController {
   @ApiCreatedResponse({ description: "Creates a QR service point in a venue" })
   createServicePoint(
     @CurrentAuth() auth: AuthContext,
-    @Param("venueId") venueId: string,
+    @Param("venueId", ParseUUIDPipe) venueId: string,
     @Body() input: CreateServicePointDto
   ) {
     return this.servicePoints.createServicePoint(auth, venueId, input);

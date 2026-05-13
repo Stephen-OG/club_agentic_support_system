@@ -96,4 +96,15 @@ describe("ServicePointsService admin helpers", () => {
     assert.equal((await validate(blankVenue)).length > 0, true);
     assert.equal((await validate(blankServicePoint)).length > 0, true);
   });
+
+  it("rejects malformed location IDs during DTO validation", async () => {
+    const servicePoint = plainToInstance(CreateServicePointDto, {
+      label: "Main Bar",
+      locationId: "not-a-uuid"
+    });
+
+    const errors = await validate(servicePoint);
+
+    assert.equal(errors.some((error) => error.property === "locationId"), true);
+  });
 });
