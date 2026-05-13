@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { NotFoundException } from "@nestjs/common";
 import { RequestPriority, RequestStatus, SenderType } from "@prisma/client";
 import { ServicePointsService } from "./service-points.service";
 
@@ -217,6 +218,314 @@ describe("ServicePointsService public QR workflow", () => {
           },
           orderBy: {
             createdAt: "asc"
+          }
+        }
+      }
+    ]);
+  });
+
+  it("resumes an existing conversation scoped to the active service point", async () => {
+    const servicePoint = {
+      id: "sp_resume",
+      venueId: "venue_resume",
+      label: "Booth 12",
+      qrToken: "qr_resume_123",
+      isActive: true
+    };
+    const conversation = {
+      id: "conversation_resume_1",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      guestSessionId: "session_existing_123"
+    };
+    const supportRequest = {
+      id: "request_resume_1",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      conversationId: conversation.id,
+      title: "Guest support request",
+      category: "general",
+      summary: "Could we get more water?",
+      priority: RequestPriority.NORMAL,
+      deterministicPriority: RequestPriority.NORMAL,
+      status: RequestStatus.NEW
+    };
+    const storedMessages = [
+      {
+        id: "message_resume_guest_1",
+        conversationId: conversation.id,
+        requestId: supportRequest.id,
+        sender: SenderType.GUEST,
+        body: "Could we get more water?"
+      },
+      {
+        id: "message_resume_assistant_1",
+        conversationId: conversation.id,
+        requestId: supportRequest.id,
+        sender: SenderType.ASSISTANT,
+        body: "The team has your request."
+      }
+    ];
+
+    const calls: Array<{ model: string; args: unknown }> = [];
+    const prisma = {
+      servicePoint: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "servicePoint.findFirst", args });
+          return servicePoint;
+        }
+      },
+      conversation: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "conversation.findFirst", args });
+          return conversation;
+        },
+        create: async (args: unknown) => {
+          calls.push({ model: "conversation.create", args });
+          throw new Error("conversation.create should not be called when resuming");
+        }
+      },
+      supportRequest: {
+        create: async (args: unknown) => {
+          calls.push({ model: "supportRequest.create", args });
+          return supportRequest;
+        }
+      },
+      message: {
+        create: async (args: unknown) => {
+          calls.push({ model: "message.create", args });
+          return args;
+        },
+        findMany: async (args: unknown) => {
+          calls.push({ model: "message.findMany", args });
+          return storedMessages;
+        }
+      },
+      requestEvent: {
+        create: async (args: unknown) => {
+          calls.push({ model: "requestEvent.create", args });
+          return args;
+        }
+      }
+    };
+    const service = new ServicePointsService(
+      {
+        createFallback: () => ({
+          assistantReply: "The team has your request.",
+          category: "general",
+          needsStaff: true,
+          priority: "normal",
+          summary: "Could we get more water?",
+          title: "Guest support request"
+        })
+      } as never,
+      {
+        classifyOrDefault: () => "normal"
+      } as never,
+      prisma as never,
+      {} as never
+    );
+
+    const result = (await service.createGuestMessage("qr_resume_123", {
+      conversationId: "conversation_resume_1",
+      message: "Could we get more water?",
+      sessionId: "ignored_session_123"
+    })) as unknown as PublicGuestMessageResult;
+
+    assert.equal(result.conversationId, conversation.id);
+    assert.deepEqual(result.messages, storedMessages);
+    assert.deepEqual(result.request, supportRequest);
+    assert.deepEqual(result.servicePoint, servicePoint);
+    assert.equal(calls.some((call) => call.model === "conversation.create"), false);
+    assert.deepEqual(calls, [
+      {
+        model: "servicePoint.findFirst",
+        args: {
+          where: {
+            qrToken: "qr_resume_123",
+            isActive: true
+          }
+        }
+      },
+      {
+        model: "conversation.findFirst",
+        args: {
+          where: {
+            id: "conversation_resume_1",
+            servicePointId: servicePoint.id,
+            venueId: servicePoint.venueId
+          }
+        }
+      },
+      {
+        model: "supportRequest.create",
+        args: {
+          data: {
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            conversationId: conversation.id,
+            title: "Guest support request",
+            category: "general",
+            summary: "Could we get more water?",
+            priority: RequestPriority.NORMAL,
+            deterministicPriority: RequestPriority.NORMAL,
+            status: RequestStatus.NEW
+          }
+        }
+      },
+      {
+        model: "message.create",
+        args: {
+          data: {
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            conversationId: conversation.id,
+            requestId: supportRequest.id,
+            sender: SenderType.GUEST,
+            body: "Could we get more water?",
+            metadata: {
+              source: "public_qr",
+              qrToken: "qr_resume_123"
+            }
+          }
+        }
+      },
+      {
+        model: "message.create",
+        args: {
+          data: {
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            conversationId: conversation.id,
+            requestId: supportRequest.id,
+            sender: SenderType.ASSISTANT,
+            body: "The team has your request.",
+            metadata: {
+              source: "public_qr",
+              triage: {
+                category: "general",
+                needsStaff: true,
+                priority: "normal",
+                summary: "Could we get more water?",
+                title: "Guest support request"
+              }
+            }
+          }
+        }
+      },
+      {
+        model: "requestEvent.create",
+        args: {
+          data: {
+            venueId: servicePoint.venueId,
+            requestId: supportRequest.id,
+            type: "request.created",
+            toStatus: RequestStatus.NEW,
+            metadata: {
+              source: "public_qr",
+              qrToken: "qr_resume_123"
+            }
+          }
+        }
+      },
+      {
+        model: "message.findMany",
+        args: {
+          where: {
+            conversationId: conversation.id
+          },
+          orderBy: {
+            createdAt: "asc"
+          }
+        }
+      }
+    ]);
+  });
+
+  it("throws NotFoundException when the requested conversation is not scoped to the service point", async () => {
+    const servicePoint = {
+      id: "sp_missing_conversation",
+      venueId: "venue_missing_conversation",
+      label: "Counter 2",
+      qrToken: "qr_missing_conversation_123",
+      isActive: true
+    };
+    const calls: Array<{ model: string; args: unknown }> = [];
+    const prisma = {
+      servicePoint: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "servicePoint.findFirst", args });
+          return servicePoint;
+        }
+      },
+      conversation: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "conversation.findFirst", args });
+          return null;
+        },
+        create: async (args: unknown) => {
+          calls.push({ model: "conversation.create", args });
+          throw new Error("conversation.create should not be called when conversationId is provided");
+        }
+      },
+      supportRequest: {
+        create: async (args: unknown) => {
+          calls.push({ model: "supportRequest.create", args });
+          throw new Error("supportRequest.create should not be called for a missing conversation");
+        }
+      },
+      message: {
+        create: async (args: unknown) => {
+          calls.push({ model: "message.create", args });
+          throw new Error("message.create should not be called for a missing conversation");
+        }
+      },
+      requestEvent: {
+        create: async (args: unknown) => {
+          calls.push({ model: "requestEvent.create", args });
+          throw new Error("requestEvent.create should not be called for a missing conversation");
+        }
+      }
+    };
+    const service = new ServicePointsService(
+      {
+        createFallback: () => {
+          throw new Error("triage should not run for a missing conversation");
+        }
+      } as never,
+      {
+        classifyOrDefault: () => {
+          throw new Error("priority should not run for a missing conversation");
+        }
+      } as never,
+      prisma as never,
+      {} as never
+    );
+
+    await assert.rejects(
+      service.createGuestMessage("qr_missing_conversation_123", {
+        conversationId: "conversation_from_another_place",
+        message: "Hello"
+      }),
+      NotFoundException
+    );
+    assert.deepEqual(calls, [
+      {
+        model: "servicePoint.findFirst",
+        args: {
+          where: {
+            qrToken: "qr_missing_conversation_123",
+            isActive: true
+          }
+        }
+      },
+      {
+        model: "conversation.findFirst",
+        args: {
+          where: {
+            id: "conversation_from_another_place",
+            servicePointId: servicePoint.id,
+            venueId: servicePoint.venueId
           }
         }
       }
