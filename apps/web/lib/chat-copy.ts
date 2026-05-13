@@ -1,0 +1,54 @@
+import type { RequestPriority, RequestStatus } from "./types";
+
+export function createWelcomeBody(tableLabel: string) {
+  return `Hi, welcome in. You are chatting from ${tableLabel}. What can we help with?`;
+}
+
+export function createFollowupReply() {
+  return "Got it, I added that to your open request so the team has the full picture.";
+}
+
+export function createServiceRecoveryReply() {
+  return "Thanks for letting us know. I have reopened this for the team, and they will keep working on it.";
+}
+
+export function createSatisfactionReply(rating: number) {
+  return `Thank you. You rated this service ${rating}/5, and we really appreciate the feedback.`;
+}
+
+export function createCancelledReply() {
+  return "No problem, I have cancelled that request. Send another message if you need anything else.";
+}
+
+export function createAssistantReply(priority: RequestPriority, tableLabel: string) {
+  if (priority === "urgent") {
+    return `I have alerted the team that ${tableLabel} needs urgent support. Please stay where you are if it is safe to do so.`;
+  }
+
+  if (priority === "high") {
+    return `Thanks for telling us. I have flagged this for the team at ${tableLabel} so they can help as soon as they can.`;
+  }
+
+  return `Of course, I have let the team know for ${tableLabel}.`;
+}
+
+export function createSendErrorBody() {
+  return "I could not send that just now. Please try again, or speak to a team member nearby.";
+}
+
+export function createUpdateErrorBody() {
+  return "I could not update that request just now. Please try again, or speak to a team member nearby.";
+}
+
+export function createGuestStatusMessage(status: RequestStatus) {
+  const messages: Partial<Record<RequestStatus, string>> = {
+    acknowledged: "The team has picked this up and will help from here.",
+    declined: "That team member could not take it, so we are sending it back for another teammate to pick up.",
+    in_progress: "The team is working on this now.",
+    completed: "The team marked this complete. How did it go?",
+    resolved: "Thank you for confirming. We have closed this request.",
+    cancelled: "No problem, this request is cancelled. Send another message if you need anything else."
+  };
+
+  return messages[status];
+}

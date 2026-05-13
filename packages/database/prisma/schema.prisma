@@ -1,0 +1,417 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StaffRole {
+  OWNER     @map("owner")
+  MANAGER   @map("manager")
+  ADMIN     @map("admin")
+  STAFF     @map("staff")
+  SECURITY  @map("security")
+  READ_ONLY @map("read_only")
+}
+
+enum RequestPriority {
+  LOW    @map("low")
+  NORMAL @map("normal")
+  HIGH   @map("high")
+  URGENT @map("urgent")
+}
+
+enum RequestStatus {
+  NEW          @map("new")
+  ACKNOWLEDGED @map("acknowledged")
+  ASSIGNED     @map("assigned")
+  IN_PROGRESS  @map("in_progress")
+  COMPLETED    @map("completed")
+  RESOLVED     @map("resolved")
+  DECLINED     @map("declined")
+  CANCELLED    @map("cancelled")
+  ESCALATED    @map("escalated")
+}
+
+enum SenderType {
+  GUEST     @map("guest")
+  ASSISTANT @map("assistant")
+  STAFF     @map("staff")
+  SYSTEM    @map("system")
+}
+
+enum AssignmentStatus {
+  ACTIVE    @map("active")
+  DECLINED  @map("declined")
+  COMPLETED @map("completed")
+  CANCELLED @map("cancelled")
+}
+
+enum WebhookDeliveryStatus {
+  PENDING   @map("pending")
+  DELIVERED @map("delivered")
+  FAILED    @map("failed")
+  RETRYING  @map("retrying")
+}
+
+enum IntegrationProvider {
+  SQUARE     @map("square")
+  TOAST      @map("toast")
+  LIGHTSPEED @map("lightspeed")
+  SLACK      @map("slack")
+  TEAMS      @map("teams")
+  WHATSAPP   @map("whatsapp")
+  SMS        @map("sms")
+  EMAIL      @map("email")
+}
+
+model Workspace {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String            @unique
+  venues           Venue[]
+  staffMemberships StaffMembership[]
+  billingAccount   BillingAccount?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model Venue {
+  id                     String                 @id @default(uuid()) @db.Uuid
+  workspaceId            String                 @db.Uuid
+  workspace              Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name                   String
+  slug                   String
+  timezone               String                 @default("Europe/London")
+  locations              VenueLocation[]
+  servicePoints          ServicePoint[]
+  staffMemberships       StaffMembership[]
+  conversations          Conversation[]
+  messages               Message[]
+  supportRequests        SupportRequest[]
+  requestAssignments     RequestAssignment[]
+  requestEvents          RequestEvent[]
+  auditLogs              AuditLog[]
+  aiTriageLogs           AiTriageLog[]
+  webhookEndpoints       WebhookEndpoint[]
+  webhookDeliveries      WebhookDelivery[]
+  integrations           Integration[]
+  notificationDeliveries NotificationDelivery[]
+  rateLimitEvents        RateLimitEvent[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+}
+
+model VenueLocation {
+  id            String         @id @default(uuid()) @db.Uuid
+  venueId       String         @db.Uuid
+  venue         Venue          @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  name          String
+  zone          String?
+  servicePoints ServicePoint[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([venueId, name])
+  @@index([venueId])
+}
+
+model ServicePoint {
+  id              String           @id @default(uuid()) @db.Uuid
+  venueId         String           @db.Uuid
+  venue           Venue            @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  locationId      String?          @db.Uuid
+  location        VenueLocation?   @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  label           String
+  qrToken         String           @unique
+  tokenVersion    Int              @default(1)
+  isActive        Boolean          @default(true)
+  conversations   Conversation[]
+  messages        Message[]
+  supportRequests SupportRequest[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([venueId, label])
+  @@index([venueId, isActive])
+}
+
+model StaffProfile {
+  id                         String              @id @default(uuid()) @db.Uuid
+  email                      String?             @unique
+  displayName                String
+  memberships                StaffMembership[]
+  assignedRequests           SupportRequest[]    @relation("AssignedRequests")
+  requestAssignments         RequestAssignment[] @relation("AssignmentStaff")
+  assignedRequestAssignments RequestAssignment[] @relation("AssignmentActor")
+  requestEvents              RequestEvent[]
+  auditLogs                  AuditLog[]
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+}
+
+model StaffMembership {
+  id             String       @id @default(uuid()) @db.Uuid
+  workspaceId    String       @db.Uuid
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  venueId        String?      @db.Uuid
+  venue          Venue?       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  staffProfileId String       @db.Uuid
+  staffProfile   StaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+  role           StaffRole
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([workspaceId, staffProfileId, venueId])
+  @@index([workspaceId, role, isActive])
+  @@index([venueId, role, isActive])
+}
+
+model Conversation {
+  id             String           @id @default(uuid()) @db.Uuid
+  venueId        String           @db.Uuid
+  venue          Venue            @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  servicePointId String           @db.Uuid
+  servicePoint   ServicePoint     @relation(fields: [servicePointId], references: [id], onDelete: Cascade)
+  guestSessionId String?
+  status         String           @default("open")
+  messages       Message[]
+  requests       SupportRequest[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([venueId, updatedAt])
+  @@index([servicePointId, updatedAt])
+}
+
+model Message {
+  id             String          @id @default(uuid()) @db.Uuid
+  venueId        String          @db.Uuid
+  venue          Venue           @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  servicePointId String          @db.Uuid
+  servicePoint   ServicePoint    @relation(fields: [servicePointId], references: [id], onDelete: Cascade)
+  conversationId String          @db.Uuid
+  conversation   Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  requestId      String?         @db.Uuid
+  request        SupportRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  sender         SenderType
+  body           String
+  metadata       Json?
+  createdAt      DateTime        @default(now())
+
+  @@index([venueId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([requestId, createdAt])
+}
+
+model SupportRequest {
+  id                    String              @id @default(uuid()) @db.Uuid
+  venueId               String              @db.Uuid
+  venue                 Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  servicePointId        String              @db.Uuid
+  servicePoint          ServicePoint        @relation(fields: [servicePointId], references: [id], onDelete: Cascade)
+  conversationId        String              @db.Uuid
+  conversation          Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  assignedToId          String?             @db.Uuid
+  assignedTo            StaffProfile?       @relation("AssignedRequests", fields: [assignedToId], references: [id], onDelete: SetNull)
+  title                 String
+  category              String              @default("general")
+  summary               String?
+  priority              RequestPriority     @default(NORMAL)
+  deterministicPriority RequestPriority?
+  aiPriority            RequestPriority?
+  status                RequestStatus       @default(NEW)
+  messages              Message[]
+  assignments           RequestAssignment[]
+  events                RequestEvent[]
+  aiTriageLogs          AiTriageLog[]
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  acknowledgedAt        DateTime?
+  completedAt           DateTime?
+  resolvedAt            DateTime?
+
+  @@index([venueId, status, priority, createdAt])
+  @@index([assignedToId, status])
+  @@index([conversationId, createdAt])
+  @@index([servicePointId, createdAt])
+}
+
+model RequestAssignment {
+  id             String           @id @default(uuid()) @db.Uuid
+  venueId        String           @db.Uuid
+  venue          Venue            @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  requestId      String           @db.Uuid
+  request        SupportRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  staffProfileId String           @db.Uuid
+  staffProfile   StaffProfile     @relation("AssignmentStaff", fields: [staffProfileId], references: [id], onDelete: Cascade)
+  assignedById   String?          @db.Uuid
+  assignedBy     StaffProfile?    @relation("AssignmentActor", fields: [assignedById], references: [id], onDelete: SetNull)
+  status         AssignmentStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([venueId, status, createdAt])
+  @@index([staffProfileId, status])
+  @@index([requestId, createdAt])
+}
+
+model RequestEvent {
+  id             String          @id @default(uuid()) @db.Uuid
+  venueId        String          @db.Uuid
+  venue          Venue           @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  requestId      String          @db.Uuid
+  request        SupportRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actorStaffId   String?         @db.Uuid
+  actorStaff     StaffProfile?   @relation(fields: [actorStaffId], references: [id], onDelete: SetNull)
+  type           String
+  fromStatus     RequestStatus?
+  toStatus       RequestStatus?
+  metadata       Json?
+  idempotencyKey String?         @unique
+  createdAt      DateTime        @default(now())
+
+  @@index([venueId, createdAt])
+  @@index([requestId, createdAt])
+}
+
+model AuditLog {
+  id           String        @id @default(uuid()) @db.Uuid
+  venueId      String        @db.Uuid
+  venue        Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  actorStaffId String?       @db.Uuid
+  actorStaff   StaffProfile? @relation(fields: [actorStaffId], references: [id], onDelete: SetNull)
+  action       String
+  targetType   String
+  targetId     String?
+  metadata     Json?
+  createdAt    DateTime      @default(now())
+
+  @@index([venueId, createdAt])
+  @@index([actorStaffId, createdAt])
+}
+
+model AiTriageLog {
+  id               String           @id @default(uuid()) @db.Uuid
+  venueId          String           @db.Uuid
+  venue            Venue            @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  requestId        String?          @db.Uuid
+  request          SupportRequest?  @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  model            String
+  promptVersion    String
+  inputHash        String
+  deterministicHit RequestPriority?
+  rawOutput        Json?
+  validatedOutput  Json?
+  error            String?
+  latencyMs        Int?
+  createdAt        DateTime         @default(now())
+
+  @@index([venueId, createdAt])
+  @@index([requestId, createdAt])
+}
+
+model WebhookEndpoint {
+  id           String            @id @default(uuid()) @db.Uuid
+  venueId      String            @db.Uuid
+  venue        Venue             @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  url          String
+  description  String?
+  events       String[]
+  signingKeyId String
+  isActive     Boolean           @default(true)
+  deliveries   WebhookDelivery[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([venueId, isActive])
+}
+
+model WebhookDelivery {
+  id             String                @id @default(uuid()) @db.Uuid
+  venueId        String                @db.Uuid
+  venue          Venue                 @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  endpointId     String                @db.Uuid
+  endpoint       WebhookEndpoint       @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  eventType      String
+  payload        Json
+  idempotencyKey String                @unique
+  status         WebhookDeliveryStatus @default(PENDING)
+  attempts       Int                   @default(0)
+  nextAttemptAt  DateTime?
+  responseCode   Int?
+  responseBody   String?
+  deliveredAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([venueId, status, nextAttemptAt])
+  @@index([endpointId, createdAt])
+}
+
+model Integration {
+  id           String              @id @default(uuid()) @db.Uuid
+  venueId      String              @db.Uuid
+  venue        Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  provider     IntegrationProvider
+  externalId   String?
+  config       Json?
+  status       String              @default("inactive")
+  lastSyncedAt DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@unique([venueId, provider, externalId])
+  @@index([venueId, provider, status])
+}
+
+model NotificationDelivery {
+  id             String    @id @default(uuid()) @db.Uuid
+  venueId        String    @db.Uuid
+  venue          Venue     @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  channel        String
+  recipient      String
+  eventType      String
+  idempotencyKey String    @unique
+  status         String    @default("pending")
+  attempts       Int       @default(0)
+  error          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([venueId, status, createdAt])
+}
+
+model RateLimitEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  venueId      String?  @db.Uuid
+  venue        Venue?   @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  key          String
+  scope        String
+  limit        Int
+  remaining    Int
+  blocked      Boolean  @default(false)
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([venueId, createdAt])
+  @@index([key, scope, createdAt])
+}
+
+model BillingAccount {
+  id                 String    @id @default(uuid()) @db.Uuid
+  workspaceId        String    @unique @db.Uuid
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  stripeCustomerId   String?   @unique
+  stripeSubscription String?
+  status             String    @default("trialing")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}

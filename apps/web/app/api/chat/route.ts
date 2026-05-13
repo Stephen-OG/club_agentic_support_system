@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import { triageMessage } from "@/lib/ai/triage";
+import { createFollowupReply } from "@/lib/chat-copy";
 import {
   addDemoMessage,
   addDemoRequest,
   getActiveDemoRequestForConversation,
-  getDemoRequest,
   getDemoConversation,
+  getDemoRequest,
   getDemoTable,
   getLatestDemoRequestForConversation,
-  updateDemoRequest,
-  listDemoMessages
+  listDemoMessages,
+  updateDemoRequest
 } from "@/lib/demo-store";
 import { logger } from "@/lib/logger";
+import { getClientActionResult, type ClientRequestAction } from "@/lib/request-actions";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -114,7 +116,7 @@ export async function POST(request: Request) {
         conversation_id: activeConversationId,
         request_id: activeRequest.id,
         sender: "assistant",
-        body: "Thanks, I added that to your open request."
+        body: createFollowupReply()
       });
 
       logger.info("chat.create.demo_followup", {
@@ -175,7 +177,12 @@ export async function POST(request: Request) {
       durationMs: Date.now() - startedAt
     });
 
-    return NextResponse.json({ table, conversationId: activeConversationId, messages: [guestMessage, assistantMessage], request: supportRequest });
+    return NextResponse.json({
+      table,
+      conversationId: activeConversationId,
+      messages: [guestMessage, assistantMessage],
+      request: supportRequest
+    });
   }
 
   const { data: table, error: tableError } = await supabase
@@ -255,7 +262,7 @@ export async function POST(request: Request) {
           conversation_id: activeConversationId,
           request_id: activeRequest.id,
           sender: "assistant",
-          body: "Thanks, I added that to your open request."
+          body: createFollowupReply()
         }
       ])
       .select("*");
@@ -376,12 +383,13 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const startedAt = Date.now();
-  const { requestId, action } = (await request.json()) as {
+  const { requestId, action, rating } = (await request.json()) as {
     requestId?: string;
-    action?: unknown;
+    action?: ClientRequestAction;
+    rating?: unknown;
   };
 
-  if (!requestId || !isGuestRequestAction(action)) {
+  if (!requestId || !action) {
     logger.warn("chat.action.invalid_request", {
       hasRequestId: Boolean(requestId),
       action
@@ -402,7 +410,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
 
-    const next = getClientActionResult(action, supportRequest.status);
+    const next = getClientActionResult(action, supportRequest.status, rating);
 
     if (!next.allowed) {
       return NextResponse.json({ error: next.error }, { status: 409 });
@@ -415,7 +423,10 @@ export async function PATCH(request: Request) {
       conversation_id: supportRequest.conversation_id,
       request_id: supportRequest.id,
       sender: "system",
-      body: next.message
+      body: next.message,
+      metadata: {
+        satisfactionRating: next.satisfactionRating
+      }
     });
 
     logger.info("chat.action.demo", {
@@ -444,7 +455,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Request not found" }, { status: 404 });
   }
 
-  const next = getClientActionResult(action, supportRequest.status);
+  const next = getClientActionResult(action, supportRequest.status, rating);
 
   if (!next.allowed) {
     return NextResponse.json({ error: next.error }, { status: 409 });
@@ -457,11 +468,10 @@ export async function PATCH(request: Request) {
       resolved_at: next.status === "resolved" ? new Date().toISOString() : null
     })
     .eq("id", requestId)
-    .eq("status", supportRequest.status)
     .select("*, club_tables(label, zone), staff_profiles(display_name, role)")
-    .maybeSingle();
+    .single();
 
-  if (updateError) {
+  if (updateError || !updatedRequest) {
     logger.error("chat.action.update_error", {
       requestId,
       action,
@@ -472,17 +482,6 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Could not update request" }, { status: 500 });
   }
 
-  if (!updatedRequest) {
-    logger.warn("chat.action.status_conflict", {
-      requestId,
-      action,
-      previousStatus: supportRequest.status,
-      nextStatus: next.status,
-      durationMs: Date.now() - startedAt
-    });
-    return NextResponse.json({ error: "Request status changed. Please refresh and try again." }, { status: 409 });
-  }
-
   const { data: message, error: messageError } = await supabase
     .from("messages")
     .insert({
@@ -491,7 +490,10 @@ export async function PATCH(request: Request) {
       conversation_id: supportRequest.conversation_id,
       request_id: supportRequest.id,
       sender: "system",
-      body: next.message
+      body: next.message,
+      metadata: {
+        satisfactionRating: next.satisfactionRating
+      }
     })
     .select("*")
     .single();
@@ -514,58 +516,4 @@ export async function PATCH(request: Request) {
   });
 
   return NextResponse.json({ request: updatedRequest, message });
-}
-
-type GuestRequestAction = "cancel" | "confirm_resolved" | "not_satisfied";
-
-const guestRequestActions = new Set<GuestRequestAction>(["cancel", "confirm_resolved", "not_satisfied"]);
-
-function isGuestRequestAction(action: unknown): action is GuestRequestAction {
-  return typeof action === "string" && guestRequestActions.has(action as GuestRequestAction);
-}
-
-function getClientActionResult(
-  action: GuestRequestAction,
-  currentStatus: string
-):
-  | { allowed: true; status: "cancelled" | "resolved" | "in_progress"; message: string }
-  | { allowed: false; error: string } {
-  if (action === "cancel") {
-    if (
-      currentStatus === "completed" ||
-      currentStatus === "resolved" ||
-      currentStatus === "cancelled" ||
-      currentStatus === "escalated"
-    ) {
-      return { allowed: false, error: "This request can no longer be cancelled" };
-    }
-
-    return {
-      allowed: true,
-      status: "cancelled",
-      message: "You cancelled this request. Send another message if you need anything else."
-    };
-  }
-
-  if (action === "confirm_resolved") {
-    if (currentStatus !== "completed") {
-      return { allowed: false, error: "This request is not awaiting satisfaction confirmation" };
-    }
-
-    return {
-      allowed: true,
-      status: "resolved",
-      message: "Thanks for confirming. This request is resolved."
-    };
-  }
-
-  if (currentStatus !== "completed") {
-    return { allowed: false, error: "This request is not awaiting satisfaction confirmation" };
-  }
-
-  return {
-    allowed: true,
-    status: "in_progress",
-    message: "Thanks for letting us know. The team will continue working on this request."
-  };
 }
