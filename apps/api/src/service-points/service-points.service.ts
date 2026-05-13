@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { RequestPriority as PrismaRequestPriority, RequestStatus, SenderType } from "@prisma/client";
+import type { RequestPriority } from "@guestos/shared";
 import type { AuthContext } from "../auth/auth-context";
 import { PrismaService } from "../database/prisma.service";
 import { AiTriageService } from "../triage/ai-triage.service";
@@ -8,6 +10,13 @@ import { VenueAccessService } from "../venues/access.service";
 import { CreateServicePointDto } from "./dto/create-service-point.dto";
 import { CreateVenueDto } from "./dto/create-venue.dto";
 import type { PublicGuestMessageDto } from "./dto/public-guest-message.dto";
+
+const prismaPriorityBySharedPriority: Record<RequestPriority, PrismaRequestPriority> = {
+  low: PrismaRequestPriority.LOW,
+  normal: PrismaRequestPriority.NORMAL,
+  high: PrismaRequestPriority.HIGH,
+  urgent: PrismaRequestPriority.URGENT
+};
 
 @Injectable()
 export class ServicePointsService {
@@ -75,21 +84,124 @@ export class ServicePointsService {
     });
   }
 
-  createGuestMessage(token: string, input: PublicGuestMessageDto) {
-    const priority = this.priorityClassifier.classifyOrDefault(input.message);
-    const servicePointLabel = token;
+  async createGuestMessage(token: string, input: PublicGuestMessageDto) {
+    const servicePoint = await this.prisma.servicePoint.findFirst({
+      where: {
+        qrToken: token,
+        isActive: true
+      }
+    });
+
+    if (!servicePoint) {
+      throw new NotFoundException("Service point not found");
+    }
+
+    const conversation = input.conversationId
+      ? await this.prisma.conversation.findFirst({
+          where: {
+            id: input.conversationId,
+            servicePointId: servicePoint.id,
+            venueId: servicePoint.venueId
+          }
+        })
+      : await this.prisma.conversation.create({
+          data: {
+            guestSessionId: input.sessionId || null,
+            servicePointId: servicePoint.id,
+            venueId: servicePoint.venueId
+          }
+        });
+
+    if (!conversation) {
+      throw new NotFoundException("Service point not found");
+    }
+
+    const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
+    const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
     const triage = this.aiTriage.createFallback({
-      deterministicPriority: priority,
+      deterministicPriority,
       message: input.message,
-      servicePointLabel
+      servicePointLabel: servicePoint.label
+    });
+    const status = deterministicPriority === "urgent" ? RequestStatus.ESCALATED : RequestStatus.NEW;
+    const eventType = deterministicPriority === "urgent" ? "request.escalated" : "request.created";
+    const supportRequest = await this.prisma.supportRequest.create({
+      data: {
+        venueId: servicePoint.venueId,
+        servicePointId: servicePoint.id,
+        conversationId: conversation.id,
+        title: triage.title,
+        category: triage.category,
+        summary: triage.summary || input.message,
+        priority: prismaPriority,
+        deterministicPriority: prismaPriority,
+        status
+      }
+    });
+
+    await this.prisma.message.create({
+      data: {
+        venueId: servicePoint.venueId,
+        servicePointId: servicePoint.id,
+        conversationId: conversation.id,
+        requestId: supportRequest.id,
+        sender: SenderType.GUEST,
+        body: input.message,
+        metadata: {
+          source: "public_qr",
+          qrToken: token
+        }
+      }
+    });
+
+    await this.prisma.message.create({
+      data: {
+        venueId: servicePoint.venueId,
+        servicePointId: servicePoint.id,
+        conversationId: conversation.id,
+        requestId: supportRequest.id,
+        sender: SenderType.ASSISTANT,
+        body: triage.assistantReply,
+        metadata: {
+          source: "public_qr",
+          triage: {
+            category: triage.category,
+            needsStaff: triage.needsStaff,
+            priority: triage.priority,
+            summary: triage.summary,
+            title: triage.title
+          }
+        }
+      }
+    });
+
+    await this.prisma.requestEvent.create({
+      data: {
+        venueId: servicePoint.venueId,
+        requestId: supportRequest.id,
+        type: eventType,
+        toStatus: status,
+        metadata: {
+          source: "public_qr",
+          qrToken: token
+        }
+      }
+    });
+
+    const messages = await this.prisma.message.findMany({
+      where: {
+        conversationId: conversation.id
+      },
+      orderBy: {
+        createdAt: "asc"
+      }
     });
 
     return {
-      event: priority === "urgent" ? "request.escalated" : "request.created",
-      priority,
-      qrToken: token,
-      status: priority === "urgent" ? "escalated" : "new",
-      triage
+      conversationId: conversation.id,
+      messages,
+      request: supportRequest,
+      servicePoint
     };
   }
 }

@@ -1,12 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsString, IsUUID, Length } from "class-validator";
+import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
 
 export class PublicGuestMessageDto {
   @ApiProperty({
     example: "We need help with a spill at the table"
   })
   @IsString()
-  @Length(1, 1600)
+  @MinLength(1)
+  @MaxLength(1600)
   message!: string;
 
   @ApiPropertyOptional()
@@ -17,6 +18,7 @@ export class PublicGuestMessageDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @Length(12, 160)
+  @MinLength(12)
+  @MaxLength(160)
   sessionId?: string;
 }
