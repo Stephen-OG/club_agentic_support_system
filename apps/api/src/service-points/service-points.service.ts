@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { AuthContext } from "../auth/auth-context";
 import { PrismaService } from "../database/prisma.service";
 import { AiTriageService } from "../triage/ai-triage.service";
@@ -25,10 +25,12 @@ export class ServicePointsService {
 
   async createVenue(auth: AuthContext, input: CreateVenueDto) {
     this.venueAccess.assertCanManageWorkspace(auth, auth.workspaceId);
+    const name = input.name.trim();
+
     return this.prisma.venue.create({
       data: {
         workspaceId: auth.workspaceId,
-        name: input.name.trim(),
+        name,
         slug: input.slug,
         timezone: input.timezone || "Europe/London"
       }
@@ -36,15 +38,39 @@ export class ServicePointsService {
   }
 
   async createServicePoint(auth: AuthContext, venueId: string, input: CreateServicePointDto) {
-    const venue = await this.prisma.venue.findUniqueOrThrow({ where: { id: venueId } });
+    const venue = await this.prisma.venue.findFirst({
+      where: {
+        id: venueId,
+        workspaceId: auth.workspaceId
+      }
+    });
+
+    if (!venue) {
+      throw new NotFoundException("Venue not found");
+    }
+
     this.venueAccess.assertCanManageVenue(auth, { workspaceId: venue.workspaceId, venueId });
+    const label = input.label.trim();
+
+    if (input.locationId) {
+      const location = await this.prisma.venueLocation.findFirst({
+        where: {
+          id: input.locationId,
+          venueId
+        }
+      });
+
+      if (!location) {
+        throw new BadRequestException("Location does not belong to this venue");
+      }
+    }
 
     return this.prisma.servicePoint.create({
       data: {
         venueId,
         locationId: input.locationId || null,
-        label: input.label.trim(),
-        qrToken: this.createQrToken(input.label)
+        label,
+        qrToken: this.createQrToken(label)
       }
     });
   }
