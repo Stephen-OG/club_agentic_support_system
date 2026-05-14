@@ -3,8 +3,25 @@
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-let browserSupabaseClient: SupabaseClient | null = null;
-let browserSupabaseConfig: string | null = null;
+type BrowserSupabaseRegistry = {
+  client: SupabaseClient | null;
+  config: string | null;
+};
+
+const registryKey = "__guestosBrowserSupabase";
+
+function getRegistry() {
+  const globalScope = globalThis as typeof globalThis & {
+    [registryKey]?: BrowserSupabaseRegistry;
+  };
+
+  globalScope[registryKey] ??= {
+    client: null,
+    config: null
+  };
+
+  return globalScope[registryKey];
+}
 
 export function createBrowserSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -15,13 +32,14 @@ export function createBrowserSupabaseClient() {
   }
 
   const configKey = `${url}:${anonKey}`;
+  const registry = getRegistry();
 
-  if (browserSupabaseClient && browserSupabaseConfig === configKey) {
-    return browserSupabaseClient;
+  if (registry.client && registry.config === configKey) {
+    return registry.client;
   }
 
-  browserSupabaseClient = createClient(url, anonKey);
-  browserSupabaseConfig = configKey;
+  registry.client = createClient(url, anonKey);
+  registry.config = configKey;
 
-  return browserSupabaseClient;
+  return registry.client;
 }
