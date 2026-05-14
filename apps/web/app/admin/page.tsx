@@ -2,7 +2,7 @@ import { AdminDashboard } from "./admin-dashboard";
 
 export default function AdminPage() {
   return (
-    <main className="page">
+    <main className="legacy-command-page">
       <AdminDashboard />
     </main>
   );

@@ -1193,3 +1193,62 @@ body {
     min-height: auto;
   }
 }
+
+.legacy-command-page {
+  min-height: 100vh;
+  padding: clamp(20px, 4vw, 44px);
+}
+
+.page-title {
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 0.98;
+  margin: 0;
+}
+
+.lead,
+.meta {
+  color: var(--muted);
+}
+
+.panel,
+.request-card,
+.metric-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+}
+
+.button {
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink);
+  display: inline-flex;
+  font-weight: 900;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 13px;
+}
+
+.button.secondary,
+.button.selected {
+  background: var(--accent);
+  color: #0a100e;
+}
+
+.button.ghost {
+  background: transparent;
+}
+
+.dev-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  padding: 8px 10px;
+  text-transform: uppercase;
+}

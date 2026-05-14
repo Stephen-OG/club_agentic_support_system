@@ -166,9 +166,10 @@ export function AdminDashboard() {
   return (
     <section className="grid">
       <div className="dashboard-header">
-        <h1 className="page-title">Operations Dashboard</h1>
-        <p className="lead">Track guest requests, service recovery, staff handoffs, and satisfaction signals in one live queue.</p>
+        <h1 className="page-title">Operations</h1>
+        <p className="lead">Live guest requests, staff handoffs, service recovery, and satisfaction signals.</p>
         <div className="toolbar">
+          <span className="dev-chip">Local role preview</span>
           {(["manager", "admin", "staff"] as StaffRole[]).map((nextRole) => (
             <button
               className={`button ghost ${role === nextRole ? "selected" : ""}`}
