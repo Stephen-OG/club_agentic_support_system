@@ -1,46 +1,42 @@
-import Link from "next/link";
-import { ArrowRight, LayoutDashboard, MessageCircle, QrCode } from "lucide-react";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
+import { AppShell } from "./app-shell";
+import { LoginPanel } from "./login-panel";
+import { PasswordChangePanel } from "./password-change-panel";
+import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 export default function HomePage() {
-  return (
-    <main>
-      <section className="hero">
-        <div>
-          <div className="eyebrow">Guest support OS</div>
-          <h1>Guest requests, triaged instantly</h1>
-          <p>
-            Let guests ask naturally from the table while your team gets a prioritized, trackable service queue.
-          </p>
-          <Link className="button" href="/table/demo-table-1">
-            Try demo table <ArrowRight size={18} />
-          </Link>
-        </div>
-      </section>
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
 
-      <section className="page grid two-col">
-        <div className="panel">
-          <h2>Built for live service</h2>
-          <p className="lead">
-            Guests ask for tissues, spoons, cleaning, payment help, or safety support. The assistant replies warmly, creates a staff request, and keeps the conversation open.
-          </p>
-          <div className="quick-actions">
-            <Link className="button ghost" href="/table/demo-table-1">
-              <MessageCircle size={17} /> Guest chat
-            </Link>
-            <Link className="button ghost" href="/admin">
-              <LayoutDashboard size={17} /> Staff dashboard
-            </Link>
-          </div>
-        </div>
+  useEffect(() => {
+    if (!supabase) {
+      setSession(null);
+      return;
+    }
 
-        <div className="panel">
-          <h2>QR ready by table</h2>
-          <p className="lead">
-            Each physical table gets a URL like <strong>/table/demo-table-1</strong>. In production, the token comes from Supabase and is printed as a QR code.
-          </p>
-          <QrCode size={92} strokeWidth={1.4} />
-        </div>
-      </section>
-    </main>
-  );
+    void supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    return () => data.subscription.unsubscribe();
+  }, [supabase]);
+
+  if (session === undefined) {
+    return (
+      <main className="auth-screen">
+        <div className="loading-panel">Loading command center...</div>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return <LoginPanel />;
+  }
+
+  if (session.user.user_metadata?.mustChangePassword === true) {
+    return <PasswordChangePanel />;
+  }
+
+  return <AppShell />;
 }
