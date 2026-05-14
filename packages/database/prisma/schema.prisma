@@ -143,6 +143,7 @@ model ServicePoint {
 
 model StaffProfile {
   id                         String              @id @default(uuid()) @db.Uuid
+  authUserId                 String?             @unique
   email                      String?             @unique
   displayName                String
   memberships                StaffMembership[]

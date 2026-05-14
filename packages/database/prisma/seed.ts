@@ -6,6 +6,8 @@ const workspaceId = "00000000-0000-0000-0000-000000000001";
 const venueId = "00000000-0000-0000-0000-000000000101";
 const mainFloorId = "00000000-0000-0000-0000-000000000201";
 
+type SeedStaff = readonly [id: string, email: string, displayName: string, role: StaffRole, authUserId?: string];
+
 async function main() {
   await prisma.workspace.upsert({
     create: {
@@ -78,23 +80,25 @@ async function main() {
     });
   }
 
-  const staff = [
+  const staff: readonly SeedStaff[] = [
     ["00000000-0000-0000-0000-000000000401", "owner@demo.local", "Olivia Owner", StaffRole.OWNER],
     ["00000000-0000-0000-0000-000000000402", "maya.manager@demo.local", "Maya Manager", StaffRole.MANAGER],
     ["00000000-0000-0000-0000-000000000403", "alex.admin@demo.local", "Alex Admin", StaffRole.ADMIN],
     ["00000000-0000-0000-0000-000000000404", "sam.staff@demo.local", "Sam Staff", StaffRole.STAFF],
     ["00000000-0000-0000-0000-000000000405", "riley.runner@demo.local", "Riley Runner", StaffRole.STAFF],
     ["00000000-0000-0000-0000-000000000406", "casey.security@demo.local", "Casey Security", StaffRole.SECURITY]
-  ] as const;
+  ];
 
-  for (const [id, email, displayName, role] of staff) {
+  for (const [id, email, displayName, role, authUserId] of staff) {
     await prisma.staffProfile.upsert({
       create: {
         id,
+        authUserId,
         displayName,
         email
       },
       update: {
+        authUserId,
         displayName,
         email
       },
