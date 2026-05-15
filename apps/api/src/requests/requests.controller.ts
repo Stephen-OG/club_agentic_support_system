@@ -2,14 +2,14 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, UseGuards } from "@
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import type { AuthContext } from "../auth/auth-context";
 import { CurrentAuth } from "../auth/auth-context.decorator";
-import { DevAuthGuard } from "../auth/dev-auth.guard";
+import { SupabaseAuthGuard } from "../auth/supabase-auth.guard";
 import { GuestRequestActionDto } from "./dto/guest-request-action.dto";
 import { UpdateRequestStatusDto } from "./dto/update-request-status.dto";
 import { RequestsService } from "./requests.service";
 
 @ApiTags("requests")
 @ApiBearerAuth()
-@UseGuards(DevAuthGuard)
+@UseGuards(SupabaseAuthGuard)
 @Controller()
 export class RequestsController {
   constructor(private readonly requests: RequestsService) {}

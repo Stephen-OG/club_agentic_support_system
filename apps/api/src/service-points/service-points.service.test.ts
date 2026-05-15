@@ -577,6 +577,105 @@ describe("ServicePointsService public QR workflow", () => {
     ]);
   });
 
+  it("loads public QR conversation state scoped to the active service point", async () => {
+    const servicePoint = {
+      id: "sp_public_state",
+      venueId: "venue_public_state",
+      label: "Cabana 8",
+      qrToken: "qr_public_state_123",
+      isActive: true
+    };
+    const messages = [
+      {
+        id: "message_public_state_1",
+        conversationId: "conversation_public_state_1",
+        sender: SenderType.GUEST,
+        body: "Can we get towels?"
+      }
+    ];
+    const request = {
+      id: "request_public_state_1",
+      conversationId: "conversation_public_state_1",
+      title: "Guest support request",
+      status: RequestStatus.NEW,
+      servicePoint
+    };
+    const conversation = {
+      id: "conversation_public_state_1",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      messages,
+      requests: [request]
+    };
+    const calls: Array<{ model: string; args: unknown }> = [];
+    const service = new ServicePointsService(
+      {} as never,
+      {} as never,
+      {
+        servicePoint: {
+          findFirst: async (args: unknown) => {
+            calls.push({ model: "servicePoint.findFirst", args });
+            return servicePoint;
+          }
+        },
+        conversation: {
+          findFirst: async (args: unknown) => {
+            calls.push({ model: "conversation.findFirst", args });
+            return conversation;
+          }
+        }
+      } as never,
+      {} as never
+    );
+
+    const result = await service.getGuestConversation("qr_public_state_123", "conversation_public_state_1");
+
+    assert.deepEqual(result, {
+      conversationId: conversation.id,
+      messages,
+      request,
+      servicePoint
+    });
+    assert.deepEqual(calls, [
+      {
+        model: "servicePoint.findFirst",
+        args: {
+          where: {
+            qrToken: "qr_public_state_123",
+            isActive: true
+          }
+        }
+      },
+      {
+        model: "conversation.findFirst",
+        args: {
+          where: {
+            id: "conversation_public_state_1",
+            servicePointId: servicePoint.id,
+            venueId: servicePoint.venueId
+          },
+          include: {
+            messages: {
+              orderBy: {
+                createdAt: "asc"
+              }
+            },
+            requests: {
+              include: {
+                assignedTo: true,
+                servicePoint: true
+              },
+              orderBy: {
+                createdAt: "desc"
+              },
+              take: 1
+            }
+          }
+        }
+      }
+    ]);
+  });
+
   it("rejects through the transaction when a later request write fails", async () => {
     const servicePoint = {
       id: "sp_failed_write",

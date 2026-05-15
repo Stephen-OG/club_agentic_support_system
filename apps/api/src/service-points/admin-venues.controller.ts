@@ -1,7 +1,7 @@
-import { Body, Controller, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiCreatedResponse, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { CurrentAuth } from "../auth/auth-context.decorator";
-import { DevAuthGuard } from "../auth/dev-auth.guard";
+import { SupabaseAuthGuard } from "../auth/supabase-auth.guard";
 import type { AuthContext } from "../auth/auth-context";
 import { CreateServicePointDto } from "./dto/create-service-point.dto";
 import { CreateVenueDto } from "./dto/create-venue.dto";
@@ -9,10 +9,16 @@ import { ServicePointsService } from "./service-points.service";
 
 @ApiTags("admin venues")
 @ApiBearerAuth()
-@UseGuards(DevAuthGuard)
+@UseGuards(SupabaseAuthGuard)
 @Controller("admin")
 export class AdminVenuesController {
   constructor(private readonly servicePoints: ServicePointsService) {}
+
+  @Get("venues")
+  @ApiOkResponse({ description: "Lists venues visible to the authenticated staff profile" })
+  listVenues(@CurrentAuth() auth: AuthContext) {
+    return this.servicePoints.listVenues(auth);
+  }
 
   @Post("venues")
   @ApiCreatedResponse({ description: "Creates a venue in the authenticated workspace" })

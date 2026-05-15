@@ -46,6 +46,37 @@ export class ServicePointsService {
     });
   }
 
+  async listVenues(auth: AuthContext) {
+    const canReadWorkspace = auth.role === "owner" || auth.role === "admin";
+    const where = canReadWorkspace
+      ? {
+          workspaceId: auth.workspaceId
+        }
+      : {
+          workspaceId: auth.workspaceId,
+          id: auth.venueId ?? "00000000-0000-0000-0000-000000000000"
+        };
+
+    return this.prisma.venue.findMany({
+      where,
+      include: {
+        locations: {
+          orderBy: {
+            name: "asc"
+          }
+        },
+        servicePoints: {
+          orderBy: {
+            label: "asc"
+          }
+        }
+      },
+      orderBy: {
+        name: "asc"
+      }
+    });
+  }
+
   async createServicePoint(auth: AuthContext, venueId: string, input: CreateServicePointDto) {
     const venue = await this.prisma.venue.findFirst({
       where: {
@@ -205,5 +236,54 @@ export class ServicePointsService {
         servicePoint
       };
     });
+  }
+
+  async getGuestConversation(token: string, conversationId: string) {
+    const servicePoint = await this.prisma.servicePoint.findFirst({
+      where: {
+        qrToken: token,
+        isActive: true
+      }
+    });
+
+    if (!servicePoint) {
+      throw new NotFoundException("Service point not found");
+    }
+
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        servicePointId: servicePoint.id,
+        venueId: servicePoint.venueId
+      },
+      include: {
+        messages: {
+          orderBy: {
+            createdAt: "asc"
+          }
+        },
+        requests: {
+          include: {
+            assignedTo: true,
+            servicePoint: true
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 1
+        }
+      }
+    });
+
+    if (!conversation) {
+      throw new NotFoundException("Conversation not found");
+    }
+
+    return {
+      conversationId: conversation.id,
+      messages: conversation.messages,
+      request: conversation.requests[0] ?? null,
+      servicePoint
+    };
   }
 }

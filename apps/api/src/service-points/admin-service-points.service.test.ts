@@ -85,6 +85,88 @@ describe("ServicePointsService admin helpers", () => {
     assert.equal(authorizeCalled, false);
   });
 
+  it("lists workspace venues with locations and service points for admins", async () => {
+    const venues = [
+      {
+        id: "venue_1",
+        workspaceId: "workspace_1",
+        name: "Main Room",
+        locations: [{ id: "location_1", name: "Floor", venueId: "venue_1" }],
+        servicePoints: [{ id: "service_point_1", label: "Table 1", venueId: "venue_1" }]
+      }
+    ];
+    const calls: unknown[] = [];
+    const service = new ServicePointsService(
+      {} as never,
+      {} as never,
+      {
+        venue: {
+          findMany: async (args: unknown) => {
+            calls.push(args);
+            return venues;
+          }
+        }
+      } as never,
+      {} as never
+    );
+
+    const result = await service.listVenues({
+      role: "admin",
+      staffProfileId: "staff_1",
+      workspaceId: "workspace_1"
+    });
+
+    assert.deepEqual(result, venues);
+    assert.deepEqual(calls, [
+      {
+        where: {
+          workspaceId: "workspace_1"
+        },
+        include: {
+          locations: {
+            orderBy: {
+              name: "asc"
+            }
+          },
+          servicePoints: {
+            orderBy: {
+              label: "asc"
+            }
+          }
+        },
+        orderBy: {
+          name: "asc"
+        }
+      }
+    ]);
+  });
+
+  it("scopes venue listing to the assigned venue for staff", async () => {
+    const calls: unknown[] = [];
+    const service = new ServicePointsService(
+      {} as never,
+      {} as never,
+      {
+        venue: {
+          findMany: async (args: unknown) => {
+            calls.push(args);
+            return [];
+          }
+        }
+      } as never,
+      {} as never
+    );
+
+    await service.listVenues({
+      role: "staff",
+      staffProfileId: "staff_1",
+      workspaceId: "workspace_1",
+      venueId: "venue_1"
+    });
+
+    assert.equal((calls[0] as { where: { id: string } }).where.id, "venue_1");
+  });
+
   it("normalizes DTO whitespace before validation", async () => {
     const venue = plainToInstance(CreateVenueDto, { name: "  Main Bar  ", slug: "main-bar" });
     const servicePoint = plainToInstance(CreateServicePointDto, { label: "  Patio  " });
