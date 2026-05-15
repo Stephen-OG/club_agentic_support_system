@@ -1,4 +1,6 @@
-import { IsEmail, IsIn, IsOptional, IsString, IsUUID, MinLength, ValidateIf } from "class-validator";
+import { IsEmail, IsIn, IsOptional, IsString, Matches, MinLength, ValidateIf } from "class-validator";
+
+const postgresUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class CreateStaffUserDto {
   @IsEmail()
@@ -12,7 +14,7 @@ export class CreateStaffUserDto {
   role!: "owner" | "admin" | "manager" | "staff" | "security" | "read_only";
 
   @ValidateIf((input: CreateStaffUserDto) => !["owner", "admin"].includes(input.role))
-  @IsUUID()
+  @Matches(postgresUuidPattern, { message: "venueId must be a Postgres UUID" })
   venueId?: string;
 
   @IsOptional()
