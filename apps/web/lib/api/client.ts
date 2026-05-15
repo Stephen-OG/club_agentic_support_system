@@ -1,11 +1,33 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
+export const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
 
 type ApiErrorBody = {
   error?: string;
   message?: string;
 };
+
+function buildHeaders(initHeaders: HeadersInit | undefined, token?: string) {
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(initHeaders || {})
+  };
+}
+
+async function parseResponse<T>(response: Response) {
+  const body = (await response.json().catch(() => null)) as (ApiErrorBody & T) | null;
+
+  if (!response.ok) {
+    throw new Error(body?.message || body?.error || "Request failed");
+  }
+
+  return body as T;
+}
+
+function unreachableError() {
+  return new Error(`API server is unreachable at ${apiBaseUrl}. Start it with npm run dev:api or set NEXT_PUBLIC_API_URL.`);
+}
 
 export async function apiRequest<T>(supabase: SupabaseClient, path: string, init: RequestInit = {}) {
   const { data } = await supabase.auth.getSession();
@@ -20,21 +42,26 @@ export async function apiRequest<T>(supabase: SupabaseClient, path: string, init
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...init,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        ...(init.headers || {})
-      }
+      headers: buildHeaders(init.headers, token)
     });
   } catch {
-    throw new Error(`API server is unreachable at ${apiBaseUrl}. Start it with npm run dev:api or set NEXT_PUBLIC_API_URL.`);
+    throw unreachableError();
   }
 
-  const body = (await response.json().catch(() => null)) as ApiErrorBody | null;
+  return parseResponse<T>(response);
+}
 
-  if (!response.ok) {
-    throw new Error(body?.message || body?.error || "Request failed");
+export async function publicApiRequest<T>(path: string, init: RequestInit = {}) {
+  let response: Response;
+
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      ...init,
+      headers: buildHeaders(init.headers)
+    });
+  } catch {
+    throw unreachableError();
   }
 
-  return body as T;
+  return parseResponse<T>(response);
 }

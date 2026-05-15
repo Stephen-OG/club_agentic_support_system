@@ -2,9 +2,11 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Send, Sparkles, Star } from "lucide-react";
+import { publicApiRequest } from "@/lib/api/client";
+import type { CommandMessage, CommandSupportRequest, PublicQrConversationState } from "@/lib/auth/types";
 import { createSendErrorBody, createUpdateErrorBody, createWelcomeBody } from "@/lib/chat-copy";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
-import type { Message, SupportRequest } from "@/lib/types";
+import type { Message, RequestPriority, RequestStatus, SenderType, SupportRequest } from "@/lib/types";
 
 type LocalMessage = Pick<Message, "id" | "sender" | "body" | "created_at">;
 
@@ -22,6 +24,46 @@ function createWelcomeMessage(tableLabel: string): LocalMessage {
     sender: "assistant",
     body: createWelcomeBody(tableLabel),
     created_at: new Date().toISOString()
+  };
+}
+
+function normalizeMessage(message: CommandMessage): LocalMessage {
+  return {
+    id: message.id,
+    sender: message.sender.toLowerCase() as SenderType,
+    body: message.body,
+    created_at: message.createdAt
+  };
+}
+
+function normalizeRequest(request: CommandSupportRequest, fallback?: SupportRequest | null): SupportRequest {
+  return {
+    id: request.id,
+    club_id: request.venueId,
+    table_id: request.servicePointId,
+    conversation_id: request.conversationId,
+    title: request.title,
+    category: request.category,
+    status: request.status.toLowerCase() as RequestStatus,
+    priority: request.priority.toLowerCase() as RequestPriority,
+    assigned_to: request.assignedToId,
+    summary: request.summary,
+    created_at: request.createdAt,
+    updated_at: request.updatedAt,
+    resolved_at: request.resolvedAt,
+    satisfaction_rating: fallback?.satisfaction_rating ?? null,
+    club_tables: request.servicePoint
+      ? {
+          label: request.servicePoint.label,
+          zone: null
+        }
+      : fallback?.club_tables ?? null,
+    staff_profiles: request.assignedTo
+      ? {
+          display_name: request.assignedTo.displayName,
+          role: "staff"
+        }
+      : fallback?.staff_profiles ?? null
   };
 }
 
@@ -73,21 +115,17 @@ export function TableChat({ tableToken, tableLabel }: { tableToken: string; tabl
     const activeConversationId = conversationId;
 
     async function loadConversation() {
-      const response = await fetch(`/api/chat?conversationId=${encodeURIComponent(activeConversationId)}`, {
-        cache: "no-store"
-      });
+      const result = await publicApiRequest<PublicQrConversationState>(
+        `/public/qr/${encodeURIComponent(tableToken)}/conversations/${encodeURIComponent(activeConversationId)}`,
+        { cache: "no-store" }
+      ).catch(() => null);
 
-      if (!response.ok || cancelled) {
+      if (!result || cancelled) {
         return;
       }
 
-      const result = (await response.json()) as {
-        messages: LocalMessage[];
-        request: SupportRequest | null;
-      };
-
-      setMessages([createWelcomeMessage(tableLabel), ...(result.messages || [])]);
-      setRequest(result.request);
+      setMessages([createWelcomeMessage(tableLabel), ...result.messages.map(normalizeMessage)]);
+      setRequest(result.request ? normalizeRequest(result.request) : null);
     }
 
     void loadConversation();
@@ -97,7 +135,7 @@ export function TableChat({ tableToken, tableLabel }: { tableToken: string; tabl
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [conversationId, tableLabel]);
+  }, [conversationId, tableLabel, tableToken]);
 
   async function sendMessage(nextMessage?: string) {
     const body = (nextMessage || input).trim();
@@ -109,25 +147,14 @@ export function TableChat({ tableToken, tableLabel }: { tableToken: string; tabl
     setIsSending(true);
 
     try {
-      const response = await fetch("/api/chat", {
+      const result = await publicApiRequest<PublicQrConversationState>(`/public/qr/${encodeURIComponent(tableToken)}/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tableToken, message: body, conversationId })
+        body: JSON.stringify({ message: body, conversationId })
       });
 
-      if (!response.ok) {
-        throw new Error("Request failed");
-      }
-
-      const result = (await response.json()) as {
-        conversationId: string;
-        messages: LocalMessage[];
-        request: SupportRequest;
-      };
-
-      setMessages((current) => [...current, ...result.messages]);
+      setMessages((current) => [...current, ...result.messages.map(normalizeMessage)]);
       setConversationId(result.conversationId);
-      setRequest(result.request);
+      setRequest(result.request ? normalizeRequest(result.request) : null);
     } catch {
       setMessages((current) => [
         ...current,
@@ -151,24 +178,17 @@ export function TableChat({ tableToken, tableLabel }: { tableToken: string; tabl
     setIsSending(true);
 
     try {
-      const response = await fetch("/api/chat", {
+      const result = await publicApiRequest<{
+        request: CommandSupportRequest;
+        message?: CommandMessage;
+      }>(`/public/requests/${request.id}/action`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId: request.id, action, rating })
+        body: JSON.stringify({ action, rating })
       });
 
-      if (!response.ok) {
-        throw new Error("Request action failed");
-      }
-
-      const result = (await response.json()) as {
-        request: SupportRequest;
-        message?: LocalMessage;
-      };
-
-      setRequest(result.request);
+      setRequest(normalizeRequest(result.request, request));
       if (result.message) {
-        setMessages((current) => [...current, result.message as LocalMessage]);
+        setMessages((current) => [...current, normalizeMessage(result.message as CommandMessage)]);
       }
     } catch {
       setMessages((current) => [

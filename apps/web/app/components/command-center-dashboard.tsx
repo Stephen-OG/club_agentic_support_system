@@ -1,11 +1,62 @@
-import { Activity, BellRing, MapPinned, Star } from "lucide-react";
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Activity, BellRing, MapPinned, RefreshCw, Star } from "lucide-react";
+import { apiRequest } from "@/lib/api/client";
+import type { CommandSupportRequest, CommandTeamMember, CommandVenue } from "@/lib/auth/types";
+import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+
+function label(value: string) {
+  return value.toLowerCase().replace("_", " ");
+}
 
 export function CommandCenterDashboard() {
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const [venues, setVenues] = useState<CommandVenue[]>([]);
+  const [team, setTeam] = useState<CommandTeamMember[]>([]);
+  const [requests, setRequests] = useState<CommandSupportRequest[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      setLoading(false);
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      const [nextVenues, nextTeam] = await Promise.all([
+        apiRequest<CommandVenue[]>(supabase, "/admin/venues"),
+        apiRequest<CommandTeamMember[]>(supabase, "/team")
+      ]);
+      const venueRequests = nextVenues[0]
+        ? await apiRequest<CommandSupportRequest[]>(supabase, `/venues/${nextVenues[0].id}/requests`)
+        : [];
+      setVenues(nextVenues);
+      setTeam(nextTeam);
+      setRequests(venueRequests);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Could not load command center");
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const activeRequests = requests.filter((request) => !["RESOLVED", "CANCELLED"].includes(request.status));
+  const highPriority = activeRequests.filter((request) => ["HIGH", "URGENT"].includes(request.priority));
   const metrics = [
-    { label: "Active requests", value: "18", detail: "5 high priority", icon: BellRing },
-    { label: "Open venues", value: "3", detail: "2 in service", icon: MapPinned },
-    { label: "Avg satisfaction", value: "4.6", detail: "last 24h", icon: Star },
-    { label: "Live signals", value: "92%", detail: "queue health", icon: Activity }
+    { label: "Active requests", value: activeRequests.length.toString(), detail: `${highPriority.length} high priority`, icon: BellRing },
+    { label: "Venues", value: venues.length.toString(), detail: `${venues.reduce((sum, venue) => sum + venue.servicePoints.length, 0)} QR points`, icon: MapPinned },
+    { label: "Team users", value: team.length.toString(), detail: "Supabase credentials", icon: Star },
+    { label: "API state", value: loading ? "Sync" : "Live", detail: "Nest protected routes", icon: Activity }
   ];
 
   return (
@@ -15,8 +66,14 @@ export function CommandCenterDashboard() {
           <div className="eyebrow">Operations overview</div>
           <h1>Command Center</h1>
         </div>
-        <span className="live-pill">Live</span>
+        <button className="command-button" disabled={loading} onClick={() => void refresh()} type="button">
+          <RefreshCw size={16} />
+          Refresh
+        </button>
       </div>
+
+      {error ? <div className="form-error wide">{error}</div> : null}
+
       <div className="metric-strip">
         {metrics.map((metric) => {
           const Icon = metric.icon;
@@ -32,16 +89,21 @@ export function CommandCenterDashboard() {
           );
         })}
       </div>
+
       <div className="command-panel wide">
-        <h2>Priority queue</h2>
+        <div className="panel-title-row">
+          <h2>Priority queue</h2>
+          <span className="data-chip">{venues[0]?.name || "No venue"}</span>
+        </div>
         <div className="queue-list">
-          {["VIP booth needs security support", "Table 12 waiting on payment", "Bar area spill cleanup"].map((item, index) => (
-            <div className="queue-row" key={item}>
-              <span className={`severity-dot severity-${index}`} />
-              <strong>{item}</strong>
-              <span>{index === 0 ? "Urgent" : "In progress"}</span>
+          {activeRequests.slice(0, 6).map((request) => (
+            <div className="queue-row" key={request.id}>
+              <span className={`severity-dot severity-${label(request.priority)}`} />
+              <strong>{request.title}</strong>
+              <span>{label(request.status)}</span>
             </div>
           ))}
+          {!activeRequests.length && !loading ? <div className="empty-state">No active requests in the first venue queue.</div> : null}
         </div>
       </div>
     </section>

@@ -1,20 +1,65 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { Copy, UserPlus } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Copy, RefreshCw, UserPlus } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
-import type { CreatedStaffCredential } from "@/lib/auth/types";
+import type { CommandRole, CommandTeamMember, CommandVenue, CreatedStaffCredential } from "@/lib/auth/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
+const roles: Array<{ label: string; value: CommandRole }> = [
+  { label: "Staff", value: "staff" },
+  { label: "Manager", value: "manager" },
+  { label: "Security", value: "security" },
+  { label: "Read only", value: "read_only" },
+  { label: "Admin", value: "admin" },
+  { label: "Owner", value: "owner" }
+];
+
+function roleRequiresVenue(role: CommandRole) {
+  return !["owner", "admin"].includes(role);
+}
+
 export function TeamCommand() {
-  const supabase = createBrowserSupabaseClient();
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [role, setRole] = useState("staff");
+  const [role, setRole] = useState<CommandRole>("staff");
   const [venueId, setVenueId] = useState("");
+  const [team, setTeam] = useState<CommandTeamMember[]>([]);
+  const [venues, setVenues] = useState<CommandVenue[]>([]);
   const [created, setCreated] = useState<CreatedStaffCredential | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!supabase) {
+      setListError("Supabase is not configured.");
+      return;
+    }
+
+    setRefreshing(true);
+    setListError(null);
+
+    try {
+      const [nextTeam, nextVenues] = await Promise.all([
+        apiRequest<CommandTeamMember[]>(supabase, "/team"),
+        apiRequest<CommandVenue[]>(supabase, "/admin/venues")
+      ]);
+      setTeam(nextTeam);
+      setVenues(nextVenues);
+      setVenueId((current) => current || nextVenues[0]?.id || "");
+    } catch (nextError) {
+      setListError(nextError instanceof Error ? nextError.message : "Could not load team data");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,13 +79,13 @@ export function TeamCommand() {
           email,
           displayName,
           role,
-          venueId: ["owner", "admin"].includes(role) ? undefined : venueId
+          venueId: roleRequiresVenue(role) ? venueId : undefined
         })
       });
       setCreated(result);
       setEmail("");
       setDisplayName("");
-      setVenueId("");
+      await refresh();
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not create staff user");
     } finally {
@@ -55,6 +100,10 @@ export function TeamCommand() {
           <div className="eyebrow">Credential control</div>
           <h1>Team</h1>
         </div>
+        <button className="command-button" disabled={refreshing} onClick={() => void refresh()} type="button">
+          <RefreshCw size={16} />
+          Refresh
+        </button>
       </div>
       <div className="command-panel">
         <h2>Create user</h2>
@@ -69,19 +118,25 @@ export function TeamCommand() {
           </label>
           <label>
             <span>Role</span>
-            <select onChange={(event) => setRole(event.target.value)} value={role}>
-              <option value="staff">Staff</option>
-              <option value="manager">Manager</option>
-              <option value="security">Security</option>
-              <option value="read_only">Read only</option>
-              <option value="admin">Admin</option>
-              <option value="owner">Owner</option>
+            <select onChange={(event) => setRole(event.target.value as CommandRole)} value={role}>
+              {roles.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
             </select>
           </label>
-          {!["owner", "admin"].includes(role) ? (
+          {roleRequiresVenue(role) ? (
             <label>
-              <span>Venue ID</span>
-              <input onChange={(event) => setVenueId(event.target.value)} required value={venueId} />
+              <span>Venue</span>
+              <select onChange={(event) => setVenueId(event.target.value)} required value={venueId}>
+                <option value="">Select venue</option>
+                {venues.map((venue) => (
+                  <option key={venue.id} value={venue.id}>
+                    {venue.name}
+                  </option>
+                ))}
+              </select>
             </label>
           ) : null}
           {error ? <div className="form-error">{error}</div> : null}
@@ -90,6 +145,31 @@ export function TeamCommand() {
             {loading ? "Creating..." : "Create credentials"}
           </button>
         </form>
+      </div>
+      <div className="command-panel">
+        <div className="panel-title-row">
+          <h2>Active credentials</h2>
+          <span className="data-chip">{team.length} users</span>
+        </div>
+        {listError ? <div className="form-error">{listError}</div> : null}
+        <div className="team-directory">
+          {team.map((member) => {
+            const membership = member.memberships[0];
+            return (
+              <article className="directory-row" key={member.id}>
+                <div>
+                  <strong>{member.displayName}</strong>
+                  <span>{member.email || "No email"}</span>
+                </div>
+                <div className="directory-meta">
+                  <span className="data-chip">{membership?.role.replace("_", " ") || "unassigned"}</span>
+                  <small>{membership?.venue?.name || membership?.workspace?.name || "Workspace"}</small>
+                </div>
+              </article>
+            );
+          })}
+          {!team.length && !listError ? <div className="empty-state">No team members returned by the API yet.</div> : null}
+        </div>
       </div>
       {created ? (
         <div className="command-panel credential-panel">

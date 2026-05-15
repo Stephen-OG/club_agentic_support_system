@@ -718,6 +718,11 @@ button {
   color: var(--accent-strong);
 }
 
+.pill.status-assigned {
+  background: #e7eaff;
+  color: var(--indigo);
+}
+
 .pill.status-declined {
   background: var(--danger-soft);
   color: var(--danger);
@@ -741,6 +746,11 @@ button {
 .pill.status-cancelled {
   background: #ece4d5;
   color: #5f574d;
+}
+
+.pill.status-escalated {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .empty {
@@ -996,6 +1006,46 @@ body {
   color: var(--danger);
 }
 
+.command-actions,
+.panel-title-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.command-select {
+  background: #0a100e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.data-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  padding: 6px 9px;
+  text-transform: capitalize;
+}
+
+.icon-button {
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
 .form-error {
   background: rgba(255, 107, 74, 0.12);
   border: 1px solid rgba(255, 107, 74, 0.38);
@@ -1165,6 +1215,53 @@ body {
   background: var(--accent-2);
 }
 
+.severity-low,
+.severity-normal {
+  background: var(--success);
+}
+
+.severity-high {
+  background: var(--warning);
+}
+
+.severity-urgent {
+  background: var(--danger);
+}
+
+.request-row {
+  background: #0a100e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 13px;
+}
+
+.request-main {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.request-main strong,
+.directory-row strong,
+.service-point-row strong {
+  display: block;
+}
+
+.request-main span,
+.directory-row span,
+.service-point-row span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pill-row.compact {
+  margin: 0;
+}
+
 .ops-layout {
   display: grid;
   gap: 18px;
@@ -1230,11 +1327,73 @@ body {
   gap: 10px;
 }
 
+.team-directory,
+.service-point-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.directory-row,
+.service-point-row {
+  align-items: center;
+  background: #0a100e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 13px;
+}
+
+.directory-meta {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.directory-meta small {
+  color: var(--muted);
+}
+
+.venue-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.venue-card {
+  align-content: start;
+}
+
+.venue-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.venue-stats span {
+  background: rgba(216, 255, 104, 0.1);
+  border: 1px solid rgba(216, 255, 104, 0.22);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+  padding: 7px 9px;
+}
+
+.service-point-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 @media (max-width: 900px) {
   .auth-screen,
   .command-shell,
   .metric-strip,
-  .ops-layout {
+  .ops-layout,
+  .venue-grid,
+  .request-row {
     grid-template-columns: 1fr;
   }
 

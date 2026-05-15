@@ -1,11 +1,13 @@
 export type RequestStatus =
   | "new"
   | "acknowledged"
+  | "assigned"
   | "declined"
   | "in_progress"
   | "completed"
   | "resolved"
-  | "cancelled";
+  | "cancelled"
+  | "escalated";
 export type RequestPriority = "low" | "normal" | "high" | "urgent";
 export type SenderType = "guest" | "assistant" | "staff" | "system";
 export type StaffRole = "manager" | "admin" | "staff";
