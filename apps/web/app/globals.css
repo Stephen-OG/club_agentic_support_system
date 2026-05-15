@@ -1440,13 +1440,33 @@ body {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
+.staff-task-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.staff-task {
+  align-items: center;
+  background:
+    linear-gradient(90deg, rgba(216, 255, 104, 0.08), transparent 34%),
+    #0a100e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 14px;
+}
+
 @media (max-width: 900px) {
   .auth-screen,
   .command-shell,
   .metric-strip,
   .ops-layout,
   .venue-grid,
-  .request-row {
+  .request-row,
+  .staff-task {
     grid-template-columns: 1fr;
   }
 

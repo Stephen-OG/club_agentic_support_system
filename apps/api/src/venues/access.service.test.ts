@@ -30,4 +30,11 @@ describe("VenueAccessService", () => {
       ForbiddenException
     );
   });
+
+  it("allows read-only staff to read their assigned venue without operating it", () => {
+    const auth = { staffProfileId: "r", workspaceId: "w1", venueId: "v1", role: "read_only" as const };
+
+    assert.equal(service.canReadVenue(auth, { workspaceId: "w1", venueId: "v1" }), true);
+    assert.equal(service.canOperateVenue(auth, { workspaceId: "w1", venueId: "v1" }), false);
+  });
 });

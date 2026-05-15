@@ -59,7 +59,7 @@ export class RequestsService {
       throw new NotFoundException("Venue not found");
     }
 
-    this.venueAccess.assertCanOperateVenue(auth, { workspaceId: venue.workspaceId, venueId });
+    this.venueAccess.assertCanReadVenue(auth, { workspaceId: venue.workspaceId, venueId });
 
     return this.prisma.supportRequest.findMany({
       where: {

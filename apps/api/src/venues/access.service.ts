@@ -36,6 +36,14 @@ export class VenueAccessService {
     return auth.workspaceId === target.workspaceId && auth.venueId === target.venueId && ["staff", "security"].includes(auth.role);
   }
 
+  canReadVenue(auth: AuthContext, target: VenueTarget) {
+    if (this.canOperateVenue(auth, target)) {
+      return true;
+    }
+
+    return auth.workspaceId === target.workspaceId && auth.venueId === target.venueId && auth.role === "read_only";
+  }
+
   assertCanManageWorkspace(auth: AuthContext, workspaceId: string) {
     if (!this.canManageWorkspace(auth, workspaceId)) {
       throw new ForbiddenException("You cannot manage this workspace");
@@ -51,6 +59,12 @@ export class VenueAccessService {
   assertCanOperateVenue(auth: AuthContext, target: VenueTarget) {
     if (!this.canOperateVenue(auth, target)) {
       throw new ForbiddenException("You cannot operate this venue");
+    }
+  }
+
+  assertCanReadVenue(auth: AuthContext, target: VenueTarget) {
+    if (!this.canReadVenue(auth, target)) {
+      throw new ForbiddenException("You cannot read this venue");
     }
   }
 }

@@ -14,11 +14,74 @@ const auth: AuthContext = {
 
 function createVenueAccess() {
   return {
+    assertCanReadVenue: () => undefined,
     assertCanOperateVenue: () => undefined
   };
 }
 
 describe("RequestsService lifecycle", () => {
+  it("uses read permission when listing venue requests", async () => {
+    const venue = {
+      id: "venue_1",
+      workspaceId: "workspace_1"
+    };
+    const calls: Array<{ model: string; args: unknown }> = [];
+    let readPermissionChecked = false;
+    const prisma = {
+      venue: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "venue.findFirst", args });
+          return venue;
+        }
+      },
+      supportRequest: {
+        findMany: async (args: unknown) => {
+          calls.push({ model: "supportRequest.findMany", args });
+          return [];
+        }
+      }
+    };
+    const service = new RequestsService(prisma as never, {
+      assertCanReadVenue: () => {
+        readPermissionChecked = true;
+      },
+      assertCanOperateVenue: () => {
+        throw new Error("listing requests must not require operate permission");
+      }
+    } as never);
+
+    const result = await service.listForVenue({ ...auth, role: "read_only" }, venue.id);
+
+    assert.deepEqual(result, []);
+    assert.equal(readPermissionChecked, true);
+    assert.deepEqual(calls, [
+      {
+        model: "venue.findFirst",
+        args: {
+          where: {
+            id: venue.id,
+            workspaceId: auth.workspaceId
+          }
+        }
+      },
+      {
+        model: "supportRequest.findMany",
+        args: {
+          where: {
+            venueId: venue.id
+          },
+          include: {
+            assignedTo: true,
+            servicePoint: true
+          },
+          orderBy: {
+            createdAt: "desc"
+          }
+        }
+      }
+    ]);
+  });
+
   it("rejects an invalid staff transition from completed to resolved", async () => {
     const request = {
       id: "request_1",

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { Copy, Download, MapPinned, QrCode, RefreshCw } from "lucide-react";
-import { apiBaseUrl, apiRequest } from "@/lib/api/client";
+import { apiRequest } from "@/lib/api/client";
 import type { CommandVenue } from "@/lib/auth/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { generateQrCodeDataUrl } from "@/lib/qr";
@@ -143,7 +144,14 @@ export function VenuesCommand() {
               </button>
             </div>
           </div>
-          <img className="qr-preview-image" src={qrPreview.dataUrl} alt={`QR code for ${qrPreview.label}`} />
+          <Image
+            alt={`QR code for ${qrPreview.label}`}
+            className="qr-preview-image"
+            height={220}
+            src={qrPreview.dataUrl}
+            unoptimized
+            width={220}
+          />
         </section>
       ) : null}
 
