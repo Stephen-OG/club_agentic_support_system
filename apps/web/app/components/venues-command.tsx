@@ -1,16 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, MapPinned, QrCode, RefreshCw } from "lucide-react";
+import { Copy, Download, MapPinned, QrCode, RefreshCw } from "lucide-react";
 import { apiBaseUrl, apiRequest } from "@/lib/api/client";
 import type { CommandVenue } from "@/lib/auth/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { generateQrCodeDataUrl } from "@/lib/qr";
+
+type QrPreview = {
+  label: string;
+  url: string;
+  dataUrl: string;
+};
 
 export function VenuesCommand() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [venues, setVenues] = useState<CommandVenue[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [qrPreview, setQrPreview] = useState<QrPreview | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!supabase) {
@@ -30,6 +39,24 @@ export function VenuesCommand() {
       setLoading(false);
     }
   }, [supabase]);
+
+  const handleGenerateQr = useCallback(async (url: string, label: string) => {
+    setQrLoading(true);
+    try {
+      const dataUrl = await generateQrCodeDataUrl(url);
+      setQrPreview({ label, url, dataUrl });
+    } finally {
+      setQrLoading(false);
+    }
+  }, []);
+
+  const handleDownloadQr = useCallback(async (url: string, label: string) => {
+    const dataUrl = await generateQrCodeDataUrl(url);
+    const anchor = document.createElement("a");
+    anchor.href = dataUrl;
+    anchor.download = `${label.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "qr"}.png`;
+    anchor.click();
+  }, []);
 
   useEffect(() => {
     void refresh();
@@ -66,22 +93,33 @@ export function VenuesCommand() {
             </div>
             <div className="service-point-list">
               {venue.servicePoints.map((point) => {
-                const publicUrl = `${apiBaseUrl}/public/qr/${point.qrToken}/messages`;
+                const guestAppUrl = typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:3000";
+                const publicUrl = `${guestAppUrl}/table/${point.qrToken}`;
                 return (
                   <div className="service-point-row" key={point.id}>
                     <QrCode size={18} />
                     <div>
                       <strong>{point.label}</strong>
-                      <span>{point.isActive ? "Active" : "Inactive"} token</span>
+                      <span>{point.isActive ? "Active" : "Inactive"} guest URL</span>
                     </div>
-                    <button
-                      aria-label={`Copy QR token for ${point.label}`}
-                      className="icon-button"
-                      onClick={() => void navigator.clipboard.writeText(publicUrl)}
-                      type="button"
-                    >
-                      <Copy size={15} />
-                    </button>
+                    <div className="service-point-actions">
+                      <button
+                        aria-label={`Generate QR code for ${point.label}`}
+                        className="icon-button"
+                        onClick={() => void handleGenerateQr(publicUrl, point.label)}
+                        type="button"
+                      >
+                        <QrCode size={15} />
+                      </button>
+                      <button
+                        aria-label={`Copy guest URL for ${point.label}`}
+                        className="icon-button"
+                        onClick={() => void navigator.clipboard.writeText(publicUrl)}
+                        type="button"
+                      >
+                        <Copy size={15} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -90,6 +128,24 @@ export function VenuesCommand() {
           </article>
         ))}
       </div>
+
+      {qrPreview ? (
+        <section className="command-panel qr-preview-panel">
+          <div className="qr-preview-header">
+            <div>
+              <strong>QR code for {qrPreview.label}</strong>
+              <p className="meta">{qrPreview.url}</p>
+            </div>
+            <div className="qr-preview-actions">
+              <button className="button" disabled={qrLoading} onClick={() => void handleDownloadQr(qrPreview.url, qrPreview.label)} type="button">
+                <Download size={16} />
+                Download PNG
+              </button>
+            </div>
+          </div>
+          <img className="qr-preview-image" src={qrPreview.dataUrl} alt={`QR code for ${qrPreview.label}`} />
+        </section>
+      ) : null}
 
       {!venues.length && !loading && !error ? (
         <div className="command-panel wide">

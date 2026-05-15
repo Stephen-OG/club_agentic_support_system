@@ -152,7 +152,7 @@ export function TableChat({ tableToken, tableLabel }: { tableToken: string; tabl
         body: JSON.stringify({ message: body, conversationId })
       });
 
-      setMessages((current) => [...current, ...result.messages.map(normalizeMessage)]);
+      setMessages([createWelcomeMessage(tableLabel), ...result.messages.map(normalizeMessage)]);
       setConversationId(result.conversationId);
       setRequest(result.request ? normalizeRequest(result.request) : null);
     } catch {

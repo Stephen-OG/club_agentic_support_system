@@ -241,6 +241,157 @@ describe("ServicePointsService public QR workflow", () => {
     ]);
   });
 
+  it("handles simple greetings without creating a support request", async () => {
+    const servicePoint = {
+      id: "sp_greeting",
+      venueId: "venue_greeting",
+      label: "Table 2",
+      qrToken: "qr_greeting_123",
+      isActive: true
+    };
+    const conversation = {
+      id: "conversation_greeting_1",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      guestSessionId: "session_greeting_123"
+    };
+    const storedMessages = [
+      {
+        id: "message_guest_1",
+        conversationId: conversation.id,
+        sender: SenderType.GUEST,
+        body: "hello"
+      },
+      {
+        id: "message_assistant_1",
+        conversationId: conversation.id,
+        sender: SenderType.ASSISTANT,
+        body: "Hello. If you'd like help at Table 2, just send your request and the team will respond."
+      }
+    ];
+
+    const calls: Array<{ model: string; args: unknown }> = [];
+    const tx = {
+      conversation: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "conversation.findFirst", args });
+          return null;
+        },
+        create: async (args: unknown) => {
+          calls.push({ model: "conversation.create", args });
+          return conversation;
+        }
+      },
+      message: {
+        create: async (args: unknown) => {
+          calls.push({ model: "message.create", args });
+          return args;
+        },
+        findMany: async (args: unknown) => {
+          calls.push({ model: "message.findMany", args });
+          return storedMessages;
+        }
+      }
+    };
+    const prisma = {
+      servicePoint: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "servicePoint.findFirst", args });
+          return servicePoint;
+        }
+      },
+      conversation: tx.conversation,
+      message: tx.message,
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => {
+        calls.push({ model: "$transaction", args: "callback" });
+        return callback(tx);
+      }
+    } as never;
+    const service = new ServicePointsService(
+      {} as never,
+      {} as never,
+      prisma,
+      {} as never
+    );
+
+    const result = (await service.createGuestMessage("qr_greeting_123", {
+      message: "hello",
+      sessionId: "session_greeting_123"
+    })) as unknown as PublicGuestMessageResult;
+
+    assert.equal(result.conversationId, conversation.id);
+    assert.deepEqual(result.messages, storedMessages);
+    assert.equal(result.request, null);
+    assert.deepEqual(result.servicePoint, servicePoint);
+    assert.deepEqual(calls, [
+      {
+        model: "servicePoint.findFirst",
+        args: {
+          where: {
+            qrToken: "qr_greeting_123",
+            isActive: true
+          }
+        }
+      },
+      {
+        model: "$transaction",
+        args: "callback"
+      },
+      {
+        model: "conversation.create",
+        args: {
+          data: {
+            guestSessionId: "session_greeting_123",
+            servicePointId: servicePoint.id,
+            venueId: servicePoint.venueId
+          }
+        }
+      },
+      {
+        model: "message.create",
+        args: {
+          data: {
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            conversationId: conversation.id,
+            sender: SenderType.GUEST,
+            body: "hello",
+            metadata: {
+              source: "public_qr",
+              qrToken: "qr_greeting_123"
+            }
+          }
+        }
+      },
+      {
+        model: "message.create",
+        args: {
+          data: {
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            conversationId: conversation.id,
+            sender: SenderType.ASSISTANT,
+            body: "Hello. If you'd like help at Table 2, just send your request and the team will respond.",
+            metadata: {
+              source: "public_qr"
+            }
+          }
+        }
+      },
+      {
+        model: "message.findMany",
+        args: {
+          where: {
+            conversationId: conversation.id
+          },
+          orderBy: {
+            createdAt: "asc"
+          }
+        }
+      }
+    ]);
+  });
+
   it("resumes an existing conversation scoped to the active service point", async () => {
     const servicePoint = {
       id: "sp_resume",
@@ -385,6 +536,14 @@ describe("ServicePointsService public QR workflow", () => {
             id: "conversation_resume_1",
             servicePointId: servicePoint.id,
             venueId: servicePoint.venueId
+          },
+          include: {
+            requests: {
+              orderBy: {
+                createdAt: "desc"
+              },
+              take: 1
+            }
           }
         }
       },
@@ -455,6 +614,227 @@ describe("ServicePointsService public QR workflow", () => {
             metadata: {
               source: "public_qr",
               qrToken: "qr_resume_123"
+            }
+          }
+        }
+      },
+      {
+        model: "message.findMany",
+        args: {
+          where: {
+            conversationId: conversation.id
+          },
+          orderBy: {
+            createdAt: "asc"
+          }
+        }
+      }
+    ]);
+  });
+
+  it("appends follow-up text to an existing open request instead of creating a new support request", async () => {
+    const servicePoint = {
+      id: "sp_followup",
+      venueId: "venue_followup",
+      label: "Table 2",
+      qrToken: "qr_followup_123",
+      isActive: true
+    };
+    const supportRequest = {
+      id: "request_followup_1",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      conversationId: "conversation_followup_1",
+      title: "Guest support request",
+      category: "general",
+      summary: "Could we get more water?",
+      priority: RequestPriority.NORMAL,
+      deterministicPriority: RequestPriority.NORMAL,
+      status: RequestStatus.NEW
+    };
+    const conversation = {
+      id: "conversation_followup_1",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      guestSessionId: "session_followup_123",
+      requests: [supportRequest]
+    };
+    const storedMessages = [
+      {
+        id: "message_followup_guest_1",
+        conversationId: conversation.id,
+        requestId: supportRequest.id,
+        sender: SenderType.GUEST,
+        body: "Could we get more water?"
+      },
+      {
+        id: "message_followup_assistant_1",
+        conversationId: conversation.id,
+        requestId: supportRequest.id,
+        sender: SenderType.ASSISTANT,
+        body: "Thanks, I added that to your open request for Table 2."
+      }
+    ];
+
+    const calls: Array<{ model: string; args: unknown }> = [];
+    const tx = {
+      conversation: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "conversation.findFirst", args });
+          return conversation;
+        }
+      },
+      supportRequest: {
+        create: async (args: unknown) => {
+          calls.push({ model: "supportRequest.create", args });
+          throw new Error("supportRequest.create should not be called for a follow-up on an open request");
+        }
+      },
+      message: {
+        create: async (args: unknown) => {
+          calls.push({ model: "message.create", args });
+          return args;
+        },
+        findMany: async (args: unknown) => {
+          calls.push({ model: "message.findMany", args });
+          return storedMessages;
+        }
+      },
+      requestEvent: {
+        create: async (args: unknown) => {
+          calls.push({ model: "requestEvent.create", args });
+          return args;
+        }
+      }
+    };
+    const prisma = {
+      servicePoint: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "servicePoint.findFirst", args });
+          return servicePoint;
+        }
+      },
+      conversation: tx.conversation,
+      supportRequest: tx.supportRequest,
+      message: tx.message,
+      requestEvent: tx.requestEvent,
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => {
+        calls.push({ model: "$transaction", args: "callback" });
+        return callback(tx);
+      }
+    };
+    const service = new ServicePointsService(
+      {
+        createFallback: () => ({
+          assistantReply: "Thanks, I added that to your open request for Table 2.",
+          category: "general",
+          needsStaff: true,
+          priority: "normal",
+          summary: "Could we get more water?",
+          title: "Guest support request"
+        })
+      } as never,
+      {
+        classifyOrDefault: () => "normal"
+      } as never,
+      prisma as never,
+      {} as never
+    );
+
+    const result = (await service.createGuestMessage("qr_followup_123", {
+      conversationId: conversation.id,
+      message: "Could we get more water?",
+      sessionId: "session_followup_123"
+    })) as unknown as PublicGuestMessageResult;
+
+    assert.equal(result.conversationId, conversation.id);
+    assert.deepEqual(result.messages, storedMessages);
+    assert.deepEqual(result.request, supportRequest);
+    assert.deepEqual(result.servicePoint, servicePoint);
+    assert.equal(calls.some((call) => call.model === "supportRequest.create"), false);
+    assert.deepEqual(calls, [
+      {
+        model: "servicePoint.findFirst",
+        args: {
+          where: {
+            qrToken: "qr_followup_123",
+            isActive: true
+          }
+        }
+      },
+      {
+        model: "$transaction",
+        args: "callback"
+      },
+      {
+        model: "conversation.findFirst",
+        args: {
+          where: {
+            id: conversation.id,
+            servicePointId: servicePoint.id,
+            venueId: servicePoint.venueId
+          },
+          include: {
+            requests: {
+              orderBy: {
+                createdAt: "desc"
+              },
+              take: 1
+            }
+          }
+        }
+      },
+      {
+        model: "message.create",
+        args: {
+          data: {
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            conversationId: conversation.id,
+            requestId: supportRequest.id,
+            sender: SenderType.GUEST,
+            body: "Could we get more water?",
+            metadata: {
+              source: "public_qr",
+              qrToken: "qr_followup_123"
+            }
+          }
+        }
+      },
+      {
+        model: "message.create",
+        args: {
+          data: {
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            conversationId: conversation.id,
+            requestId: supportRequest.id,
+            sender: SenderType.ASSISTANT,
+            body: "Thanks, I added that to your open request for Table 2.",
+            metadata: {
+              source: "public_qr",
+              triage: {
+                category: "general",
+                needsStaff: true,
+                priority: "normal",
+                summary: "Could we get more water?",
+                title: "Guest support request"
+              }
+            }
+          }
+        }
+      },
+      {
+        model: "requestEvent.create",
+        args: {
+          data: {
+            venueId: servicePoint.venueId,
+            requestId: supportRequest.id,
+            type: "request.updated",
+            toStatus: RequestStatus.NEW,
+            metadata: {
+              source: "public_qr",
+              qrToken: "qr_followup_123"
             }
           }
         }
@@ -571,6 +951,14 @@ describe("ServicePointsService public QR workflow", () => {
             id: "conversation_from_another_place",
             servicePointId: servicePoint.id,
             venueId: servicePoint.venueId
+          },
+          include: {
+            requests: {
+              orderBy: {
+                createdAt: "desc"
+              },
+              take: 1
+            }
           }
         }
       }

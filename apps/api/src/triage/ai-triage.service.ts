@@ -10,9 +10,14 @@ export class AiTriageService {
     deterministicPriority: RequestPriority;
     message: string;
     servicePointLabel: string;
+    isFollowup?: boolean;
   }): AiTriageOutput {
     return AiTriageSchema.parse({
-      assistantReply: this.replyGuard.createGuestReply(input.deterministicPriority, input.servicePointLabel),
+      assistantReply: this.replyGuard.createGuestReply(
+        input.deterministicPriority,
+        input.servicePointLabel,
+        input.isFollowup
+      ),
       category: this.categoryFromMessage(input.message),
       needsStaff: true,
       priority: input.deterministicPriority,

@@ -115,6 +115,19 @@ export class ServicePointsService {
     });
   }
 
+  private isGreetingMessage(message: string) {
+    const normalized = message.trim().toLowerCase();
+    return /^(hi|hello|hey|hiya|howdy|greetings|good morning|good afternoon|good evening)(\s+(there|everyone|team))?[.!]?$/i.test(normalized);
+  }
+
+  private greetingReply(servicePointLabel: string) {
+    return `Hello. If you'd like help at ${servicePointLabel}, just send your request and the team will respond.`;
+  }
+
+  private isActiveRequestStatus(status: string | null | undefined) {
+    return status !== "completed" && status !== "resolved" && status !== "cancelled";
+  }
+
   async createGuestMessage(token: string, input: PublicGuestMessageDto) {
     const servicePoint = await this.prisma.servicePoint.findFirst({
       where: {
@@ -134,6 +147,14 @@ export class ServicePointsService {
               id: input.conversationId,
               servicePointId: servicePoint.id,
               venueId: servicePoint.venueId
+            },
+            include: {
+              requests: {
+                orderBy: {
+                  createdAt: "desc"
+                },
+                take: 1
+              }
             }
           })
         : await tx.conversation.create({
@@ -148,28 +169,80 @@ export class ServicePointsService {
         throw new NotFoundException("Service point not found");
       }
 
+      const latestRequest = Array.isArray((conversation as any).requests) ? (conversation as any).requests[0] : null;
+      const hasOpenRequest = latestRequest ? this.isActiveRequestStatus(latestRequest.status) : false;
+
+      if (this.isGreetingMessage(input.message) && !hasOpenRequest) {
+        await tx.message.create({
+          data: {
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            conversationId: conversation.id,
+            sender: SenderType.GUEST,
+            body: input.message,
+            metadata: {
+              source: "public_qr",
+              qrToken: token
+            }
+          }
+        });
+
+        await tx.message.create({
+          data: {
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            conversationId: conversation.id,
+            sender: SenderType.ASSISTANT,
+            body: this.greetingReply(servicePoint.label),
+            metadata: {
+              source: "public_qr"
+            }
+          }
+        });
+
+        const messages = await tx.message.findMany({
+          where: {
+            conversationId: conversation.id
+          },
+          orderBy: {
+            createdAt: "asc"
+          }
+        });
+
+        return {
+          conversationId: conversation.id,
+          messages,
+          request: latestRequest ?? null,
+          servicePoint
+        };
+      }
+
       const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
       const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
+      const hasExistingRequest = hasOpenRequest && latestRequest;
       const triage = this.aiTriage.createFallback({
         deterministicPriority,
         message: input.message,
-        servicePointLabel: servicePoint.label
+        servicePointLabel: servicePoint.label,
+        isFollowup: Boolean(hasExistingRequest)
       });
       const status = deterministicPriority === "urgent" ? RequestStatus.ESCALATED : RequestStatus.NEW;
-      const eventType = deterministicPriority === "urgent" ? "request.escalated" : "request.created";
-      const supportRequest = await tx.supportRequest.create({
-        data: {
-          venueId: servicePoint.venueId,
-          servicePointId: servicePoint.id,
-          conversationId: conversation.id,
-          title: triage.title,
-          category: triage.category,
-          summary: triage.summary || input.message,
-          priority: prismaPriority,
-          deterministicPriority: prismaPriority,
-          status
-        }
-      });
+      const supportRequest = hasExistingRequest
+        ? latestRequest
+        : await tx.supportRequest.create({
+            data: {
+              venueId: servicePoint.venueId,
+              servicePointId: servicePoint.id,
+              conversationId: conversation.id,
+              title: triage.title,
+              category: triage.category,
+              summary: triage.summary || input.message,
+              priority: prismaPriority,
+              deterministicPriority: prismaPriority,
+              status
+            }
+          });
+      const eventType = hasExistingRequest ? "request.updated" : deterministicPriority === "urgent" ? "request.escalated" : "request.created";
 
       await tx.message.create({
         data: {
@@ -212,7 +285,7 @@ export class ServicePointsService {
           venueId: servicePoint.venueId,
           requestId: supportRequest.id,
           type: eventType,
-          toStatus: status,
+          toStatus: supportRequest.status,
           metadata: {
             source: "public_qr",
             qrToken: token
