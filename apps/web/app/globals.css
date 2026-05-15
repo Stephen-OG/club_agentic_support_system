@@ -1165,6 +1165,54 @@ body {
   background: var(--accent-2);
 }
 
+.ops-layout {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.8fr);
+}
+
+.ops-ok {
+  border-color: rgba(84, 216, 167, 0.35);
+}
+
+.ops-warn {
+  border-color: rgba(255, 204, 102, 0.4);
+}
+
+.ops-idle {
+  border-color: rgba(225, 231, 221, 0.18);
+}
+
+.ops-dot-danger {
+  background: var(--danger);
+}
+
+.ops-dot-warn {
+  background: var(--warning);
+}
+
+.ops-dot-ok {
+  background: var(--accent-2);
+}
+
+.ops-incident-panel {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+}
+
+.ops-incident-icon {
+  align-items: center;
+  background: rgba(255, 204, 102, 0.12);
+  border: 1px solid rgba(255, 204, 102, 0.3);
+  border-radius: 8px;
+  color: var(--warning);
+  display: inline-flex;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
 .credential-panel code {
   background: #0a100e;
   border: 1px solid var(--line);
@@ -1185,7 +1233,8 @@ body {
 @media (max-width: 900px) {
   .auth-screen,
   .command-shell,
-  .metric-strip {
+  .metric-strip,
+  .ops-layout {
     grid-template-columns: 1fr;
   }
 

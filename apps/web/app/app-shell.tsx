@@ -5,9 +5,9 @@ import type { LucideIcon } from "lucide-react";
 import { Activity, Building2, LayoutDashboard, RadioTower, Settings, Users } from "lucide-react";
 import { AccountCommand } from "./components/account-command";
 import { CommandCenterDashboard } from "./components/command-center-dashboard";
+import { OperationsCommand } from "./components/operations-command";
 import { TeamCommand } from "./components/team-command";
 import { VenuesCommand } from "./components/venues-command";
-import { AdminDashboard } from "./admin/admin-dashboard";
 
 type View = "dashboard" | "operations" | "team" | "venues" | "account";
 
@@ -52,7 +52,7 @@ export function AppShell() {
       </aside>
       <section className="command-main">
         {view === "dashboard" ? <CommandCenterDashboard /> : null}
-        {view === "operations" ? <AdminDashboard /> : null}
+        {view === "operations" ? <OperationsCommand /> : null}
         {view === "team" ? <TeamCommand /> : null}
         {view === "venues" ? <VenuesCommand /> : null}
         {view === "account" ? <AccountCommand /> : null}

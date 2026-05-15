@@ -1,9 +1,5 @@
-import { AdminDashboard } from "./admin-dashboard";
+import { redirect } from "next/navigation";
 
 export default function AdminPage() {
-  return (
-    <main className="legacy-command-page">
-      <AdminDashboard />
-    </main>
-  );
+  redirect("/");
 }
