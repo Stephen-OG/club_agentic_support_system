@@ -6,7 +6,7 @@ export default async function TablePage({ params }: { params: Promise<{ token: s
   const table = getTableDisplay(token);
 
   return (
-    <main className="page">
+    <main className="table-chat-page">
       <TableChat tableToken={table.tableToken} tableLabel={table.label} />
     </main>
   );

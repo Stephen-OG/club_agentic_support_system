@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Clock3, Play, RefreshCw, ShieldCheck, UserCheck } from "lucide-react";
+import { CheckCircle2, Clock3, LogOut, Play, RefreshCw, ShieldCheck, UserCheck } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
 import type { CommandRequestStatus, CommandSupportRequest, CommandUser } from "@/lib/auth/types";
@@ -75,6 +75,11 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
     }
   }
 
+  async function signOut() {
+    await supabase?.auth.signOut();
+    window.location.reload();
+  }
+
   useEffect(() => {
     if (!supabase || !venueId) {
       setLoading(false);
@@ -126,6 +131,10 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
             <div className="eyebrow">Staff workspace</div>
             <h1>Staff Dashboard</h1>
           </div>
+          <button className="command-button danger" onClick={signOut} type="button">
+            <LogOut size={16} />
+            Sign out
+          </button>
         </div>
         <div className="command-panel wide">
           <div className="empty-state">
@@ -145,10 +154,16 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
           <div className="eyebrow">Staff workspace</div>
           <h1>Staff Dashboard</h1>
         </div>
-        <button className="command-button" disabled={loading} onClick={() => void refresh()} type="button">
-          <RefreshCw size={16} />
-          Refresh
-        </button>
+        <div className="button-row">
+          <button className="command-button" disabled={loading} onClick={() => void refresh()} type="button">
+            <RefreshCw size={16} />
+            Refresh
+          </button>
+          <button className="command-button danger" onClick={signOut} type="button">
+            <LogOut size={16} />
+            Sign out
+          </button>
+        </div>
       </div>
 
       {error ? <div className="form-error wide">{error}</div> : null}

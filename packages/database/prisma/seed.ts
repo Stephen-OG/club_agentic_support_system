@@ -1,4 +1,4 @@
-import { PrismaClient, StaffRole } from "@prisma/client";
+import { PrismaClient, SenderType, StaffRole, RequestPriority, RequestStatus } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -60,7 +60,6 @@ async function main() {
     ["00000000-0000-0000-0000-000000000303", "Table 3", "demo-table-3"],
     ["00000000-0000-0000-0000-000000000304", "Table 4", "demo-table-4"]
   ] as const;
-
 
   await prisma.servicePoint.upsert({
     create: {
@@ -144,6 +143,87 @@ async function main() {
       }
     });
   }
+
+  const conversationId = "00000000-0000-0000-0000-000000000501";
+  const requestId = "00000000-0000-0000-0000-000000000601";
+  const guestMessageId = "00000000-0000-0000-0000-000000000701";
+  const staffMessageId = "00000000-0000-0000-0000-000000000702";
+  const assignedStaffId = staff[3]?.[0] ?? "00000000-0000-0000-0000-000000000404";
+
+  await prisma.conversation.upsert({
+    create: {
+      id: conversationId,
+      venueId,
+      servicePointId: servicePoints[0][0],
+      guestSessionId: "demo-session-1",
+      status: "open"
+    },
+    update: {
+      status: "open"
+    },
+    where: {
+      id: conversationId
+    }
+  });
+
+  await prisma.supportRequest.upsert({
+    create: {
+      id: requestId,
+      venueId,
+      servicePointId: servicePoints[0][0],
+      conversationId,
+      title: "Need service at Table 1",
+      category: "general",
+      status: RequestStatus.NEW,
+      priority: RequestPriority.NORMAL,
+      summary: "Guest is requesting a drink refill.",
+      assignedToId: assignedStaffId
+    },
+    update: {
+      status: RequestStatus.NEW,
+      priority: RequestPriority.NORMAL,
+      summary: "Guest is requesting a drink refill."
+    },
+    where: {
+      id: requestId
+    }
+  });
+
+  await prisma.message.upsert({
+    create: {
+      id: guestMessageId,
+      venueId,
+      servicePointId: servicePoints[0][0],
+      conversationId,
+      requestId,
+      sender: SenderType.GUEST,
+      body: "Hi, can we get another round of drinks please?"
+    },
+    update: {
+      body: "Hi, can we get another round of drinks please?"
+    },
+    where: {
+      id: guestMessageId
+    }
+  });
+
+  await prisma.message.upsert({
+    create: {
+      id: staffMessageId,
+      venueId,
+      servicePointId: servicePoints[0][0],
+      conversationId,
+      requestId,
+      sender: SenderType.STAFF,
+      body: "On my way with the drinks."
+    },
+    update: {
+      body: "On my way with the drinks."
+    },
+    where: {
+      id: staffMessageId
+    }
+  });
 }
 
 main()

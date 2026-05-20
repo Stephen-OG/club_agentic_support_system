@@ -38,12 +38,16 @@ export function getPrimaryRole(user: CommandUser): CommandRole {
   return getPrimaryMembership(user)?.role ?? "read_only";
 }
 
+export function hasCommandDashboardAccess(user: CommandUser) {
+  return user.memberships.some((membership) => membership.role === "owner" || membership.role === "admin" || membership.role === "manager");
+}
+
 export function getRoleDashboardMode(user: CommandUser): RoleDashboardMode {
-  const role = getPrimaryRole(user);
-  return role === "owner" || role === "admin" || role === "manager" ? "command" : "staff";
+  return hasCommandDashboardAccess(user) ? "command" : "staff";
 }
 
 export function getVisibleCommandViews(user: CommandUser) {
-  const visibleIds = new Set(visibleViewsByRole[getPrimaryRole(user)]);
+  const role = getPrimaryRole(user);
+  const visibleIds = new Set(visibleViewsByRole[role]);
   return commandViews.filter((view) => visibleIds.has(view.id));
 }

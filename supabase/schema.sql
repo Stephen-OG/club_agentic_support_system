@@ -82,8 +82,8 @@ alter table messages enable row level security;
 create or replace function public.staff_club_id()
 returns uuid
 language sql
-security definer
-set search_path = public
+security invoker
+set search_path = public, pg_temp
 as $$
   select club_id from staff_profiles where id = auth.uid()
 $$;
@@ -116,6 +116,8 @@ for insert with check (club_id = public.staff_club_id() and sender = 'staff');
 create or replace function set_updated_at()
 returns trigger
 language plpgsql
+security definer
+set search_path = public, pg_temp
 as $$
 begin
   new.updated_at = now();

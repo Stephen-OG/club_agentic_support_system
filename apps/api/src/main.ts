@@ -30,6 +30,7 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   const port = config.get<number>("PORT") || 4000;
   const host = config.get<string>("HOST") || "127.0.0.1";
+  console.log(`Starting API server on ${host}:${port}...`);
   await app.listen(port, host);
 }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Activity, Building2, LayoutDashboard, RadioTower, Settings, UserCheck, Users } from "lucide-react";
+import { Activity, Building2, LayoutDashboard, LogOut, RadioTower, Settings, UserCheck, Users } from "lucide-react";
 import { AccountCommand } from "./components/account-command";
 import { CommandCenterDashboard } from "./components/command-center-dashboard";
 import { OperationsCommand } from "./components/operations-command";
@@ -12,6 +12,7 @@ import { VenuesCommand } from "./components/venues-command";
 import type { CommandView } from "@/lib/auth/role-policy";
 import { getPrimaryMembership, getRoleDashboardMode, getVisibleCommandViews } from "@/lib/auth/role-policy";
 import type { CommandUser } from "@/lib/auth/types";
+import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 const iconByView: Record<CommandView, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -22,12 +23,24 @@ const iconByView: Record<CommandView, LucideIcon> = {
   account: Settings
 };
 
-export function AppShell({ currentUser }: { currentUser: CommandUser }) {
+export function AppShell({ currentUser, initialView }: { currentUser: CommandUser; initialView?: CommandView }) {
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const defaultView = getRoleDashboardMode(currentUser) === "staff" ? "staff" : "dashboard";
-  const [view, setView] = useState<CommandView>(defaultView);
   const visibleViews = useMemo(() => getVisibleCommandViews(currentUser), [currentUser]);
   const visibleViewIds = useMemo(() => new Set(visibleViews.map((item) => item.id)), [visibleViews]);
+  const startingView = initialView && visibleViewIds.has(initialView) ? initialView : defaultView;
+  const [view, setView] = useState<CommandView>(startingView);
   const primaryMembership = getPrimaryMembership(currentUser);
+
+  async function signOut() {
+    if (!supabase) {
+      window.location.reload();
+      return;
+    }
+
+    await supabase.auth.signOut();
+    window.location.reload();
+  }
 
   useEffect(() => {
     if (!visibleViewIds.has(view)) {
@@ -61,6 +74,10 @@ export function AppShell({ currentUser }: { currentUser: CommandUser }) {
         <div className="sidebar-footer">
           <span className="live-pill">{primaryMembership?.role.replace("_", " ") || "Profile"}</span>
           <small>{primaryMembership?.venue?.name || primaryMembership?.workspace.name || "Workspace access"}.</small>
+          <button className="command-button danger" onClick={signOut} type="button">
+            <LogOut size={14} />
+            Sign out
+          </button>
         </div>
       </aside>
       <section className="command-main">

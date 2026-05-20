@@ -1,10 +1,15 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { LockKeyhole, Mail, Radar } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { apiRequest } from "@/lib/api/client";
+import { getSignedInRouteAction, mustChangePassword } from "@/lib/auth/session-route-policy";
+import type { CommandUser } from "@/lib/auth/types";
 
 export function LoginPanel() {
+  const router = useRouter();
   const supabase = createBrowserSupabaseClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,7 +39,30 @@ export function LoginPanel() {
       return;
     }
 
-    window.location.reload();
+    if (!result.data.session) {
+      setError("Unable to sign in. Please try again.");
+      return;
+    }
+
+    if (mustChangePassword(result.data.session.user)) {
+      router.replace("/login");
+      return;
+    }
+
+    const accessToken = result.data.session.access_token;
+
+    try {
+      const user = await apiRequest<CommandUser>(supabase, "/me", { accessToken });
+      const action = getSignedInRouteAction({
+        user,
+        userMetadata: result.data.session.user.user_metadata
+      });
+      if (action.kind === "redirect") {
+        router.replace(action.path);
+      }
+    } catch {
+      setError("Signed in, but your staff profile could not be loaded. Please ask an admin to check your account.");
+    }
   }
 
   return (

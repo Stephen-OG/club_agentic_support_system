@@ -15,6 +15,15 @@ const prismaRoleBySharedRole: Record<CreateStaffUserDto["role"], StaffRole> = {
   read_only: StaffRole.READ_ONLY
 };
 
+const sharedRoleByPrismaRole: Record<StaffRole, CreateStaffUserDto["role"]> = {
+  OWNER: "owner",
+  ADMIN: "admin",
+  MANAGER: "manager",
+  STAFF: "staff",
+  SECURITY: "security",
+  READ_ONLY: "read_only"
+};
+
 @Injectable()
 export class StaffService {
   constructor(
@@ -23,7 +32,7 @@ export class StaffService {
   ) {}
 
   async getCurrentUser(auth: AuthContext) {
-    return this.prisma.staffProfile.findUnique({
+    const profile = await this.prisma.staffProfile.findUnique({
       where: { id: auth.staffProfileId },
       include: {
         memberships: {
@@ -33,12 +42,24 @@ export class StaffService {
         }
       }
     });
+
+    if (!profile) {
+      return null;
+    }
+
+    return {
+      ...profile,
+      memberships: profile.memberships.map((membership) => ({
+        ...membership,
+        role: sharedRoleByPrismaRole[membership.role]
+      }))
+    };
   }
 
   async listTeam(auth: AuthContext) {
     this.assertWorkspaceAdmin(auth);
 
-    return this.prisma.staffProfile.findMany({
+    const profiles = await this.prisma.staffProfile.findMany({
       where: {
         memberships: {
           some: {
@@ -56,6 +77,14 @@ export class StaffService {
       },
       orderBy: { displayName: "asc" }
     });
+
+    return profiles.map((profile) => ({
+      ...profile,
+      memberships: profile.memberships.map((membership) => ({
+        ...membership,
+        role: sharedRoleByPrismaRole[membership.role]
+      }))
+    }));
   }
 
   async createStaffUser(auth: AuthContext, input: CreateStaffUserDto) {
