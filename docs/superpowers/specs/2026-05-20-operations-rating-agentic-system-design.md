@@ -8,7 +8,9 @@ The Operations tab should make guest satisfaction ratings visible where admins a
 
 Use the approved **rating-led operations overview** direction.
 
-The Operations tab remains a dense command-center surface. The new UI should feel like part of the existing dark operational dashboard: compact metrics, crisp status chips, and practical recovery cues. Ratings should not become a separate analytics page in this slice. They should sit directly inside the request workflow so staff can see service quality while handling the queue.
+The Operations tab remains a dense command-center surface. The new UI should feel like part of the existing dark operational dashboard: compact metrics, crisp status chips, conversational request cards, and practical recovery cues. Ratings should not become a separate analytics page in this slice. They should sit directly inside the request workflow so staff can see service quality while handling the queue.
+
+The first version should add **no new token spend**. It can explain the agentic system and surface conversation context using existing request, message, status, priority, and rating data. Future model-backed agent actions can be added later behind rate limits, logging, and approval workflows.
 
 ## User Experience
 
@@ -35,13 +37,31 @@ States:
 
 Low ratings should be visually easy to notice without looking like a destructive error. Use the existing warning/danger palette with restraint.
 
+### Conversational Requests
+
+Requests should feel like live conversations, not static tickets. Each request card or expanded row should expose enough thread context for an operator to understand what happened without opening another page.
+
+The Operations UI should use existing stored messages to show:
+
+- The latest guest message or latest conversation excerpt.
+- The latest staff/system response when available.
+- A compact message count or last-activity timestamp.
+- A reply affordance or clear path to continue the conversation from Operations.
+
+The conversational summary in this slice should be deterministic: use existing message bodies, request title, status, and category. Do not call an AI model to summarize conversations in version one.
+
+For crowded queue rows, use a two-level pattern:
+
+- Collapsed row: request title, service point, status, priority, rating chip, and latest-message preview.
+- Expanded/detail area: short message timeline and staff reply controls.
+
 ### Agentic System Panel
 
 The right-side Operations panel should become an AI agent loop panel with three plain-language steps:
 
-- `Observe`: the agent watches request status, priority, wait time, service point, category, and guest rating.
-- `Decide`: the agent identifies low-rated resolved requests, repeated categories, stale requests, and possible recovery moments.
-- `Act`: the agent recommends staff-approved recovery actions or follow-ups.
+- `Observe`: the agent watches request status, priority, wait time, service point, category, guest rating, and recent conversation activity.
+- `Decide`: the agent identifies low-rated resolved requests, repeated categories, stale conversations, and possible recovery moments.
+- `Act`: the agent recommends staff-approved recovery actions, follow-ups, or conversation replies.
 
 The panel must be transparent about authority. In this slice, the agent recommends and explains; it does not silently change request statuses, assign staff, or message guests without an explicit approved workflow.
 
@@ -54,9 +74,11 @@ The venue request listing API should return each support request with an optiona
 Implementation target:
 
 - Update `RequestsService.listForVenue` to include enough message data to determine the latest valid rating for each request.
+- Include enough recent message data for conversational request previews and expanded request details.
 - Normalize only integer values from 1 through 5.
 - Ignore invalid, missing, or malformed metadata.
 - Return `satisfactionRating: number | null` on each request object.
+- Return recent messages or a typed conversation preview for each request without adding model-generated summaries.
 - Update the web command request type to include `satisfactionRating?: number | null`.
 
 If the API later adds a first-class request rating column, the frontend should not need a visual redesign. It can continue reading the same `satisfactionRating` response field.
@@ -83,6 +105,7 @@ The existing `apps/web/lib/rating-analytics.ts` helper can be reused or adapted,
 - API request failure: preserve the existing Operations error banner behavior.
 - Loading state: keep existing refresh/loading behavior; do not show fake rating values.
 - Low ratings: highlight them, but do not automatically reopen requests.
+- Missing message history: still render the request row with title, status, priority, and rating state.
 
 ## Agentic System Boundaries
 
@@ -92,7 +115,7 @@ This feature should fit the app's current AI capabilities:
 - Reply guard and AI triage services support safer assistant behavior.
 - Rating monitoring should be presented as the next operational signal the agent observes.
 
-The first UI slice should not introduce autonomous side effects. Any future action loop should require explicit product rules, permission checks, audit events, and staff approval states.
+The first UI slice should not introduce autonomous side effects or new token-consuming AI calls. Any future action loop should require explicit product rules, permission checks, audit events, staff approval states, rate limits, and usage logging.
 
 ## Testing Strategy
 
@@ -102,12 +125,14 @@ Backend tests should cover:
 - Choosing the latest valid rating when multiple messages exist.
 - Ignoring invalid ratings.
 - Preserving existing venue access behavior.
+- Returning conversation preview data without requiring AI-generated summaries.
 
 Frontend tests should cover:
 
 - Rating analytics for average, high ratings, low ratings, and unrated requests.
 - Rendering rated request rows.
 - Rendering unrated request rows.
+- Rendering latest-message previews and expanded conversation details.
 - Empty rating metric states.
 
 ## Out Of Scope
@@ -116,6 +141,8 @@ Frontend tests should cover:
 - Free-text guest reviews.
 - Staff editing guest ratings.
 - Autonomous agent actions.
+- AI-generated conversation summaries.
+- New token-consuming model calls for this first version.
 - New database columns for ratings.
 - Notification workflows for low ratings.
 
@@ -125,5 +152,7 @@ Frontend tests should cover:
 - Each request can show its latest guest satisfaction rating.
 - Unrated requests have a clear state.
 - The AI agent panel explains observe, decide, and act behavior in terms of this app's request workflow.
+- Request rows show conversational context from existing messages.
+- The first version adds no new token spend.
 - Ratings are derived from existing guest action metadata.
 - Tests cover rating derivation and frontend rating analytics.
