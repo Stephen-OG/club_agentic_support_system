@@ -5,6 +5,7 @@ const prisma = new PrismaClient();
 const workspaceId = "00000000-0000-0000-0000-000000000001";
 const venueId = "00000000-0000-0000-0000-000000000101";
 const mainFloorId = "00000000-0000-0000-0000-000000000201";
+const venueSupportServicePointId = "00000000-0000-0000-0000-000000000300";
 
 type SeedStaff = readonly [id: string, email: string, displayName: string, role: StaffRole, authUserId?: string];
 
@@ -59,6 +60,25 @@ async function main() {
     ["00000000-0000-0000-0000-000000000303", "Table 3", "demo-table-3"],
     ["00000000-0000-0000-0000-000000000304", "Table 4", "demo-table-4"]
   ] as const;
+
+
+  await prisma.servicePoint.upsert({
+    create: {
+      id: venueSupportServicePointId,
+      label: "Venue support",
+      locationId: mainFloorId,
+      qrToken: "demo-venue-support",
+      venueId
+    },
+    update: {
+      isActive: true,
+      label: "Venue support",
+      locationId: mainFloorId
+    },
+    where: {
+      id: venueSupportServicePointId
+    }
+  });
 
   for (const [id, label, qrToken] of servicePoints) {
     await prisma.servicePoint.upsert({

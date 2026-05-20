@@ -181,6 +181,8 @@ model Conversation {
   servicePointId String           @db.Uuid
   servicePoint   ServicePoint     @relation(fields: [servicePointId], references: [id], onDelete: Cascade)
   guestSessionId String?
+  guestLocationLabel String?
+  guestLocationSource String?
   status         String           @default("open")
   messages       Message[]
   requests       SupportRequest[]
@@ -228,6 +230,11 @@ model SupportRequest {
   deterministicPriority RequestPriority?
   aiPriority            RequestPriority?
   status                RequestStatus       @default(NEW)
+  guestLocationLabel    String?
+  guestLocationSource   String?
+  agentPolicyVersion    String?
+  agentConfidence       Float?
+  agentSuggestedAction  String?
   messages              Message[]
   assignments           RequestAssignment[]
   events                RequestEvent[]
