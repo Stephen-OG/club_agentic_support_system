@@ -24,3 +24,49 @@ export const PublicGuestMessageSchema = z.object({
 });
 
 export type PublicGuestMessageInput = z.infer<typeof PublicGuestMessageSchema>;
+
+export const GuestLocationSchema = z.object({
+  label: z.string().trim().min(1).max(120),
+  source: z.enum(["guest", "agent", "qr"]).default("guest")
+});
+
+export const AgentPolicyVersionSchema = z.enum([
+  "v1-assistive",
+  "v1-semi-autonomous",
+  "v2-autonomous-within-rules"
+]);
+
+export const AgentActionSchema = z.enum([
+  "reply",
+  "assign",
+  "escalate",
+  "reopen",
+  "summarize",
+  "mark_handled"
+]);
+
+export const VenueIntakeMessageSchema = PublicGuestMessageSchema.extend({
+  locationLabel: z.string().trim().min(1).max(120).optional(),
+  quickAction: z
+    .enum([
+      "drink",
+      "missing_order",
+      "long_wait",
+      "spill",
+      "dirty_area",
+      "lost_property",
+      "payment",
+      "restroom",
+      "accessibility",
+      "vip",
+      "safety",
+      "medical",
+      "general"
+    ])
+    .optional()
+});
+
+export type GuestLocation = z.infer<typeof GuestLocationSchema>;
+export type AgentPolicyVersion = z.infer<typeof AgentPolicyVersionSchema>;
+export type AgentAction = z.infer<typeof AgentActionSchema>;
+export type VenueIntakeMessageInput = z.infer<typeof VenueIntakeMessageSchema>;

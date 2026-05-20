@@ -8,6 +8,7 @@ type RatingMessage = {
 
 type RateableRequest = {
   satisfaction_rating?: number | null;
+  satisfactionRating?: number | null;
 };
 
 export type RatingAnalytics = {
@@ -15,6 +16,7 @@ export type RatingAnalytics = {
   ratedCount: number;
   highRatingCount: number;
   lowRatingCount: number;
+  highRatingPercent: number;
   ratingDistribution: Record<RatingValue, number>;
 };
 
@@ -65,7 +67,7 @@ export function calculateRatingAnalytics(requests: RateableRequest[]): RatingAna
   };
 
   const ratings = requests
-    .map((request) => normalizeRating(request.satisfaction_rating))
+    .map((request) => requestRating(request))
     .filter((rating): rating is RatingValue => Boolean(rating));
 
   for (const rating of ratings) {
@@ -74,14 +76,22 @@ export function calculateRatingAnalytics(requests: RateableRequest[]): RatingAna
 
   const total = ratings.reduce((sum, rating) => sum + rating, 0);
   const averageRating = ratings.length > 0 ? Math.round((total / ratings.length) * 10) / 10 : null;
+  const highRatingCount = ratings.filter((rating) => rating >= 4).length;
+  const lowRatingCount = ratings.filter((rating) => rating <= 2).length;
+  const highRatingPercent = ratings.length > 0 ? Math.round((highRatingCount / ratings.length) * 100) : 0;
 
   return {
     averageRating,
     ratedCount: ratings.length,
-    highRatingCount: ratings.filter((rating) => rating >= 4).length,
-    lowRatingCount: ratings.filter((rating) => rating <= 2).length,
+    highRatingCount,
+    lowRatingCount,
+    highRatingPercent,
     ratingDistribution
   };
+}
+
+function requestRating(request: RateableRequest) {
+  return normalizeRating(request.satisfactionRating ?? request.satisfaction_rating);
 }
 
 function normalizeRating(value: unknown): RatingValue | null {

@@ -71,9 +71,36 @@ describe("rating analytics", () => {
         ratedCount: 3,
         highRatingCount: 2,
         lowRatingCount: 1,
+        highRatingPercent: 67,
         ratingDistribution: {
           1: 0,
           2: 1,
+          3: 0,
+          4: 1,
+          5: 1
+        }
+      }
+    );
+  });
+
+  it("calculates command center analytics from camelCase satisfaction ratings", () => {
+    assert.deepEqual(
+      calculateRatingAnalytics([
+        { satisfactionRating: 5 },
+        { satisfactionRating: 4 },
+        { satisfactionRating: 1 },
+        { satisfactionRating: null },
+        {}
+      ]),
+      {
+        averageRating: 3.3,
+        ratedCount: 3,
+        highRatingCount: 2,
+        lowRatingCount: 1,
+        highRatingPercent: 67,
+        ratingDistribution: {
+          1: 1,
+          2: 0,
           3: 0,
           4: 1,
           5: 1
