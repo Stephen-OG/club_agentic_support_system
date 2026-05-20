@@ -36,10 +36,22 @@ export function loadWorkspaceEnv({ appDir, repoRoot, existingEnv = process.env }
   };
 
   const apiUrl =
-    merged.NEXT_PUBLIC_API_URL ||
+    existingEnv.NEXT_PUBLIC_API_URL ||
+    appEnv.NEXT_PUBLIC_API_URL ||
+    rootEnv.NEXT_PUBLIC_API_URL ||
     buildLocalApiUrl({
-      host: merged.NEXT_PUBLIC_API_HOST || merged.HOST,
-      port: merged.NEXT_PUBLIC_API_PORT || merged.PORT
+      host:
+        existingEnv.NEXT_PUBLIC_API_HOST ||
+        appEnv.NEXT_PUBLIC_API_HOST ||
+        rootEnv.NEXT_PUBLIC_API_HOST ||
+        appEnv.HOST ||
+        rootEnv.HOST,
+      port:
+        existingEnv.NEXT_PUBLIC_API_PORT ||
+        appEnv.NEXT_PUBLIC_API_PORT ||
+        rootEnv.NEXT_PUBLIC_API_PORT ||
+        appEnv.PORT ||
+        rootEnv.PORT
     });
 
   return {

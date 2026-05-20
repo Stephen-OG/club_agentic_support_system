@@ -35,4 +35,30 @@ describe("loadWorkspaceEnv", () => {
 
     assert.equal(result.publicEnv.NEXT_PUBLIC_API_URL, "https://api.example");
   });
+
+  it("does not let generic shell host and port override workspace env API settings", () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "guestos-env-"));
+    const appDir = path.join(workspace, "apps", "web");
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(path.join(workspace, ".env"), "PORT=4000\nHOST=127.0.0.1\n");
+
+    const result = loadWorkspaceEnv({
+      appDir,
+      repoRoot: workspace,
+      existingEnv: {
+        HOST: "Stephens-MacBook-Pro.local",
+        PORT: "5000"
+      }
+    });
+
+    assert.equal(result.publicEnv.NEXT_PUBLIC_API_URL, "http://127.0.0.1:4000");
+  });
+
+  it("pins the web dev server away from the API PORT unless WEB_PORT is set", async () => {
+    const packageJson = JSON.parse(
+      await fs.promises.readFile(new URL("./package.json", import.meta.url), "utf8")
+    );
+
+    assert.equal(packageJson.scripts.dev, "next dev -p ${WEB_PORT:-3000}");
+  });
 });
