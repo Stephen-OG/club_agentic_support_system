@@ -9,8 +9,11 @@ export const StaffRoleSchema = z.enum(staffRoles);
 export const AiTriageSchema = z.object({
   assistantReply: z.string().min(1),
   category: z.string().min(1),
+  confidence: z.number().min(0).max(1).default(0.6),
+  guestLocationLabel: z.string().min(1).max(120).optional(),
   needsStaff: z.boolean().default(true),
   priority: RequestPrioritySchema,
+  suggestedAction: z.enum(["reply", "assign", "escalate", "reopen", "summarize", "mark_handled"]).default("reply"),
   summary: z.string().min(1).optional(),
   title: z.string().min(1)
 });

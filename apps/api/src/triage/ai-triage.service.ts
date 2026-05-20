@@ -19,11 +19,39 @@ export class AiTriageService {
         input.isFollowup
       ),
       category: this.categoryFromMessage(input.message),
+      confidence: 0.72,
+      guestLocationLabel: this.locationFromMessage(input.message),
       needsStaff: true,
       priority: input.deterministicPriority,
+      suggestedAction: input.deterministicPriority === "urgent" ? "escalate" : "reply",
       summary: input.message,
       title: this.titleFromPriority(input.deterministicPriority)
     });
+  }
+
+  private locationFromMessage(message: string) {
+    const tableMatch = message.match(/\btable\s*([a-z0-9-]+)\b/i);
+    if (tableMatch?.[1]) {
+      return `Table ${tableMatch[1].toUpperCase()}`;
+    }
+
+    if (/\b(bar|main bar)\b/i.test(message)) {
+      return "Bar area";
+    }
+
+    if (/\b(dance floor|floor)\b/i.test(message)) {
+      return "Dance floor";
+    }
+
+    if (/\b(vip|booth)\b/i.test(message)) {
+      return "VIP area";
+    }
+
+    if (/\b(toilet|restroom|bathroom)\b/i.test(message)) {
+      return "Toilet/restroom";
+    }
+
+    return undefined;
   }
 
   private categoryFromMessage(message: string) {
