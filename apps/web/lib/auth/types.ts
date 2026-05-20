@@ -101,6 +101,13 @@ export type CommandSupportRequest = {
   acknowledgedAt: string | null;
   completedAt: string | null;
   resolvedAt: string | null;
+  guestLocationLabel?: string | null;
+  guestLocationSource?: string | null;
+  agentPolicyVersion?: string | null;
+  agentConfidence?: number | null;
+  agentSuggestedAction?: string | null;
+  satisfactionRating?: number | null;
+  recentMessages?: Array<Pick<CommandMessage, "id" | "sender" | "body" | "createdAt">>;
   assignedTo?: Pick<CommandTeamMember, "id" | "displayName" | "email"> | null;
   servicePoint?: CommandServicePoint;
 };

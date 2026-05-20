@@ -40,6 +40,37 @@ type GuestActionInput = GuestRequestActionDto & {
   requestId: string;
 };
 
+function normalizeSatisfactionRating(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 5 ? value : null;
+}
+
+function latestSatisfactionRating(messages: Array<{ metadata: unknown; createdAt: Date | string }>) {
+  const sortedMessages = [...messages].sort((left, right) =>
+    String(right.createdAt).localeCompare(String(left.createdAt))
+  );
+
+  for (const message of sortedMessages) {
+    const metadata = message.metadata as { satisfactionRating?: unknown } | null;
+    const rating = normalizeSatisfactionRating(metadata?.satisfactionRating);
+    if (rating) {
+      return rating;
+    }
+  }
+
+  return null;
+}
+
+function recentMessages(messages: Array<{ id: string; sender: SenderType; body: string; createdAt: Date | string }>) {
+  return [...messages]
+    .sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt)))
+    .map((message) => ({
+      id: message.id,
+      sender: message.sender,
+      body: message.body,
+      createdAt: message.createdAt
+    }));
+}
+
 @Injectable()
 export class RequestsService {
   constructor(
@@ -61,18 +92,30 @@ export class RequestsService {
 
     this.venueAccess.assertCanReadVenue(auth, { workspaceId: venue.workspaceId, venueId });
 
-    return this.prisma.supportRequest.findMany({
+    const requests = await this.prisma.supportRequest.findMany({
       where: {
         venueId
       },
       include: {
         assignedTo: true,
-        servicePoint: true
+        servicePoint: true,
+        messages: {
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 6
+        }
       },
       orderBy: {
         createdAt: "desc"
       }
     });
+
+    return requests.map((request) => ({
+      ...request,
+      satisfactionRating: latestSatisfactionRating(request.messages),
+      recentMessages: recentMessages(request.messages)
+    }));
   }
 
   async updateStatus(auth: AuthContext, requestId: string, input: UpdateRequestStatusDto) {

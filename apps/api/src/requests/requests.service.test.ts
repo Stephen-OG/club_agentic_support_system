@@ -72,7 +72,13 @@ describe("RequestsService lifecycle", () => {
           },
           include: {
             assignedTo: true,
-            servicePoint: true
+            servicePoint: true,
+            messages: {
+              orderBy: {
+                createdAt: "desc"
+              },
+              take: 6
+            }
           },
           orderBy: {
             createdAt: "desc"
@@ -80,6 +86,60 @@ describe("RequestsService lifecycle", () => {
         }
       }
     ]);
+  });
+
+  it("returns satisfaction rating and recent conversation preview for venue requests", async () => {
+    const venue = { id: "venue_1", workspaceId: "workspace_1" };
+    const request = {
+      id: "request_1",
+      venueId: venue.id,
+      servicePointId: "sp_1",
+      conversationId: "conversation_1",
+      title: "Missing order",
+      category: "missing_order",
+      summary: "Guest is missing drinks",
+      priority: "HIGH",
+      status: RequestStatus.RESOLVED,
+      guestLocationLabel: "Table 14",
+      guestLocationSource: "guest",
+      agentPolicyVersion: "v1-semi-autonomous",
+      agentConfidence: 0.82,
+      agentSuggestedAction: "reply",
+      messages: [
+        {
+          id: "msg_1",
+          requestId: "request_1",
+          body: "Drinks never came",
+          sender: SenderType.GUEST,
+          metadata: null,
+          createdAt: "2026-05-20T10:00:00.000Z"
+        },
+        {
+          id: "msg_2",
+          requestId: "request_1",
+          body: "Rating: 5/5",
+          sender: SenderType.SYSTEM,
+          metadata: { satisfactionRating: 5 },
+          createdAt: "2026-05-20T10:10:00.000Z"
+        }
+      ],
+      assignedTo: null,
+      servicePoint: { id: "sp_1", label: "Venue support" }
+    };
+    const prisma = {
+      venue: { findFirst: async () => venue },
+      supportRequest: { findMany: async () => [request] }
+    };
+    const service = new RequestsService(prisma as never, { assertCanReadVenue: () => undefined } as never);
+
+    const result = await service.listForVenue(
+      { workspaceId: "workspace_1", role: "admin", venueId: null } as never,
+      venue.id
+    );
+
+    assert.equal((result[0] as any).satisfactionRating, 5);
+    assert.equal((result[0] as any).guestLocationLabel, "Table 14");
+    assert.equal((result[0] as any).recentMessages.length, 2);
   });
 
   it("rejects an invalid staff transition from completed to resolved", async () => {
