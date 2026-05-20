@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Clock3, RadioTower, RefreshCw, ShieldAlert } from "lucide-react";
+import { CheckCircle2, MessageSquareText, RadioTower, RefreshCw, ShieldAlert, Star, Workflow } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import type { CommandRequestStatus, CommandSupportRequest, CommandVenue } from "@/lib/auth/types";
+import { calculateRatingAnalytics } from "@/lib/rating-analytics";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 const nextStatusByStatus: Partial<Record<CommandRequestStatus, CommandRequestStatus>> = {
@@ -25,6 +26,22 @@ function sharedStatus(status: CommandRequestStatus) {
 
 function priorityClass(priority: string) {
   return priority.toLowerCase();
+}
+
+function ratingLabel(request: CommandSupportRequest) {
+  if (request.satisfactionRating) {
+    return `${request.satisfactionRating}/5`;
+  }
+
+  if (request.status === "COMPLETED" || request.status === "RESOLVED") {
+    return "Not rated";
+  }
+
+  return "Awaiting completion";
+}
+
+function latestPreview(request: CommandSupportRequest) {
+  return request.recentMessages?.at(-1)?.body || request.summary || "No conversation preview yet.";
 }
 
 export function OperationsCommand() {
@@ -100,14 +117,13 @@ export function OperationsCommand() {
   }, [refresh]);
 
   const openRequests = requests.filter((request) => !["RESOLVED", "CANCELLED"].includes(request.status));
-  const urgentRequests = requests.filter((request) => request.priority === "URGENT" || request.status === "ESCALATED");
-  const completedToday = requests.filter((request) => request.status === "COMPLETED" || request.status === "RESOLVED");
-  const activeVenue = venues.find((venue) => venue.id === selectedVenueId);
+  const ratingAnalytics = calculateRatingAnalytics(requests);
+  const ratingAverage = ratingAnalytics.averageRating === null ? "No ratings" : ratingAnalytics.averageRating.toFixed(1);
   const metrics = [
     { label: "Open queue", value: openRequests.length.toString(), detail: `${requests.length} total`, tone: "ok", icon: RadioTower },
-    { label: "Escalations", value: urgentRequests.length.toString(), detail: "needs command attention", tone: "warn", icon: ShieldAlert },
-    { label: "Completed", value: completedToday.length.toString(), detail: "awaiting confirmation", tone: "ok", icon: CheckCircle2 },
-    { label: "Venue", value: activeVenue ? "Live" : "None", detail: activeVenue?.name || "No venue selected", tone: "idle", icon: Clock3 }
+    { label: "Avg rating", value: ratingAverage, detail: `${ratingAnalytics.ratedCount} rated`, tone: "idle", icon: Star },
+    { label: "Low ratings", value: ratingAnalytics.lowRatingCount.toString(), detail: "1-2 star recovery", tone: "warn", icon: ShieldAlert },
+    { label: "High ratings", value: `${ratingAnalytics.highRatingPercent}%`, detail: "4-5 star requests", tone: "ok", icon: CheckCircle2 }
   ];
 
   return (
@@ -166,11 +182,20 @@ export function OperationsCommand() {
                     <div>
                       <strong>{request.title}</strong>
                       <span>{request.servicePoint?.label || "Service point"} · {request.category}</span>
+                      <span className="request-preview">
+                        <MessageSquareText size={13} />
+                        {latestPreview(request)}
+                      </span>
+                      {request.guestLocationLabel ? <span className="request-preview">Location: {request.guestLocationLabel}</span> : null}
                     </div>
                   </div>
                   <div className="pill-row compact">
                     <span className={`pill priority-${priorityClass(request.priority)}`}>{priorityClass(request.priority)}</span>
                     <span className={`pill status-${sharedStatus(request.status)}`}>{statusLabel(request.status)}</span>
+                    <span className={`pill rating-chip ${request.satisfactionRating && request.satisfactionRating <= 2 ? "low-rating" : ""}`}>
+                      <Star size={12} />
+                      {ratingLabel(request)}
+                    </span>
                   </div>
                   {nextStatus ? (
                     <button
@@ -189,13 +214,27 @@ export function OperationsCommand() {
           </div>
         </section>
 
-        <section className="command-panel ops-incident-panel">
+        <section className="command-panel ops-incident-panel agent-loop-panel">
           <span className="ops-incident-icon">
-            <AlertTriangle size={20} />
+            <Workflow size={20} />
           </span>
           <div>
-            <h2>Control state</h2>
-            <p className="meta">Request reads and lifecycle updates now go through the Nest API with Supabase staff authorization.</p>
+            <h2>Agent loop</h2>
+            <p className="meta">Semi-autonomous mode can reply to safe routine requests and assign low-risk work inside manager rules.</p>
+          </div>
+          <div className="agent-loop-steps">
+            <div>
+              <strong>Observe</strong>
+              <span>Status, priority, location, rating, conversation</span>
+            </div>
+            <div>
+              <strong>Decide</strong>
+              <span>Recovery, stale threads, escalation risk</span>
+            </div>
+            <div>
+              <strong>Act</strong>
+              <span>Reply, recommend, assign inside policy</span>
+            </div>
           </div>
         </section>
       </div>
