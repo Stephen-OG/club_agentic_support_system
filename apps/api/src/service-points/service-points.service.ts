@@ -10,6 +10,7 @@ import { VenueAccessService } from "../venues/access.service";
 import { CreateServicePointDto } from "./dto/create-service-point.dto";
 import { CreateVenueDto } from "./dto/create-venue.dto";
 import type { PublicGuestMessageDto } from "./dto/public-guest-message.dto";
+import type { PublicVenueMessageDto } from "./dto/public-venue-message.dto";
 
 const prismaPriorityBySharedPriority: Record<RequestPriority, PrismaRequestPriority> = {
   low: PrismaRequestPriority.LOW,
@@ -30,6 +31,61 @@ export class ServicePointsService {
   createQrToken(label: string) {
     const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "service_point";
     return `sp_${slug}_${randomBytes(12).toString("hex")}`;
+  }
+
+  private venueSupportQrToken(venueSlug: string) {
+    return `venue_support_${venueSlug}`;
+  }
+
+  private async findOrCreateVenueSupportServicePoint(venue: { id: string; slug: string }) {
+    const existing = await this.prisma.servicePoint.findFirst({
+      where: {
+        venueId: venue.id,
+        label: "Venue support"
+      }
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    return this.prisma.servicePoint.create({
+      data: {
+        venueId: venue.id,
+        label: "Venue support",
+        qrToken: this.venueSupportQrToken(venue.slug)
+      }
+    });
+  }
+
+  async getVenueIntake(venueSlug: string) {
+    const venue = await this.prisma.venue.findFirst({
+      where: { slug: venueSlug },
+      select: { id: true, name: true, slug: true }
+    });
+
+    if (!venue) {
+      throw new NotFoundException("Venue not found");
+    }
+
+    return {
+      venue,
+      quickActions: [
+        "drink",
+        "missing_order",
+        "long_wait",
+        "spill",
+        "dirty_area",
+        "lost_property",
+        "payment",
+        "restroom",
+        "accessibility",
+        "vip",
+        "safety",
+        "medical",
+        "general"
+      ]
+    };
   }
 
   async createVenue(auth: AuthContext, input: CreateVenueDto) {
@@ -290,6 +346,151 @@ export class ServicePointsService {
             source: "public_qr",
             qrToken: token
           }
+        }
+      });
+
+      const messages = await tx.message.findMany({
+        where: {
+          conversationId: conversation.id
+        },
+        orderBy: {
+          createdAt: "asc"
+        }
+      });
+
+      return {
+        conversationId: conversation.id,
+        messages,
+        request: supportRequest,
+        servicePoint
+      };
+    });
+  }
+
+  async createVenueGuestMessage(venueSlug: string, input: PublicVenueMessageDto) {
+    const venue = await this.prisma.venue.findFirst({
+      where: {
+        slug: venueSlug
+      }
+    });
+
+    if (!venue) {
+      throw new NotFoundException("Venue not found");
+    }
+
+    const servicePoint = await this.findOrCreateVenueSupportServicePoint(venue);
+
+    return this.prisma.$transaction(async (tx) => {
+      const conversation = input.conversationId
+        ? await tx.conversation.findFirst({
+            where: {
+              id: input.conversationId,
+              servicePointId: servicePoint.id,
+              venueId: venue.id
+            },
+            include: {
+              requests: {
+                orderBy: {
+                  createdAt: "desc"
+                },
+                take: 1
+              }
+            }
+          })
+        : await tx.conversation.create({
+            data: {
+              guestLocationLabel: input.locationLabel || null,
+              guestLocationSource: input.locationLabel ? "guest" : null,
+              guestSessionId: input.sessionId || null,
+              servicePointId: servicePoint.id,
+              venueId: venue.id
+            }
+          });
+
+      if (!conversation) {
+        throw new NotFoundException("Conversation not found");
+      }
+
+      const latestRequest = Array.isArray((conversation as any).requests) ? (conversation as any).requests[0] : null;
+      const hasOpenRequest = latestRequest ? this.isActiveRequestStatus(latestRequest.status) : false;
+      const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
+      const triage = this.aiTriage.createFallback({
+        deterministicPriority,
+        message: `${input.quickAction ? `Quick action: ${input.quickAction}\n` : ""}${input.message}`,
+        servicePointLabel: input.locationLabel || servicePoint.label,
+        isFollowup: Boolean(hasOpenRequest)
+      });
+      const locationLabel = input.locationLabel?.trim() || triage.guestLocationLabel || null;
+      const locationSource = input.locationLabel ? "guest" : triage.guestLocationLabel ? "agent" : null;
+      const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
+      const status = deterministicPriority === "urgent" ? RequestStatus.ESCALATED : RequestStatus.NEW;
+      const supportRequest = hasOpenRequest
+        ? latestRequest
+        : await tx.supportRequest.create({
+            data: {
+              agentConfidence: triage.confidence,
+              agentPolicyVersion: "v1-semi-autonomous",
+              agentSuggestedAction: triage.suggestedAction,
+              category: triage.category,
+              conversationId: conversation.id,
+              deterministicPriority: prismaPriority,
+              guestLocationLabel: locationLabel,
+              guestLocationSource: locationSource,
+              priority: prismaPriority,
+              servicePointId: servicePoint.id,
+              status,
+              summary: triage.summary || input.message,
+              title: triage.title,
+              venueId: venue.id
+            }
+          });
+      const eventType = hasOpenRequest ? "request.updated" : deterministicPriority === "urgent" ? "request.escalated" : "request.created";
+
+      await tx.message.create({
+        data: {
+          body: input.message,
+          conversationId: conversation.id,
+          metadata: {
+            locationLabel,
+            quickAction: input.quickAction || null,
+            source: "public_venue_qr",
+            venueSlug
+          },
+          requestId: supportRequest.id,
+          sender: SenderType.GUEST,
+          servicePointId: servicePoint.id,
+          venueId: venue.id
+        }
+      });
+
+      await tx.message.create({
+        data: {
+          body: triage.assistantReply,
+          conversationId: conversation.id,
+          metadata: {
+            source: "public_venue_qr",
+            triage
+          },
+          requestId: supportRequest.id,
+          sender: SenderType.ASSISTANT,
+          servicePointId: servicePoint.id,
+          venueId: venue.id
+        }
+      });
+
+      await tx.requestEvent.create({
+        data: {
+          metadata: {
+            agentPolicyVersion: "v1-semi-autonomous",
+            locationLabel,
+            quickAction: input.quickAction || null,
+            source: "public_venue_qr",
+            venueSlug
+          },
+          requestId: supportRequest.id,
+          toStatus: supportRequest.status,
+          type: eventType,
+          venueId: venue.id
         }
       });
 

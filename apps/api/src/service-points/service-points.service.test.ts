@@ -1201,6 +1201,96 @@ describe("ServicePointsService public QR workflow", () => {
     ]);
   });
 
+  it("creates a venue QR conversation with guest location and semi-autonomous metadata", async () => {
+    const venue = { id: "venue_1", slug: "blue-note", workspaceId: "workspace_1", name: "Blue Note" };
+    const servicePoint = {
+      id: "sp_venue_support",
+      venueId: venue.id,
+      label: "Venue support",
+      qrToken: "venue_support_blue_note",
+      isActive: true
+    };
+    const conversation = {
+      id: "conversation_venue_1",
+      venueId: venue.id,
+      servicePointId: servicePoint.id,
+      guestLocationLabel: "Table 14",
+      guestLocationSource: "guest"
+    };
+    const supportRequest = {
+      id: "request_venue_1",
+      venueId: venue.id,
+      servicePointId: servicePoint.id,
+      conversationId: conversation.id,
+      title: "Missing order",
+      category: "missing_order",
+      summary: "Guest says drinks never arrived",
+      priority: RequestPriority.HIGH,
+      deterministicPriority: RequestPriority.HIGH,
+      status: RequestStatus.NEW,
+      guestLocationLabel: "Table 14",
+      guestLocationSource: "guest",
+      agentPolicyVersion: "v1-semi-autonomous",
+      agentConfidence: 0.82,
+      agentSuggestedAction: "reply"
+    };
+    const storedMessages = [
+      { id: "message_guest", conversationId: conversation.id, sender: SenderType.GUEST, body: "My drinks never came" },
+      { id: "message_agent", conversationId: conversation.id, sender: SenderType.ASSISTANT, body: "Sorry about that. I have sent this to the team for Table 14." }
+    ];
+    const tx = {
+      conversation: {
+        create: async () => conversation
+      },
+      supportRequest: {
+        create: async () => supportRequest
+      },
+      message: {
+        create: async (args: unknown) => args,
+        findMany: async () => storedMessages
+      },
+      requestEvent: {
+        create: async (args: unknown) => args
+      }
+    };
+    const prisma = {
+      venue: { findFirst: async () => venue },
+      servicePoint: {
+        findFirst: async () => servicePoint,
+        create: async () => servicePoint
+      },
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
+    };
+    const service = new ServicePointsService(
+      {
+        createFallback: () => ({
+          assistantReply: "Sorry about that. I have sent this to the team for Table 14.",
+          category: "missing_order",
+          confidence: 0.82,
+          guestLocationLabel: "Table 14",
+          needsStaff: true,
+          priority: "high",
+          suggestedAction: "reply",
+          summary: "Guest says drinks never arrived",
+          title: "Missing order"
+        })
+      } as never,
+      { classifyOrDefault: () => "high" } as never,
+      prisma as never,
+      {} as never
+    );
+
+    const result = await service.createVenueGuestMessage("blue-note", {
+      message: "My drinks never came",
+      locationLabel: "Table 14",
+      sessionId: "session_venue_123"
+    });
+
+    assert.equal((result as any).conversationId, conversation.id);
+    assert.deepEqual((result as any).messages, storedMessages);
+    assert.deepEqual((result as any).request, supportRequest);
+  });
+
   it("trims whitespace-only DTO messages before validating length", async () => {
     const input = plainToInstance(PublicGuestMessageDto, {
       message: "   "
