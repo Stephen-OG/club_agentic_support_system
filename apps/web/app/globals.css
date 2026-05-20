@@ -1533,3 +1533,46 @@ body {
   padding: 8px 10px;
   text-transform: uppercase;
 }
+
+.venue-support-page .support-panel {
+  gap: 16px;
+}
+
+.venue-location-input {
+  display: grid;
+  gap: 8px;
+}
+
+.venue-location-input span {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 6px;
+}
+
+.venue-location-input input {
+  background: #0a100e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.location-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.location-chips button {
+  background: rgba(245, 242, 232, 0.08);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-weight: 850;
+  min-height: 34px;
+  padding: 0 10px;
+}
