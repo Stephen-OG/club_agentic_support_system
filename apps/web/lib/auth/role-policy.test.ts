@@ -1,6 +1,6 @@
 import type { CommandUser } from "./types";
 import assert from "node:assert/strict";
-import { getRoleDashboardMode, getVisibleCommandViews } from "./role-policy";
+import { getCommandViewHref, getRoleDashboardMode, getVisibleCommandViews, resolveCommandView } from "./role-policy";
 
 const baseUser = (role: CommandUser["memberships"][number]["role"], venueId: string | null = "venue_1"): CommandUser => ({
   id: `user_${role}`,
@@ -22,8 +22,8 @@ const baseUser = (role: CommandUser["memberships"][number]["role"], venueId: str
 const visibleIds = (user: CommandUser) => getVisibleCommandViews(user).map((view) => view.id);
 
 assert.deepEqual(visibleIds(baseUser("admin", null)), ["dashboard", "operations", "team", "venues", "account"]);
-assert.deepEqual(visibleIds(baseUser("owner", null)), ["dashboard", "operations", "team", "venues", "account"]);
-assert.deepEqual(visibleIds(baseUser("manager")), ["dashboard", "operations", "venues", "account"]);
+assert.deepEqual(visibleIds(baseUser("owner")), ["dashboard", "operations", "team", "venues", "account"]);
+assert.deepEqual(visibleIds(baseUser("manager")), ["dashboard", "operations", "team", "venues", "account"]);
 assert.deepEqual(visibleIds(baseUser("staff")), ["staff", "account"]);
 assert.deepEqual(visibleIds(baseUser("security")), ["staff", "account"]);
 assert.deepEqual(visibleIds(baseUser("read_only")), ["staff", "account"]);
@@ -31,3 +31,8 @@ assert.deepEqual(visibleIds(baseUser("read_only")), ["staff", "account"]);
 assert.equal(getRoleDashboardMode(baseUser("admin", null)), "command");
 assert.equal(getRoleDashboardMode(baseUser("manager")), "command");
 assert.equal(getRoleDashboardMode(baseUser("staff")), "staff");
+
+assert.equal(resolveCommandView(baseUser("admin", null), "operations", "dashboard"), "operations");
+assert.equal(resolveCommandView(baseUser("staff"), "operations", "staff"), "staff");
+assert.equal(resolveCommandView(baseUser("manager"), "team", "dashboard"), "team");
+assert.equal(getCommandViewHref("/admin", "operations"), "/admin?view=operations");

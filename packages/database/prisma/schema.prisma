@@ -86,6 +86,7 @@ model Venue {
   slug                   String
   timezone               String                 @default("Europe/London")
   locations              VenueLocation[]
+  openingHours           VenueOpeningHour[]
   servicePoints          ServicePoint[]
   staffMemberships       StaffMembership[]
   conversations          Conversation[]
@@ -105,6 +106,21 @@ model Venue {
 
   @@unique([workspaceId, slug])
   @@index([workspaceId])
+}
+
+model VenueOpeningHour {
+  id        String   @id @default(uuid()) @db.Uuid
+  venueId   String   @db.Uuid
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  dayOfWeek Int
+  opensAt   String
+  closesAt  String
+  isClosed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([venueId, dayOfWeek])
+  @@index([venueId])
 }
 
 model VenueLocation {

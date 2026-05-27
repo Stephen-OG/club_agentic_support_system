@@ -1,7 +1,21 @@
-import type { RequestPriority, RequestStatus } from "./types";
+export type RequestPriority = "low" | "normal" | "high" | "urgent";
+export type RequestStatus =
+  | "new"
+  | "acknowledged"
+  | "assigned"
+  | "declined"
+  | "in_progress"
+  | "completed"
+  | "resolved"
+  | "cancelled"
+  | "escalated";
 
 export function createWelcomeBody(tableLabel: string) {
-  return `Hi, welcome in. You are chatting from ${tableLabel}. What can we help with?`;
+  return `Hi, I'm Lily. You're chatting from ${tableLabel}. What can I help with?`;
+}
+
+export function createVenueWelcomeBody(venueName: string) {
+  return `Hi, I'm Lily, your ${venueName} concierge. Tell me where you are and what you need, and I will get it to the team.`;
 }
 
 export function createFollowupReply() {
@@ -34,6 +48,10 @@ export function createAssistantReply(priority: RequestPriority, tableLabel: stri
 
 export function createSendErrorBody() {
   return "I could not send that just now. Please try again, or speak to a team member nearby.";
+}
+
+export function createClosedVenueBody() {
+  return "Lily is offline while the venue is closed. Please come back during opening hours or speak to a team member nearby if it is urgent.";
 }
 
 export function createUpdateErrorBody() {

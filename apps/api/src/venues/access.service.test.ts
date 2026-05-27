@@ -24,6 +24,14 @@ describe("VenueAccessService", () => {
     );
   });
 
+  it("treats owner as venue-scoped, not workspace-wide", () => {
+    const ownerAuth = { staffProfileId: "o", workspaceId: "w1", venueId: "v1", role: "owner" as const };
+
+    assert.equal(service.canManageWorkspace(ownerAuth, "w1"), false);
+    assert.equal(service.canManageVenue(ownerAuth, { workspaceId: "w1", venueId: "v1" }), true);
+    assert.equal(service.canManageVenue(ownerAuth, { workspaceId: "w1", venueId: "v2" }), false);
+  });
+
   it("throws forbidden when access is denied", () => {
     assert.throws(
       () => service.assertCanManageVenue({ staffProfileId: "s", workspaceId: "w1", venueId: "v1", role: "staff" }, { workspaceId: "w1", venueId: "v1" }),

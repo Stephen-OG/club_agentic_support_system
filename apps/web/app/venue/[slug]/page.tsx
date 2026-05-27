@@ -4,7 +4,7 @@ export default async function VenuePage({ params }: { params: Promise<{ slug: st
   const { slug } = await params;
 
   return (
-    <main className="table-chat-page venue-support-page">
+    <main className="qr-chat-page venue-support-page">
       <VenueSupportChat venueSlug={slug} />
     </main>
   );

@@ -54,11 +54,23 @@ describe("loadWorkspaceEnv", () => {
     assert.equal(result.publicEnv.NEXT_PUBLIC_API_URL, "http://127.0.0.1:4000");
   });
 
+  it("does not use the web dev server port as the API port", () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "guestos-env-"));
+    const appDir = path.join(workspace, "apps", "web");
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(path.join(workspace, ".env"), "PORT=4000\nHOST=127.0.0.1\n");
+    fs.writeFileSync(path.join(appDir, ".env"), "WEB_PORT=3001\n");
+
+    const result = loadWorkspaceEnv({ appDir, repoRoot: workspace, existingEnv: {} });
+
+    assert.equal(result.publicEnv.NEXT_PUBLIC_API_URL, "http://127.0.0.1:4000");
+  });
+
   it("pins the web dev server away from the API PORT unless WEB_PORT is set", async () => {
     const packageJson = JSON.parse(
       await fs.promises.readFile(new URL("./package.json", import.meta.url), "utf8")
     );
 
-    assert.equal(packageJson.scripts.dev, "next dev -p ${WEB_PORT:-3000}");
+    assert.equal(packageJson.scripts.dev, "next dev -p ${WEB_PORT:-3001}");
   });
 });

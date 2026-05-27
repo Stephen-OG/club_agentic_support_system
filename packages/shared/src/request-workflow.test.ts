@@ -4,6 +4,7 @@ import { canTransitionRequest, getNextGuestActionStatus } from "./request-workfl
 
 describe("request workflow", () => {
   it("allows staff to move acknowledged or in-progress requests forward", () => {
+    assert.equal(canTransitionRequest("new", "acknowledged", "staff"), true);
     assert.equal(canTransitionRequest("acknowledged", "in_progress", "staff"), true);
     assert.equal(canTransitionRequest("in_progress", "completed", "staff"), true);
   });

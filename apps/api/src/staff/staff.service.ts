@@ -24,6 +24,8 @@ const sharedRoleByPrismaRole: Record<StaffRole, CreateStaffUserDto["role"]> = {
   READ_ONLY: "read_only"
 };
 
+const venueManagerCreatableRoles = new Set<CreateStaffUserDto["role"]>(["manager", "staff", "security", "read_only"]);
+
 @Injectable()
 export class StaffService {
   constructor(
@@ -57,20 +59,28 @@ export class StaffService {
   }
 
   async listTeam(auth: AuthContext) {
-    this.assertWorkspaceAdmin(auth);
+    this.assertCanManageTeam(auth);
+    const membershipWhere =
+      auth.role === "admin"
+        ? {
+            workspaceId: auth.workspaceId,
+            isActive: true
+          }
+        : {
+            workspaceId: auth.workspaceId,
+            venueId: auth.venueId ?? "00000000-0000-0000-0000-000000000000",
+            isActive: true
+          };
 
     const profiles = await this.prisma.staffProfile.findMany({
       where: {
         memberships: {
-          some: {
-            workspaceId: auth.workspaceId,
-            isActive: true
-          }
+          some: membershipWhere
         }
       },
       include: {
         memberships: {
-          where: { workspaceId: auth.workspaceId },
+          where: membershipWhere,
           include: { venue: true },
           orderBy: { createdAt: "asc" }
         }
@@ -88,7 +98,7 @@ export class StaffService {
   }
 
   async createStaffUser(auth: AuthContext, input: CreateStaffUserDto) {
-    this.assertWorkspaceAdmin(auth);
+    const venueId = this.resolveCreatableVenueId(auth, input);
 
     const email = input.email.trim().toLowerCase();
     const existing = await this.prisma.staffProfile.findUnique({ where: { email } });
@@ -116,7 +126,7 @@ export class StaffService {
       const membership = await tx.staffMembership.create({
         data: {
           workspaceId: auth.workspaceId,
-          venueId: ["owner", "admin"].includes(input.role) ? null : input.venueId,
+          venueId,
           staffProfileId: staff.id,
           role: prismaRoleBySharedRole[input.role]
         }
@@ -132,10 +142,34 @@ export class StaffService {
     };
   }
 
-  private assertWorkspaceAdmin(auth: AuthContext) {
-    if (auth.role !== "owner" && auth.role !== "admin") {
-      throw new ForbiddenException("Only workspace admins can manage staff");
+  private assertCanManageTeam(auth: AuthContext) {
+    if (auth.role === "admin") {
+      return;
     }
+
+    if ((auth.role === "owner" || auth.role === "manager") && auth.venueId) {
+      return;
+    }
+
+    throw new ForbiddenException("Only venue managers can manage staff");
+  }
+
+  private resolveCreatableVenueId(auth: AuthContext, input: CreateStaffUserDto) {
+    this.assertCanManageTeam(auth);
+
+    if (auth.role === "admin") {
+      return input.role === "admin" ? null : input.venueId;
+    }
+
+    if (!venueManagerCreatableRoles.has(input.role)) {
+      throw new ForbiddenException("Venue managers cannot create platform admin or owner accounts");
+    }
+
+    if (input.venueId && input.venueId !== auth.venueId) {
+      throw new ForbiddenException("Venue managers can only create users for their assigned venue");
+    }
+
+    return auth.venueId;
   }
 
   private generateTemporaryPassword() {

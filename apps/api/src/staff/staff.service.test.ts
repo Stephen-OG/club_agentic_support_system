@@ -5,6 +5,8 @@ import { StaffService } from "./staff.service";
 
 const adminAuth = { staffProfileId: "admin-1", workspaceId: "workspace-1", role: "admin" as const };
 const staffAuth = { staffProfileId: "staff-1", workspaceId: "workspace-1", venueId: "venue-1", role: "staff" as const };
+const ownerAuth = { staffProfileId: "owner-1", workspaceId: "workspace-1", venueId: "venue-1", role: "owner" as const };
+const managerAuth = { staffProfileId: "manager-1", workspaceId: "workspace-1", venueId: "venue-1", role: "manager" as const };
 
 describe("StaffService", () => {
   it("creates a Supabase auth user, staff profile, and membership for admins", async () => {
@@ -39,6 +41,119 @@ describe("StaffService", () => {
     assert.equal(result.staff.email, "sam@example.com");
     assert.equal(result.membership.role, "STAFF");
     assert.match(result.temporaryPassword, /^GuestOS-/);
+  });
+
+  it("stores venue owners as venue-scoped memberships", async () => {
+    let membershipData: any = null;
+    const service = new StaffService(
+      {
+        staffProfile: {
+          findUnique: async () => null
+        },
+        $transaction: async (operation: any) =>
+          operation({
+            staffProfile: {
+              create: async ({ data }: any) => ({ id: "profile-owner", ...data })
+            },
+            staffMembership: {
+              create: async ({ data }: any) => {
+                membershipData = data;
+                return { id: "membership-owner", ...data };
+              }
+            }
+          })
+      } as any,
+      {
+        createTemporaryPasswordUser: async () => ({ id: "auth-owner", email: "owner@example.com" })
+      } as any
+    );
+
+    const result = await service.createStaffUser(adminAuth, {
+      email: "owner@example.com",
+      displayName: "Venue Owner",
+      role: "owner",
+      venueId: "venue-1"
+    });
+
+    assert.equal(result.membership.role, "OWNER");
+    assert.equal(membershipData.venueId, "venue-1");
+  });
+
+  it("allows venue owners and managers to create venue-scoped staff for their own venue", async () => {
+    const createdMemberships: any[] = [];
+    const service = new StaffService(
+      {
+        staffProfile: {
+          findUnique: async () => null
+        },
+        $transaction: async (operation: any) =>
+          operation({
+            staffProfile: {
+              create: async ({ data }: any) => ({ id: `profile-${createdMemberships.length + 1}`, ...data })
+            },
+            staffMembership: {
+              create: async ({ data }: any) => {
+                createdMemberships.push(data);
+                return { id: `membership-${createdMemberships.length}`, ...data };
+              }
+            }
+          })
+      } as any,
+      {
+        createTemporaryPasswordUser: async ({ email }: any) => ({ id: `auth-${email}`, email })
+      } as any
+    );
+
+    await service.createStaffUser(ownerAuth, {
+      email: "owner-created@example.com",
+      displayName: "Owner Created",
+      role: "staff",
+      venueId: "venue-1"
+    });
+    await service.createStaffUser(managerAuth, {
+      email: "manager-created@example.com",
+      displayName: "Manager Created",
+      role: "security"
+    });
+
+    assert.deepEqual(
+      createdMemberships.map((membership) => ({ role: membership.role, venueId: membership.venueId })),
+      [
+        { role: "STAFF", venueId: "venue-1" },
+        { role: "SECURITY", venueId: "venue-1" }
+      ]
+    );
+  });
+
+  it("rejects venue managers creating users for a different venue or platform role", async () => {
+    const service = new StaffService(
+      {
+        staffProfile: {
+          findUnique: async () => null
+        }
+      } as any,
+      {} as any
+    );
+
+    await assert.rejects(
+      () =>
+        service.createStaffUser(managerAuth, {
+          email: "other@example.com",
+          displayName: "Other Venue",
+          role: "staff",
+          venueId: "venue-2"
+        }),
+      ForbiddenException
+    );
+    await assert.rejects(
+      () =>
+        service.createStaffUser(managerAuth, {
+          email: "admin@example.com",
+          displayName: "Admin",
+          role: "admin"
+        }),
+      ForbiddenException
+    );
   });
 
   it("rejects non-admin user creation", async () => {

@@ -9,7 +9,7 @@ type VenueTarget = {
 @Injectable()
 export class VenueAccessService {
   canManageWorkspace(auth: AuthContext, workspaceId: string) {
-    return auth.workspaceId === workspaceId && (auth.role === "owner" || auth.role === "admin");
+    return auth.workspaceId === workspaceId && auth.role === "admin";
   }
 
   canManageVenue(auth: AuthContext, target: VenueTarget) {
@@ -17,11 +17,11 @@ export class VenueAccessService {
       return false;
     }
 
-    if (auth.role === "owner" || auth.role === "admin") {
+    if (auth.role === "admin") {
       return true;
     }
 
-    if (auth.role === "manager") {
+    if (auth.role === "owner" || auth.role === "manager") {
       return auth.venueId === target.venueId;
     }
 

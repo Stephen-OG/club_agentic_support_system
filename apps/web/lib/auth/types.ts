@@ -46,6 +46,17 @@ export type CommandVenueLocation = {
   updatedAt?: string;
 };
 
+export type CommandVenueOpeningHour = {
+  id?: string;
+  venueId?: string;
+  dayOfWeek: number;
+  opensAt: string;
+  closesAt: string;
+  isClosed: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type CommandServicePoint = {
   id: string;
   venueId: string;
@@ -65,9 +76,17 @@ export type CommandVenue = {
   slug: string;
   timezone: string;
   locations: CommandVenueLocation[];
+  openingHours: CommandVenueOpeningHour[];
   servicePoints: CommandServicePoint[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type PublicVenueSummary = Pick<CommandVenue, "id" | "name" | "slug">;
+
+export type PublicChatAvailability = {
+  isOpen: boolean;
+  reason: "open" | "closed" | "hours_not_configured";
 };
 
 export type CommandRequestStatus =
@@ -125,8 +144,16 @@ export type CommandMessage = {
 };
 
 export type PublicQrConversationState = {
+  chatAvailability?: PublicChatAvailability;
   conversationId: string;
   messages: CommandMessage[];
   request: CommandSupportRequest | null;
   servicePoint: CommandServicePoint;
+  venue?: PublicVenueSummary;
+};
+
+export type PublicQrIntakeState = {
+  chatAvailability: PublicChatAvailability;
+  servicePoint: CommandServicePoint;
+  venue?: PublicVenueSummary;
 };

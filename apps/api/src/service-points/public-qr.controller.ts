@@ -9,6 +9,12 @@ import { ServicePointsService } from "./service-points.service";
 export class PublicQrController {
   constructor(private readonly servicePoints: ServicePointsService) {}
 
+  @Get(":token")
+  @ApiOkResponse({ description: "Loads public QR service point details and chat availability" })
+  getServicePointIntake(@Param("token") token: string) {
+    return this.servicePoints.getServicePointIntake(token);
+  }
+
   @Post(":token/messages")
   @ApiCreatedResponse({ description: "Accepts a guest message from a QR service point" })
   createGuestMessage(@Param("token") token: string, @Body() input: PublicGuestMessageDto) {
@@ -25,6 +31,12 @@ export class PublicQrController {
   @ApiOkResponse({ description: "Loads public venue intake details" })
   getVenueIntake(@Param("venueSlug") venueSlug: string) {
     return this.servicePoints.getVenueIntake(venueSlug);
+  }
+
+  @Get("venues/:venueSlug/conversations/:conversationId")
+  @ApiOkResponse({ description: "Loads the latest guest conversation state for a venue QR intake" })
+  getVenueGuestConversation(@Param("venueSlug") venueSlug: string, @Param("conversationId") conversationId: string) {
+    return this.servicePoints.getVenueGuestConversation(venueSlug, conversationId);
   }
 
   @Post("venues/:venueSlug/messages")

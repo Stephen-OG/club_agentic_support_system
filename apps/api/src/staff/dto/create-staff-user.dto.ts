@@ -13,7 +13,7 @@ export class CreateStaffUserDto {
   @IsIn(["owner", "admin", "manager", "staff", "security", "read_only"])
   role!: "owner" | "admin" | "manager" | "staff" | "security" | "read_only";
 
-  @ValidateIf((input: CreateStaffUserDto) => !["owner", "admin"].includes(input.role))
+  @ValidateIf((input: CreateStaffUserDto) => input.role !== "admin")
   @Matches(postgresUuidPattern, { message: "venueId must be a Postgres UUID" })
   venueId?: string;
 

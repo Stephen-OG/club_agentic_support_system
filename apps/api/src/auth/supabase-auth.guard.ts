@@ -3,6 +3,8 @@ import { PrismaService } from "../database/prisma.service";
 import type { RequestWithAuth } from "./auth-context";
 import { SUPABASE_ADMIN_CLIENT, type SupabaseAdminClient } from "./supabase-admin.service";
 
+type AuthRole = "owner" | "manager" | "admin" | "staff" | "security" | "read_only";
+
 type RequestWithCurrentUser = RequestWithAuth & {
   currentUser?: {
     authUserId: string;
@@ -13,7 +15,7 @@ type RequestWithCurrentUser = RequestWithAuth & {
       id: string;
       workspaceId: string;
       venueId: string | null;
-      role: "owner" | "manager" | "admin" | "staff" | "security" | "read_only";
+      role: AuthRole;
       workspace: { id: string; name: string; slug: string };
       venue: { id: string; name: string; slug: string } | null;
     }>;
@@ -21,13 +23,21 @@ type RequestWithCurrentUser = RequestWithAuth & {
   headers: Record<string, string | string[] | undefined>;
 };
 
-const roleByPrismaRole: Record<string, "owner" | "manager" | "admin" | "staff" | "security" | "read_only"> = {
+const roleByPrismaRole: Record<string, AuthRole> = {
   OWNER: "owner",
   MANAGER: "manager",
   ADMIN: "admin",
   STAFF: "staff",
   SECURITY: "security",
   READ_ONLY: "read_only"
+};
+const authRoleRank: Record<AuthRole, number> = {
+  admin: 6,
+  owner: 5,
+  manager: 4,
+  security: 3,
+  staff: 2,
+  read_only: 1
 };
 
 @Injectable()
@@ -62,30 +72,29 @@ export class SupabaseAuthGuard implements CanActivate {
       }
     });
 
-    const membership = profile?.memberships[0];
+    const memberships = profile?.memberships.map((item) => ({ ...item, role: this.mapRole(item.role) })) ?? [];
+    const membership = [...memberships].sort((left, right) => authRoleRank[right.role] - authRoleRank[left.role])[0];
 
     if (!profile || !membership) {
       throw new UnauthorizedException("Staff account is not configured");
     }
 
-    const role = this.mapRole(membership.role);
-
     request.auth = {
       staffProfileId: profile.id,
       workspaceId: membership.workspaceId,
       venueId: membership.venueId ?? undefined,
-      role
+      role: membership.role
     };
     request.currentUser = {
       authUserId: data.user.id,
       email: data.user.email ?? profile.email ?? null,
       displayName: profile.displayName,
       mustChangePassword: data.user.user_metadata?.mustChangePassword === true,
-      memberships: profile.memberships.map((item) => ({
+      memberships: memberships.map((item) => ({
         id: item.id,
         workspaceId: item.workspaceId,
         venueId: item.venueId,
-        role: this.mapRole(item.role),
+        role: item.role,
         workspace: item.workspace,
         venue: item.venue
       }))
@@ -100,7 +109,7 @@ export class SupabaseAuthGuard implements CanActivate {
     return match?.[1];
   }
 
-  private mapRole(role: string) {
+  private mapRole(role: string): AuthRole {
     const mapped = roleByPrismaRole[role];
 
     if (!mapped) {

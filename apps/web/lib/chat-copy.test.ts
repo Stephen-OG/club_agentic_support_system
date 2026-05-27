@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   createAssistantReply,
+  createClosedVenueBody,
   createFollowupReply,
   createGuestStatusMessage,
   createSatisfactionReply,
   createServiceRecoveryReply,
+  createVenueWelcomeBody,
   createWelcomeBody
 } from "./chat-copy";
 
@@ -13,7 +15,18 @@ describe("chat copy", () => {
   it("greets guests like a helpful host", () => {
     assert.equal(
       createWelcomeBody("Table 1"),
-      "Hi, welcome in. You are chatting from Table 1. What can we help with?"
+      "Hi, I'm Lily. You're chatting from Table 1. What can I help with?"
+    );
+    assert.equal(
+      createVenueWelcomeBody("Blue Note"),
+      "Hi, I'm Lily, your Blue Note concierge. Tell me where you are and what you need, and I will get it to the team."
+    );
+  });
+
+  it("uses Lily for closed-hours guest chat copy", () => {
+    assert.equal(
+      createClosedVenueBody(),
+      "Lily is offline while the venue is closed. Please come back during opening hours or speak to a team member nearby if it is urgent."
     );
   });
 

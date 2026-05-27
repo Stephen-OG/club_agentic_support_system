@@ -37,6 +37,7 @@ const allowedTransitions: Record<RequestActor, Partial<Record<RequestStatus, Req
     escalated: ["assigned", "in_progress", "cancelled", "resolved"]
   },
   staff: {
+    new: ["acknowledged"],
     acknowledged: ["in_progress", "declined"],
     assigned: ["in_progress", "declined"],
     in_progress: ["completed"]

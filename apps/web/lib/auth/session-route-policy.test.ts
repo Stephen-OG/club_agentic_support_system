@@ -12,10 +12,10 @@ const userWithRole = (role: CommandUser["memberships"][number]["role"]): Command
     {
       id: `membership_${role}`,
       workspaceId: "workspace_1",
-      venueId: role === "owner" || role === "admin" ? null : "venue_1",
+      venueId: role === "admin" ? null : "venue_1",
       role,
       workspace: { id: "workspace_1", name: "Workspace", slug: "workspace" },
-      venue: role === "owner" || role === "admin" ? null : { id: "venue_1", name: "Main Room", slug: "main-room" }
+      venue: role === "admin" ? null : { id: "venue_1", name: "Main Room", slug: "main-room" }
     }
   ]
 });

@@ -26,6 +26,8 @@ for (const [key, value] of Object.entries(publicEnv)) {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ["127.0.0.1"],
+  devIndicators: false,
   env: publicEnv,
   logging: {
     browserToTerminal: true

@@ -1,20 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, MessageSquareText, RadioTower, RefreshCw, ShieldAlert, Star, Workflow } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, Bell, Clock3, MessageSquareText, RadioTower, RefreshCw, ShieldAlert, Star } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import type { CommandRequestStatus, CommandSupportRequest, CommandVenue } from "@/lib/auth/types";
+import { calculateOperationsAnalytics } from "@/lib/operations-analytics";
+import {
+  type OperationsBucket,
+  getOperationsNotifications,
+  getOperationsBucket,
+  getOperationsStatusTone,
+  getRequestOperationAction,
+  operationsPollIntervalMs,
+  summarizeOperationsBuckets
+} from "@/lib/operations-workflow";
 import { calculateRatingAnalytics } from "@/lib/rating-analytics";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-
-const nextStatusByStatus: Partial<Record<CommandRequestStatus, CommandRequestStatus>> = {
-  NEW: "ACKNOWLEDGED",
-  ACKNOWLEDGED: "IN_PROGRESS",
-  ASSIGNED: "IN_PROGRESS",
-  ESCALATED: "IN_PROGRESS",
-  IN_PROGRESS: "COMPLETED",
-  COMPLETED: "RESOLVED"
-};
 
 function statusLabel(status: string) {
   return status.toLowerCase().replace("_", " ");
@@ -46,12 +47,23 @@ function latestPreview(request: CommandSupportRequest) {
 
 export function OperationsCommand() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const knownRequestIdsRef = useRef<Set<string>>(new Set());
+  const hasLoadedRequestsRef = useRef(false);
   const [venues, setVenues] = useState<CommandVenue[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState("");
   const [requests, setRequests] = useState<CommandSupportRequest[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [activeBucket, setActiveBucket] = useState<OperationsBucket>("active");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotificationPermission(window.Notification.permission);
+    }
+  }, []);
 
   const loadVenues = useCallback(async () => {
     if (!supabase) {
@@ -66,14 +78,39 @@ export function OperationsCommand() {
     return nextVenues;
   }, [supabase]);
 
+  const notifyForNewRequests = useCallback((nextRequests: CommandSupportRequest[]) => {
+    if (!hasLoadedRequestsRef.current) {
+      knownRequestIdsRef.current = new Set(nextRequests.map((request) => request.id));
+      hasLoadedRequestsRef.current = true;
+      return;
+    }
+
+    const notifications = getOperationsNotifications(knownRequestIdsRef.current, nextRequests);
+    knownRequestIdsRef.current = new Set(nextRequests.map((request) => request.id));
+
+    if (typeof window === "undefined" || !("Notification" in window) || window.Notification.permission !== "granted") {
+      return;
+    }
+
+    for (const notification of notifications) {
+      new window.Notification(notification.title, {
+        body: notification.body,
+        tag: notification.id
+      });
+    }
+  }, []);
+
   const loadRequests = useCallback(async (venueId: string) => {
     if (!supabase || !venueId) {
       setRequests([]);
       return;
     }
 
-    setRequests(await apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venueId}/requests`));
-  }, [supabase]);
+    const nextRequests = await apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venueId}/requests`);
+    notifyForNewRequests(nextRequests);
+    setRequests(nextRequests);
+    setLastUpdatedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+  }, [notifyForNewRequests, supabase]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -90,9 +127,25 @@ export function OperationsCommand() {
     }
   }, [loadRequests, loadVenues, selectedVenueId, venues]);
 
-  async function updateRequest(request: CommandSupportRequest, status: CommandRequestStatus) {
+  async function patchRequestStatus(request: CommandSupportRequest, status: CommandRequestStatus) {
     if (!supabase) {
       setError("Supabase is not configured.");
+      return null;
+    }
+
+    const updated = await apiRequest<CommandSupportRequest>(supabase, `/requests/${request.id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: sharedStatus(status) })
+    });
+
+    setRequests((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    return updated;
+  }
+
+  async function applyRequestAction(request: CommandSupportRequest) {
+    const action = getRequestOperationAction(request.status);
+
+    if (!action) {
       return;
     }
 
@@ -100,11 +153,17 @@ export function OperationsCommand() {
     setError(null);
 
     try {
-      const updated = await apiRequest<CommandSupportRequest>(supabase, `/requests/${request.id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: sharedStatus(status) })
-      });
-      setRequests((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      let updated = request;
+
+      if (action.requiresInProgressFirst && updated.status !== "IN_PROGRESS") {
+        updated = (await patchRequestStatus(updated, "IN_PROGRESS")) ?? updated;
+      }
+
+      updated = (await patchRequestStatus(updated, action.targetStatus)) ?? updated;
+
+      if (action.autoAdvanceToStatus && updated.status !== action.autoAdvanceToStatus) {
+        await patchRequestStatus(updated, action.autoAdvanceToStatus);
+      }
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not update request");
     } finally {
@@ -116,14 +175,46 @@ export function OperationsCommand() {
     void refresh();
   }, [refresh]);
 
-  const openRequests = requests.filter((request) => !["RESOLVED", "CANCELLED"].includes(request.status));
+  useEffect(() => {
+    if (!selectedVenueId) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadRequests(selectedVenueId);
+    }, operationsPollIntervalMs);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [loadRequests, selectedVenueId]);
+
+  async function enableNotifications() {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setError("Browser notifications are not supported here.");
+      return;
+    }
+
+    const permission = await window.Notification.requestPermission();
+    setNotificationPermission(permission);
+  }
+
+  const bucketSummary = summarizeOperationsBuckets(requests);
+  const selectedRequests = requests.filter((request) => getOperationsBucket(request.status) === activeBucket);
   const ratingAnalytics = calculateRatingAnalytics(requests);
+  const operationsAnalytics = calculateOperationsAnalytics(requests);
   const ratingAverage = ratingAnalytics.averageRating === null ? "No ratings" : ratingAnalytics.averageRating.toFixed(1);
   const metrics = [
-    { label: "Open queue", value: openRequests.length.toString(), detail: `${requests.length} total`, tone: "ok", icon: RadioTower },
+    { label: "Active queue", value: bucketSummary.activeCount.toString(), detail: `${requests.length} total`, tone: "ok", icon: RadioTower },
+    {
+      label: "Avg completion",
+      value: operationsAnalytics.averageCompletionMinutes === null ? "None" : `${operationsAnalytics.averageCompletionMinutes}m`,
+      detail: `${operationsAnalytics.slowRequestCount} slow`,
+      tone: operationsAnalytics.slowRequestCount > 0 ? "warn" : "idle",
+      icon: Clock3
+    },
     { label: "Avg rating", value: ratingAverage, detail: `${ratingAnalytics.ratedCount} rated`, tone: "idle", icon: Star },
-    { label: "Low ratings", value: ratingAnalytics.lowRatingCount.toString(), detail: "1-2 star recovery", tone: "warn", icon: ShieldAlert },
-    { label: "High ratings", value: `${ratingAnalytics.highRatingPercent}%`, detail: "4-5 star requests", tone: "ok", icon: CheckCircle2 }
+    { label: "Low ratings", value: ratingAnalytics.lowRatingCount.toString(), detail: "1-2 star recovery", tone: "warn", icon: ShieldAlert }
   ];
 
   return (
@@ -144,6 +235,10 @@ export function OperationsCommand() {
           <button className="command-button" disabled={loading} onClick={() => void refresh()} type="button">
             <RefreshCw size={16} />
             Refresh
+          </button>
+          <button className="command-button" disabled={notificationPermission === "granted"} onClick={() => void enableNotifications()} type="button">
+            <Bell size={16} />
+            {notificationPermission === "granted" ? "Notifications on" : "Enable alerts"}
           </button>
         </div>
       </div>
@@ -169,14 +264,61 @@ export function OperationsCommand() {
       <div className="ops-layout">
         <section className="command-panel">
           <div className="panel-title-row">
-            <h2>Priority handoffs</h2>
-            <span className="data-chip">{openRequests.length} open</span>
+            <h2>{activeBucket === "active" ? "Active requests" : "Completed requests"}</h2>
+            {lastUpdatedAt ? <span className="data-chip">Updated {lastUpdatedAt}</span> : null}
+            <div className="ops-tabs" role="tablist" aria-label="Request status buckets">
+              <button
+                aria-selected={activeBucket === "active"}
+                className={`ops-tab ${activeBucket === "active" ? "active" : ""}`}
+                onClick={() => setActiveBucket("active")}
+                role="tab"
+                type="button"
+              >
+                Active <span>{bucketSummary.activeCount}</span>
+              </button>
+              <button
+                aria-selected={activeBucket === "completed"}
+                className={`ops-tab ${activeBucket === "completed" ? "active" : ""}`}
+                onClick={() => setActiveBucket("completed")}
+                role="tab"
+                type="button"
+              >
+                Completed <span>{bucketSummary.completedCount}</span>
+              </button>
+            </div>
+          </div>
+          <div className="analytics-strip">
+            <div>
+              <BarChart3 size={15} />
+              <strong>Top categories</strong>
+              <span>
+                {operationsAnalytics.requestCountByCategory
+                  .slice(0, 3)
+                  .map((item) => `${item.category} ${item.count}`)
+                  .join(" · ") || "No data yet"}
+              </span>
+            </div>
+            <div>
+              <Clock3 size={15} />
+              <strong>Busiest hours</strong>
+              <span>
+                {operationsAnalytics.busiestHours.map((item) => `${item.hour} ${item.count}`).join(" · ") || "No data yet"}
+              </span>
+            </div>
+            <div>
+              <ShieldAlert size={15} />
+              <strong>Unresolved</strong>
+              <span>
+                {operationsAnalytics.unresolvedCount} open · {operationsAnalytics.slowRequestCount} slow
+              </span>
+            </div>
           </div>
           <div className="queue-list">
-            {openRequests.map((request) => {
-              const nextStatus = nextStatusByStatus[request.status];
+            {selectedRequests.map((request) => {
+              const action = getRequestOperationAction(request.status);
+              const statusTone = getOperationsStatusTone(request.status);
               return (
-                <article className="request-row" key={request.id}>
+                <article className={`request-row status-tone-${statusTone}`} key={request.id}>
                   <div className="request-main">
                     <span className={`severity-dot severity-${priorityClass(request.priority)}`} />
                     <div>
@@ -197,44 +339,24 @@ export function OperationsCommand() {
                       {ratingLabel(request)}
                     </span>
                   </div>
-                  {nextStatus ? (
+                  {action ? (
                     <button
                       className="command-button"
                       disabled={updatingId === request.id}
-                      onClick={() => void updateRequest(request, nextStatus)}
+                      onClick={() => void applyRequestAction(request)}
                       type="button"
                     >
-                      {statusLabel(nextStatus)}
+                      {action.label}
                     </button>
                   ) : null}
                 </article>
               );
             })}
-            {!openRequests.length && !loading ? <div className="empty-state">No active requests for this venue.</div> : null}
-          </div>
-        </section>
-
-        <section className="command-panel ops-incident-panel agent-loop-panel">
-          <span className="ops-incident-icon">
-            <Workflow size={20} />
-          </span>
-          <div>
-            <h2>Agent loop</h2>
-            <p className="meta">Semi-autonomous mode can reply to safe routine requests and assign low-risk work inside manager rules.</p>
-          </div>
-          <div className="agent-loop-steps">
-            <div>
-              <strong>Observe</strong>
-              <span>Status, priority, location, rating, conversation</span>
-            </div>
-            <div>
-              <strong>Decide</strong>
-              <span>Recovery, stale threads, escalation risk</span>
-            </div>
-            <div>
-              <strong>Act</strong>
-              <span>Reply, recommend, assign inside policy</span>
-            </div>
+            {!selectedRequests.length && !loading ? (
+              <div className="empty-state">
+                {activeBucket === "active" ? "No active requests for this venue." : "No completed requests for this venue."}
+              </div>
+            ) : null}
           </div>
         </section>
       </div>

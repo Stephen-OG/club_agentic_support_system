@@ -13,8 +13,8 @@ export const commandViews: Array<{ id: CommandView; label: string }> = [
 ];
 
 const roleRank: Record<CommandRole, number> = {
-  owner: 6,
-  admin: 5,
+  admin: 6,
+  owner: 5,
   manager: 4,
   security: 3,
   staff: 2,
@@ -24,7 +24,7 @@ const roleRank: Record<CommandRole, number> = {
 const visibleViewsByRole: Record<CommandRole, CommandView[]> = {
   owner: ["dashboard", "operations", "team", "venues", "account"],
   admin: ["dashboard", "operations", "team", "venues", "account"],
-  manager: ["dashboard", "operations", "venues", "account"],
+  manager: ["dashboard", "operations", "team", "venues", "account"],
   security: ["staff", "account"],
   staff: ["staff", "account"],
   read_only: ["staff", "account"]
@@ -50,4 +50,24 @@ export function getVisibleCommandViews(user: CommandUser) {
   const role = getPrimaryRole(user);
   const visibleIds = new Set(visibleViewsByRole[role]);
   return commandViews.filter((view) => visibleIds.has(view.id));
+}
+
+export function isCommandView(value: string | null | undefined): value is CommandView {
+  return commandViews.some((view) => view.id === value);
+}
+
+export function resolveCommandView(user: CommandUser, requestedView: string | null | undefined, fallbackView: CommandView) {
+  const visibleIds = new Set(getVisibleCommandViews(user).map((view) => view.id));
+
+  if (isCommandView(requestedView) && visibleIds.has(requestedView)) {
+    return requestedView;
+  }
+
+  return visibleIds.has(fallbackView) ? fallbackView : getRoleDashboardMode(user) === "staff" ? "staff" : "dashboard";
+}
+
+export function getCommandViewHref(pathname: string, view: CommandView) {
+  const params = new URLSearchParams();
+  params.set("view", view);
+  return `${pathname}?${params.toString()}`;
 }

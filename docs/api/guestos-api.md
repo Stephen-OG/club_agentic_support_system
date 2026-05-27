@@ -2,6 +2,18 @@
 
 ## Public Venue Intake
 
+Public service-point QR pages live at `/qr/:token`.
+
+`POST /public/qr/:token/messages`
+
+Accepts a message from a QR code attached to a service point such as a VIP table, booth, bar area, or room.
+
+`GET /public/qr/:token/conversations/:conversationId`
+
+Returns the latest service-point conversation state for guest polling.
+
+Public venue QR pages live at `/venue/:slug`.
+
 `GET /public/qr/venues/:venueSlug`
 
 Returns public venue intake details and quick actions.
@@ -9,6 +21,10 @@ Returns public venue intake details and quick actions.
 `POST /public/qr/venues/:venueSlug/messages`
 
 Accepts a venue QR guest message.
+
+`GET /public/qr/venues/:venueSlug/conversations/:conversationId`
+
+Returns the latest venue QR conversation state for guest polling.
 
 Request body:
 

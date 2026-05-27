@@ -16,4 +16,16 @@ describe("CreateStaffUserDto", () => {
 
     assert.deepEqual(errors, []);
   });
+
+  it("requires venue owners to be scoped to a venue", async () => {
+    const dto = Object.assign(new CreateStaffUserDto(), {
+      email: "owner@example.com",
+      displayName: "Owner",
+      role: "owner"
+    });
+
+    const errors = await validate(dto);
+
+    assert.equal(errors.some((error) => error.property === "venueId"), true);
+  });
 });

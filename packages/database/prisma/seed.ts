@@ -39,6 +39,29 @@ async function main() {
     }
   });
 
+  for (const dayOfWeek of [0, 1, 2, 3, 4, 5, 6]) {
+    await prisma.venueOpeningHour.upsert({
+      create: {
+        closesAt: "23:00",
+        dayOfWeek,
+        isClosed: false,
+        opensAt: "09:00",
+        venueId
+      },
+      update: {
+        closesAt: "23:00",
+        isClosed: false,
+        opensAt: "09:00"
+      },
+      where: {
+        venueId_dayOfWeek: {
+          dayOfWeek,
+          venueId
+        }
+      }
+    });
+  }
+
   await prisma.venueLocation.upsert({
     create: {
       id: mainFloorId,

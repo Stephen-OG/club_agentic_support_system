@@ -3,7 +3,8 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Copy, RefreshCw, UserPlus } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
-import type { CommandRole, CommandTeamMember, CommandVenue, CreatedStaffCredential } from "@/lib/auth/types";
+import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
+import type { CommandRole, CommandTeamMember, CommandUser, CommandVenue, CreatedStaffCredential } from "@/lib/auth/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 const roles: Array<{ label: string; value: CommandRole }> = [
@@ -16,11 +17,18 @@ const roles: Array<{ label: string; value: CommandRole }> = [
 ];
 
 function roleRequiresVenue(role: CommandRole) {
-  return !["owner", "admin"].includes(role);
+  return role !== "admin";
 }
 
-export function TeamCommand() {
+export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const primaryRole = getPrimaryRole(currentUser);
+  const primaryMembership = getPrimaryMembership(currentUser);
+  const canCreatePlatformRoles = primaryRole === "admin";
+  const availableRoles = useMemo(
+    () => (canCreatePlatformRoles ? roles : roles.filter((item) => ["manager", "staff", "security", "read_only"].includes(item.value))),
+    [canCreatePlatformRoles]
+  );
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<CommandRole>("staff");
@@ -49,13 +57,19 @@ export function TeamCommand() {
       ]);
       setTeam(nextTeam);
       setVenues(nextVenues);
-      setVenueId((current) => current || nextVenues[0]?.id || "");
+      setVenueId((current) => current || primaryMembership?.venueId || nextVenues[0]?.id || "");
     } catch (nextError) {
       setListError(nextError instanceof Error ? nextError.message : "Could not load team data");
     } finally {
       setRefreshing(false);
     }
-  }, [supabase]);
+  }, [primaryMembership?.venueId, supabase]);
+
+  useEffect(() => {
+    if (!availableRoles.some((item) => item.value === role)) {
+      setRole(availableRoles[0]?.value || "staff");
+    }
+  }, [availableRoles, role]);
 
   useEffect(() => {
     void refresh();
@@ -79,7 +93,7 @@ export function TeamCommand() {
           email,
           displayName,
           role,
-          venueId: roleRequiresVenue(role) ? venueId : undefined
+          venueId: canCreatePlatformRoles && roleRequiresVenue(role) ? venueId : undefined
         })
       });
       setCreated(result);
@@ -119,14 +133,14 @@ export function TeamCommand() {
           <label>
             <span>Role</span>
             <select onChange={(event) => setRole(event.target.value as CommandRole)} value={role}>
-              {roles.map((item) => (
+              {availableRoles.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
                 </option>
               ))}
             </select>
           </label>
-          {roleRequiresVenue(role) ? (
+          {roleRequiresVenue(role) && canCreatePlatformRoles ? (
             <label>
               <span>Venue</span>
               <select onChange={(event) => setVenueId(event.target.value)} required value={venueId}>

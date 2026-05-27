@@ -1,5 +1,5 @@
 import { createCancelledReply, createSatisfactionReply, createServiceRecoveryReply } from "./chat-copy";
-import type { RequestStatus } from "./types";
+import type { RequestStatus } from "./chat-copy";
 
 export type ClientRequestAction = "cancel" | "confirm_resolved" | "not_satisfied";
 export type SatisfactionRating = 1 | 2 | 3 | 4 | 5;

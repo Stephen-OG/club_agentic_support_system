@@ -166,10 +166,78 @@ describe("RequestsService lifecycle", () => {
     );
   });
 
+  it("allows staff to acknowledge a new request and records when it happened", async () => {
+    const request = {
+      id: "request_acknowledge_1",
+      venueId: "venue_1",
+      servicePointId: "service_point_1",
+      conversationId: "conversation_1",
+      status: RequestStatus.NEW,
+      assignedToId: null,
+      venue: {
+        id: "venue_1",
+        workspaceId: "workspace_1"
+      }
+    };
+    const updatedRequest = {
+      ...request,
+      status: RequestStatus.ACKNOWLEDGED,
+      acknowledgedAt: new Date("2026-05-26T10:00:00.000Z")
+    };
+    const calls: Array<{ model: string; args: unknown }> = [];
+    const tx = {
+      supportRequest: {
+        update: async (args: unknown) => {
+          calls.push({ model: "supportRequest.update", args });
+          return updatedRequest;
+        }
+      },
+      requestEvent: {
+        create: async (args: unknown) => {
+          calls.push({ model: "requestEvent.create", args });
+          return args;
+        }
+      },
+      message: {
+        create: async (args: unknown) => {
+          calls.push({ model: "message.create", args });
+          return args;
+        }
+      }
+    };
+    const prisma = {
+      supportRequest: {
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "supportRequest.findUnique", args });
+          return request;
+        }
+      },
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => {
+        calls.push({ model: "$transaction", args: "callback" });
+        return callback(tx);
+      }
+    };
+    const service = new RequestsService(prisma as never, createVenueAccess() as never);
+
+    await service.updateStatus(auth, request.id, { status: "acknowledged" });
+
+    const updateCall = calls.find((call) => call.model === "supportRequest.update") as {
+      args: { data: { acknowledgedAt?: unknown } };
+    };
+    assert.ok(updateCall.args.data.acknowledgedAt instanceof Date);
+    updateCall.args.data.acknowledgedAt = "Any<Date>";
+    assert.deepEqual(updateCall.args.data, {
+      status: RequestStatus.ACKNOWLEDGED,
+      acknowledgedAt: "Any<Date>"
+    });
+  });
+
   it("updates staff lifecycle status and creates an event in a transaction", async () => {
     const request = {
       id: "request_1",
       venueId: "venue_1",
+      servicePointId: "service_point_1",
+      conversationId: "conversation_1",
       status: RequestStatus.IN_PROGRESS,
       assignedToId: null,
       venue: {
@@ -193,6 +261,12 @@ describe("RequestsService lifecycle", () => {
       requestEvent: {
         create: async (args: unknown) => {
           calls.push({ model: "requestEvent.create", args });
+          return args;
+        }
+      },
+      message: {
+        create: async (args: unknown) => {
+          calls.push({ model: "message.create", args });
           return args;
         }
       }
@@ -262,8 +336,101 @@ describe("RequestsService lifecycle", () => {
             }
           }
         }
+      },
+      {
+        model: "message.create",
+        args: {
+          data: {
+            venueId: request.venueId,
+            servicePointId: request.servicePointId,
+            conversationId: request.conversationId,
+            requestId: request.id,
+            sender: SenderType.SYSTEM,
+            body: "The team marked this complete. How did it go?",
+            metadata: {
+              source: "request_status",
+              status: "completed"
+            }
+          }
+        }
       }
     ]);
+  });
+
+  it("creates a guest-visible conversation message when staff updates request status", async () => {
+    const request = {
+      id: "request_status_message_1",
+      venueId: "venue_1",
+      servicePointId: "service_point_1",
+      conversationId: "conversation_status_message_1",
+      status: RequestStatus.NEW,
+      assignedToId: null,
+      venue: {
+        id: "venue_1",
+        workspaceId: "workspace_1"
+      }
+    };
+    const updatedRequest = {
+      ...request,
+      status: RequestStatus.ACKNOWLEDGED
+    };
+    const calls: Array<{ model: string; args: unknown }> = [];
+    const tx = {
+      supportRequest: {
+        update: async (args: unknown) => {
+          calls.push({ model: "supportRequest.update", args });
+          return updatedRequest;
+        }
+      },
+      message: {
+        create: async (args: unknown) => {
+          calls.push({ model: "message.create", args });
+          return args;
+        }
+      },
+      requestEvent: {
+        create: async (args: unknown) => {
+          calls.push({ model: "requestEvent.create", args });
+          return args;
+        }
+      }
+    };
+    const prisma = {
+      supportRequest: {
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "supportRequest.findUnique", args });
+          return request;
+        }
+      },
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => {
+        calls.push({ model: "$transaction", args: "callback" });
+        return callback(tx);
+      }
+    };
+    const service = new RequestsService(prisma as never, createVenueAccess() as never);
+
+    await service.updateStatus({ ...auth, role: "admin" }, request.id, { status: "acknowledged" });
+
+    assert.deepEqual(
+      calls.find((call) => call.model === "message.create"),
+      {
+        model: "message.create",
+        args: {
+          data: {
+            venueId: request.venueId,
+            servicePointId: request.servicePointId,
+            conversationId: request.conversationId,
+            requestId: request.id,
+            sender: SenderType.SYSTEM,
+            body: "The team has acknowledged your request and will help from here.",
+            metadata: {
+              source: "request_status",
+              status: "acknowledged"
+            }
+          }
+        }
+      }
+    );
   });
 
   it("requires a rating before guests confirm a completed request is resolved", async () => {

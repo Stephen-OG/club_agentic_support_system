@@ -5,13 +5,14 @@ import { CheckCircle2, Clock3, LogOut, Play, RefreshCw, ShieldCheck, UserCheck }
 import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
 import type { CommandRequestStatus, CommandSupportRequest, CommandUser } from "@/lib/auth/types";
+import {
+  getStaffNextStatus,
+  getStaffQueueBucket,
+  staffQueuePollIntervalMs,
+  summarizeStaffQueueBuckets,
+  type StaffQueueBucket
+} from "@/lib/staff-workflow";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-
-const staffNextStatus: Partial<Record<CommandRequestStatus, CommandRequestStatus>> = {
-  ACKNOWLEDGED: "IN_PROGRESS",
-  ASSIGNED: "IN_PROGRESS",
-  IN_PROGRESS: "COMPLETED"
-};
 
 function label(value: string) {
   return value.toLowerCase().replace("_", " ");
@@ -35,6 +36,7 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(venueId));
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [activeBucket, setActiveBucket] = useState<StaffQueueBucket>("active");
 
   async function refresh() {
     if (!supabase || !venueId) {
@@ -86,41 +88,51 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
       return;
     }
 
+    const client = supabase;
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    async function loadQueue(options: { showLoading: boolean }) {
+      if (options.showLoading) {
+        setLoading(true);
+      }
+      setError(null);
 
-    void apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venueId}/requests`)
-      .then((nextRequests) => {
+      try {
+        const nextRequests = await apiRequest<CommandSupportRequest[]>(client, `/venues/${venueId}/requests`);
         if (!cancelled) {
           setRequests(nextRequests);
         }
-      })
-      .catch((nextError) => {
+      } catch (nextError) {
         if (!cancelled) {
           setError(nextError instanceof Error ? nextError.message : "Could not load your queue");
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setLoading(false);
         }
-      });
+      }
+    }
+
+    void loadQueue({ showLoading: true });
+    const intervalId = window.setInterval(() => {
+      void loadQueue({ showLoading: false });
+    }, staffQueuePollIntervalMs);
 
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, [supabase, venueId]);
 
-  const activeRequests = requests.filter((request) => !["RESOLVED", "CANCELLED"].includes(request.status));
+  const bucketSummary = summarizeStaffQueueBuckets(requests);
+  const activeRequests = requests.filter((request) => getStaffQueueBucket(request.status) === "active");
+  const selectedRequests = requests.filter((request) => getStaffQueueBucket(request.status) === activeBucket);
   const readyRequests = activeRequests.filter((request) => request.status === "ACKNOWLEDGED" || request.status === "ASSIGNED");
   const inProgressRequests = activeRequests.filter((request) => request.status === "IN_PROGRESS");
-  const completedRequests = requests.filter((request) => request.status === "COMPLETED" || request.status === "RESOLVED");
   const metrics = [
-    { label: "Open tasks", value: activeRequests.length.toString(), detail: venueName, icon: UserCheck },
+    { label: "Open tasks", value: bucketSummary.activeCount.toString(), detail: venueName, icon: UserCheck },
     { label: "Ready", value: readyRequests.length.toString(), detail: "waiting to start", icon: Play },
     { label: "In progress", value: inProgressRequests.length.toString(), detail: "currently owned", icon: Clock3 },
-    { label: "Completed", value: completedRequests.length.toString(), detail: "guest confirmation flow", icon: CheckCircle2 }
+    { label: "Completed", value: bucketSummary.completedCount.toString(), detail: "guest confirmation flow", icon: CheckCircle2 }
   ];
 
   if (!venueId) {
@@ -187,11 +199,29 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
       <div className="command-panel wide">
         <div className="panel-title-row">
           <h2>{venueName} queue</h2>
-          <span className="data-chip">{canUpdateRequests ? "Action enabled" : "Read only"}</span>
+          <div className="command-actions">
+            <div className="ops-tabs" aria-label="Queue bucket">
+              <button
+                className={`ops-tab ${activeBucket === "active" ? "active" : ""}`}
+                onClick={() => setActiveBucket("active")}
+                type="button"
+              >
+                Active <span>{bucketSummary.activeCount}</span>
+              </button>
+              <button
+                className={`ops-tab ${activeBucket === "completed" ? "active" : ""}`}
+                onClick={() => setActiveBucket("completed")}
+                type="button"
+              >
+                Completed <span>{bucketSummary.completedCount}</span>
+              </button>
+            </div>
+            <span className="data-chip">{canUpdateRequests ? "Action enabled" : "Read only"}</span>
+          </div>
         </div>
         <div className="staff-task-list">
-          {activeRequests.map((request) => {
-            const nextStatus = canUpdateRequests ? staffNextStatus[request.status] : undefined;
+          {selectedRequests.map((request) => {
+            const nextStatus = canUpdateRequests ? getStaffNextStatus(request.status) : null;
             return (
               <article className="staff-task" key={request.id}>
                 <div className="request-main">
@@ -218,7 +248,11 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
               </article>
             );
           })}
-          {!activeRequests.length && !loading ? <div className="empty-state">No active tasks in your queue.</div> : null}
+          {!selectedRequests.length && !loading ? (
+            <div className="empty-state">
+              {activeBucket === "active" ? "No active tasks in your queue." : "No completed tasks in this queue yet."}
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

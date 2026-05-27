@@ -128,6 +128,11 @@ describe("ServicePointsService admin helpers", () => {
               name: "asc"
             }
           },
+          openingHours: {
+            orderBy: {
+              dayOfWeek: "asc"
+            }
+          },
           servicePoints: {
             orderBy: {
               label: "asc"

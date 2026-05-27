@@ -11,6 +11,8 @@ import { CreateServicePointDto } from "./dto/create-service-point.dto";
 import { CreateVenueDto } from "./dto/create-venue.dto";
 import type { PublicGuestMessageDto } from "./dto/public-guest-message.dto";
 import type { PublicVenueMessageDto } from "./dto/public-venue-message.dto";
+import type { UpdateVenueOpeningHoursDto } from "./dto/update-venue-opening-hours.dto";
+import { getVenueChatAvailability, type VenueOpeningHourWindow } from "./venue-hours";
 
 const prismaPriorityBySharedPriority: Record<RequestPriority, PrismaRequestPriority> = {
   low: PrismaRequestPriority.LOW,
@@ -18,6 +20,15 @@ const prismaPriorityBySharedPriority: Record<RequestPriority, PrismaRequestPrior
   high: PrismaRequestPriority.HIGH,
   urgent: PrismaRequestPriority.URGENT
 };
+
+function defaultVenueOpeningHours() {
+  return Array.from({ length: 7 }, (_, dayOfWeek) => ({
+    closesAt: "23:00",
+    dayOfWeek,
+    isClosed: false,
+    opensAt: "09:00"
+  }));
+}
 
 @Injectable()
 export class ServicePointsService {
@@ -61,7 +72,13 @@ export class ServicePointsService {
   async getVenueIntake(venueSlug: string) {
     const venue = await this.prisma.venue.findFirst({
       where: { slug: venueSlug },
-      select: { id: true, name: true, slug: true }
+      include: {
+        openingHours: {
+          orderBy: {
+            dayOfWeek: "asc"
+          }
+        }
+      }
     });
 
     if (!venue) {
@@ -69,6 +86,8 @@ export class ServicePointsService {
     }
 
     return {
+      chatAvailability: this.publicChatAvailability(venue),
+      openingHours: venue.openingHours,
       venue,
       quickActions: [
         "drink",
@@ -88,12 +107,45 @@ export class ServicePointsService {
     };
   }
 
+  async getServicePointIntake(token: string) {
+    const servicePoint = await this.prisma.servicePoint.findFirst({
+      where: {
+        isActive: true,
+        qrToken: token
+      },
+      include: {
+        venue: {
+          include: {
+            openingHours: {
+              orderBy: {
+                dayOfWeek: "asc"
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!servicePoint) {
+      throw new NotFoundException("Service point not found");
+    }
+
+    return {
+      chatAvailability: this.publicChatAvailability((servicePoint as any).venue),
+      servicePoint,
+      venue: this.publicVenueSummary((servicePoint as any).venue)
+    };
+  }
+
   async createVenue(auth: AuthContext, input: CreateVenueDto) {
     this.venueAccess.assertCanManageWorkspace(auth, auth.workspaceId);
     const name = input.name.trim();
 
     return this.prisma.venue.create({
       data: {
+        openingHours: {
+          create: defaultVenueOpeningHours()
+        },
         workspaceId: auth.workspaceId,
         name,
         slug: input.slug,
@@ -103,7 +155,7 @@ export class ServicePointsService {
   }
 
   async listVenues(auth: AuthContext) {
-    const canReadWorkspace = auth.role === "owner" || auth.role === "admin";
+    const canReadWorkspace = auth.role === "admin";
     const where = canReadWorkspace
       ? {
           workspaceId: auth.workspaceId
@@ -119,6 +171,11 @@ export class ServicePointsService {
         locations: {
           orderBy: {
             name: "asc"
+          }
+        },
+        openingHours: {
+          orderBy: {
+            dayOfWeek: "asc"
           }
         },
         servicePoints: {
@@ -171,17 +228,139 @@ export class ServicePointsService {
     });
   }
 
+  async updateVenueOpeningHours(auth: AuthContext, venueId: string, input: UpdateVenueOpeningHoursDto) {
+    const venue = await this.prisma.venue.findFirst({
+      where: {
+        id: venueId,
+        workspaceId: auth.workspaceId
+      }
+    });
+
+    if (!venue) {
+      throw new NotFoundException("Venue not found");
+    }
+
+    this.venueAccess.assertCanManageVenue(auth, { workspaceId: venue.workspaceId, venueId });
+
+    const dayNumbers = new Set(input.openingHours.map((hours) => hours.dayOfWeek));
+    if (input.openingHours.length !== 7 || dayNumbers.size !== 7) {
+      throw new BadRequestException("Opening hours must include one entry for each day of the week");
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.venueOpeningHour.deleteMany({
+        where: {
+          venueId
+        }
+      }),
+      this.prisma.venueOpeningHour.createMany({
+        data: input.openingHours
+          .slice()
+          .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+          .map((hours) => ({
+            closesAt: hours.closesAt,
+            dayOfWeek: hours.dayOfWeek,
+            isClosed: hours.isClosed,
+            opensAt: hours.opensAt,
+            venueId
+          }))
+      })
+    ]);
+
+    return this.prisma.venue.findFirstOrThrow({
+      where: {
+        id: venueId
+      },
+      include: {
+        locations: {
+          orderBy: {
+            name: "asc"
+          }
+        },
+        openingHours: {
+          orderBy: {
+            dayOfWeek: "asc"
+          }
+        },
+        servicePoints: {
+          orderBy: {
+            label: "asc"
+          }
+        }
+      }
+    });
+  }
+
   private isGreetingMessage(message: string) {
     const normalized = message.trim().toLowerCase();
     return /^(hi|hello|hey|hiya|howdy|greetings|good morning|good afternoon|good evening)(\s+(there|everyone|team))?[.!]?$/i.test(normalized);
+  }
+
+  private informationalReply(message: string, venueName: string) {
+    const normalized = message.trim().toLowerCase();
+    const isInformationalQuestion =
+      /\b(wifi|wi-fi|password|opening hours|hours|close|closing|open|menu|dress code|age limit|parking|where is|where are|toilet|restroom|bathroom)\b/i.test(
+        normalized
+      ) &&
+      !/\b(need|bring|send|help|spill|broken|missing|wrong|waiting|allerg|medical|injur|fight|security|harass|fire|smoke|emergency)\b/i.test(
+        normalized
+      );
+
+    if (!isInformationalQuestion) {
+      return null;
+    }
+
+    return `I can help with service requests at ${venueName}. For venue info, please check with the team nearby.`;
+  }
+
+  private nonRequestReply(message: string, venueName: string) {
+    if (this.isGreetingMessage(message)) {
+      return `Hello. I am Lily for ${venueName}. Ask me for help when you need the team.`;
+    }
+
+    return this.informationalReply(message, venueName);
   }
 
   private greetingReply(servicePointLabel: string) {
     return `Hello. If you'd like help at ${servicePointLabel}, just send your request and the team will respond.`;
   }
 
+  private locationPrompt(venueName: string) {
+    return `Where are you in ${venueName}? Please send a table number, bar area, VIP booth, or nearby landmark so the team can find you.`;
+  }
+
   private isActiveRequestStatus(status: string | null | undefined) {
-    return status !== "completed" && status !== "resolved" && status !== "cancelled";
+    const normalized = status?.toLowerCase();
+    return normalized !== "completed" && normalized !== "resolved" && normalized !== "cancelled";
+  }
+
+  private publicVenueSummary(venue: { id: string; name: string; slug: string } | null | undefined) {
+    return venue ? { id: venue.id, name: venue.name, slug: venue.slug } : null;
+  }
+
+  private publicChatAvailability(
+    venue: { timezone: string; openingHours?: VenueOpeningHourWindow[] | null } | null | undefined
+  ) {
+    return getVenueChatAvailability({
+      openingHours: venue?.openingHours ?? [],
+      timezone: venue?.timezone || "Europe/London"
+    });
+  }
+
+  private assertVenueChatIsOpen(venue: { timezone: string; openingHours?: VenueOpeningHourWindow[] | null }) {
+    const availability = this.publicChatAvailability(venue);
+
+    if (!availability.isOpen) {
+      throw new BadRequestException("Venue support chat is closed outside opening hours");
+    }
+  }
+
+  private async triageGuestMessage(input: Parameters<AiTriageService["createFallback"]>[0]) {
+    const aiTriage = this.aiTriage as AiTriageService & {
+      triage?: (nextInput: Parameters<AiTriageService["createFallback"]>[0]) => Promise<ReturnType<AiTriageService["createFallback"]>>;
+    };
+
+    return aiTriage.triage ? aiTriage.triage(input) : this.aiTriage.createFallback(input);
   }
 
   async createGuestMessage(token: string, input: PublicGuestMessageDto) {
@@ -189,6 +368,17 @@ export class ServicePointsService {
       where: {
         qrToken: token,
         isActive: true
+      },
+      include: {
+        venue: {
+          include: {
+            openingHours: {
+              orderBy: {
+                dayOfWeek: "asc"
+              }
+            }
+          }
+        }
       }
     });
 
@@ -196,39 +386,66 @@ export class ServicePointsService {
       throw new NotFoundException("Service point not found");
     }
 
+    this.assertVenueChatIsOpen((servicePoint as any).venue);
+
+    const existingConversation = input.conversationId
+      ? await this.prisma.conversation.findFirst({
+          where: {
+            id: input.conversationId,
+            servicePointId: servicePoint.id,
+            venueId: servicePoint.venueId
+          },
+          include: {
+            requests: {
+              orderBy: {
+                createdAt: "desc"
+              },
+              take: 1
+            }
+          }
+        })
+      : null;
+
+    if (input.conversationId && !existingConversation) {
+      throw new NotFoundException("Service point not found");
+    }
+
+    const latestPreflightRequest = Array.isArray((existingConversation as any)?.requests) ? (existingConversation as any).requests[0] : null;
+    const hasOpenPreflightRequest = latestPreflightRequest ? this.isActiveRequestStatus(latestPreflightRequest.status) : false;
+    const nonRequestReply = !hasOpenPreflightRequest
+      ? this.nonRequestReply(input.message, (servicePoint as any).venue?.name || servicePoint.label)
+      : null;
+    const shouldHandleGreeting = this.isGreetingMessage(input.message) && !hasOpenPreflightRequest;
+    const deterministicPriority = nonRequestReply ? null : this.priorityClassifier.classifyOrDefault(input.message);
+    const prismaPriority = deterministicPriority ? prismaPriorityBySharedPriority[deterministicPriority] : null;
+    const hasExistingRequest = hasOpenPreflightRequest && latestPreflightRequest;
+    const triage = nonRequestReply
+      ? null
+      : await this.triageGuestMessage({
+          deterministicPriority: deterministicPriority!,
+          message: input.message,
+          servicePointLabel: servicePoint.label,
+          isFollowup: Boolean(hasExistingRequest)
+        });
+
     return this.prisma.$transaction(async (tx) => {
-      const conversation = input.conversationId
-        ? await tx.conversation.findFirst({
-            where: {
-              id: input.conversationId,
-              servicePointId: servicePoint.id,
-              venueId: servicePoint.venueId
-            },
-            include: {
-              requests: {
-                orderBy: {
-                  createdAt: "desc"
-                },
-                take: 1
-              }
-            }
-          })
-        : await tx.conversation.create({
-            data: {
-              guestSessionId: input.sessionId || null,
-              servicePointId: servicePoint.id,
-              venueId: servicePoint.venueId
-            }
-          });
+      const conversation =
+        existingConversation ??
+        (await tx.conversation.create({
+          data: {
+            guestSessionId: input.sessionId || null,
+            servicePointId: servicePoint.id,
+            venueId: servicePoint.venueId
+          }
+        }));
 
       if (!conversation) {
         throw new NotFoundException("Service point not found");
       }
 
-      const latestRequest = Array.isArray((conversation as any).requests) ? (conversation as any).requests[0] : null;
-      const hasOpenRequest = latestRequest ? this.isActiveRequestStatus(latestRequest.status) : false;
-
-      if (this.isGreetingMessage(input.message) && !hasOpenRequest) {
+      const latestRequest = latestPreflightRequest;
+      if (nonRequestReply || triage?.needsStaff === false) {
+        const assistantReply = nonRequestReply ?? triage!.assistantReply;
         await tx.message.create({
           data: {
             venueId: servicePoint.venueId,
@@ -249,9 +466,21 @@ export class ServicePointsService {
             servicePointId: servicePoint.id,
             conversationId: conversation.id,
             sender: SenderType.ASSISTANT,
-            body: this.greetingReply(servicePoint.label),
+            body: shouldHandleGreeting ? this.greetingReply(servicePoint.label) : assistantReply,
             metadata: {
-              source: "public_qr"
+              source: "public_qr",
+              intent: "non_request",
+              ...(triage
+                ? {
+                    triage: {
+                      category: triage.category,
+                      needsStaff: triage.needsStaff,
+                      priority: triage.priority,
+                      summary: triage.summary,
+                      title: triage.title
+                    }
+                  }
+                : {})
             }
           }
         });
@@ -269,19 +498,12 @@ export class ServicePointsService {
           conversationId: conversation.id,
           messages,
           request: latestRequest ?? null,
-          servicePoint
+          servicePoint,
+          chatAvailability: this.publicChatAvailability((servicePoint as any).venue),
+          ...(this.publicVenueSummary((servicePoint as any).venue) ? { venue: this.publicVenueSummary((servicePoint as any).venue) } : {})
         };
       }
 
-      const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
-      const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
-      const hasExistingRequest = hasOpenRequest && latestRequest;
-      const triage = this.aiTriage.createFallback({
-        deterministicPriority,
-        message: input.message,
-        servicePointLabel: servicePoint.label,
-        isFollowup: Boolean(hasExistingRequest)
-      });
       const status = deterministicPriority === "urgent" ? RequestStatus.ESCALATED : RequestStatus.NEW;
       const supportRequest = hasExistingRequest
         ? latestRequest
@@ -290,11 +512,11 @@ export class ServicePointsService {
               venueId: servicePoint.venueId,
               servicePointId: servicePoint.id,
               conversationId: conversation.id,
-              title: triage.title,
-              category: triage.category,
-              summary: triage.summary || input.message,
-              priority: prismaPriority,
-              deterministicPriority: prismaPriority,
+              title: triage!.title,
+              category: triage!.category,
+              summary: triage!.summary || input.message,
+              priority: prismaPriority!,
+              deterministicPriority: prismaPriority!,
               status
             }
           });
@@ -322,15 +544,15 @@ export class ServicePointsService {
           conversationId: conversation.id,
           requestId: supportRequest.id,
           sender: SenderType.ASSISTANT,
-          body: triage.assistantReply,
+          body: triage!.assistantReply,
           metadata: {
             source: "public_qr",
             triage: {
-              category: triage.category,
-              needsStaff: triage.needsStaff,
-              priority: triage.priority,
-              summary: triage.summary,
-              title: triage.title
+              category: triage!.category,
+              needsStaff: triage!.needsStaff,
+              priority: triage!.priority,
+              summary: triage!.summary,
+              title: triage!.title
             }
           }
         }
@@ -362,7 +584,9 @@ export class ServicePointsService {
         conversationId: conversation.id,
         messages,
         request: supportRequest,
-        servicePoint
+        servicePoint,
+        chatAvailability: this.publicChatAvailability((servicePoint as any).venue),
+        ...(this.publicVenueSummary((servicePoint as any).venue) ? { venue: this.publicVenueSummary((servicePoint as any).venue) } : {})
       };
     });
   }
@@ -371,6 +595,13 @@ export class ServicePointsService {
     const venue = await this.prisma.venue.findFirst({
       where: {
         slug: venueSlug
+      },
+      include: {
+        openingHours: {
+          orderBy: {
+            dayOfWeek: "asc"
+          }
+        }
       }
     });
 
@@ -378,26 +609,73 @@ export class ServicePointsService {
       throw new NotFoundException("Venue not found");
     }
 
+    this.assertVenueChatIsOpen(venue);
+
     const servicePoint = await this.findOrCreateVenueSupportServicePoint(venue);
 
-    return this.prisma.$transaction(async (tx) => {
-      const conversation = input.conversationId
-        ? await tx.conversation.findFirst({
-            where: {
-              id: input.conversationId,
-              servicePointId: servicePoint.id,
-              venueId: venue.id
+    const existingConversation = input.conversationId
+      ? await this.prisma.conversation.findFirst({
+          where: {
+            id: input.conversationId,
+            servicePointId: servicePoint.id,
+            venueId: venue.id
+          },
+          include: {
+            messages: {
+              orderBy: {
+                createdAt: "desc"
+              },
+              take: 2
             },
-            include: {
-              requests: {
-                orderBy: {
-                  createdAt: "desc"
-                },
-                take: 1
-              }
+            requests: {
+              orderBy: {
+                createdAt: "desc"
+              },
+              take: 1
             }
-          })
-        : await tx.conversation.create({
+          }
+        })
+      : null;
+
+    if (input.conversationId && !existingConversation) {
+      throw new NotFoundException("Conversation not found");
+    }
+
+    const latestPreflightRequest = Array.isArray((existingConversation as any)?.requests) ? (existingConversation as any).requests[0] : null;
+    const hasOpenRequest = latestPreflightRequest ? this.isActiveRequestStatus(latestPreflightRequest.status) : false;
+    const nonRequestReply = !hasOpenRequest && !input.quickAction ? this.nonRequestReply(input.message, venue.name) : null;
+    const deterministicPriority = nonRequestReply ? null : this.priorityClassifier.classifyOrDefault(input.message);
+    const initialTriage = nonRequestReply
+      ? null
+      : await this.triageGuestMessage({
+          deterministicPriority: deterministicPriority!,
+          message: `${input.quickAction ? `Quick action: ${input.quickAction}\n` : ""}${input.message}`,
+          servicePointLabel: input.locationLabel || servicePoint.label,
+          isFollowup: Boolean(hasOpenRequest)
+        });
+    const locationLabel = input.locationLabel?.trim() || initialTriage?.guestLocationLabel || null;
+    const locationSource = input.locationLabel ? "guest" : initialTriage?.guestLocationLabel ? "agent" : null;
+    const pendingGuestMessage = Array.isArray((existingConversation as any)?.messages)
+      ? (existingConversation as any).messages.find((message: any) => message.sender === SenderType.GUEST && !message.requestId)
+      : null;
+    const triageMessage = !hasOpenRequest && locationLabel && pendingGuestMessage ? pendingGuestMessage.body : input.message;
+    const triage =
+      nonRequestReply
+        ? null
+        : triageMessage === input.message
+        ? initialTriage
+        : await this.triageGuestMessage({
+            deterministicPriority: deterministicPriority!,
+            message: `${triageMessage}\nGuest location: ${locationLabel}`,
+            servicePointLabel: locationLabel ?? servicePoint.label,
+            isFollowup: false
+          });
+    const prismaPriority = deterministicPriority ? prismaPriorityBySharedPriority[deterministicPriority] : null;
+
+    return this.prisma.$transaction(async (tx) => {
+      const conversation =
+        existingConversation ??
+        (await tx.conversation.create({
             data: {
               guestLocationLabel: input.locationLabel || null,
               guestLocationSource: input.locationLabel ? "guest" : null,
@@ -405,42 +683,136 @@ export class ServicePointsService {
               servicePointId: servicePoint.id,
               venueId: venue.id
             }
-          });
+          }));
 
       if (!conversation) {
         throw new NotFoundException("Conversation not found");
       }
 
-      const latestRequest = Array.isArray((conversation as any).requests) ? (conversation as any).requests[0] : null;
-      const hasOpenRequest = latestRequest ? this.isActiveRequestStatus(latestRequest.status) : false;
-      const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
-      const triage = this.aiTriage.createFallback({
-        deterministicPriority,
-        message: `${input.quickAction ? `Quick action: ${input.quickAction}\n` : ""}${input.message}`,
-        servicePointLabel: input.locationLabel || servicePoint.label,
-        isFollowup: Boolean(hasOpenRequest)
-      });
-      const locationLabel = input.locationLabel?.trim() || triage.guestLocationLabel || null;
-      const locationSource = input.locationLabel ? "guest" : triage.guestLocationLabel ? "agent" : null;
-      const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
+      const latestRequest = latestPreflightRequest;
+
+      if (!hasOpenRequest && (nonRequestReply || triage?.needsStaff === false)) {
+        const assistantReply = nonRequestReply ?? triage!.assistantReply;
+        await tx.message.create({
+          data: {
+            body: input.message,
+            conversationId: conversation.id,
+            metadata: {
+              quickAction: input.quickAction || null,
+              source: "public_venue_qr",
+              venueSlug
+            },
+            requestId: null,
+            sender: SenderType.GUEST,
+            servicePointId: servicePoint.id,
+            venueId: venue.id
+          }
+        });
+
+        await tx.message.create({
+          data: {
+            body: assistantReply,
+            conversationId: conversation.id,
+            metadata: {
+              source: "public_venue_qr",
+              intent: "non_request",
+              ...(triage ? { triage } : {})
+            },
+            requestId: null,
+            sender: SenderType.ASSISTANT,
+            servicePointId: servicePoint.id,
+            venueId: venue.id
+          }
+        });
+
+        const messages = await tx.message.findMany({
+          where: {
+            conversationId: conversation.id
+          },
+          orderBy: {
+            createdAt: "asc"
+          }
+        });
+
+        return {
+          conversationId: conversation.id,
+          messages,
+          request: latestRequest ?? null,
+          servicePoint,
+          chatAvailability: this.publicChatAvailability(venue),
+          venue: this.publicVenueSummary(venue)
+        };
+      }
+
+      if (!hasOpenRequest && initialTriage!.needsStaff !== false && !locationLabel) {
+        await tx.message.create({
+          data: {
+            body: input.message,
+            conversationId: conversation.id,
+            metadata: {
+              quickAction: input.quickAction || null,
+              source: "public_venue_qr",
+              venueSlug
+            },
+            requestId: null,
+            sender: SenderType.GUEST,
+            servicePointId: servicePoint.id,
+            venueId: venue.id
+          }
+        });
+
+        await tx.message.create({
+          data: {
+            body: this.locationPrompt(venue.name),
+            conversationId: conversation.id,
+            metadata: {
+              source: "public_venue_qr",
+              intent: "collect_location"
+            },
+            requestId: null,
+            sender: SenderType.ASSISTANT,
+            servicePointId: servicePoint.id,
+            venueId: venue.id
+          }
+        });
+
+        const messages = await tx.message.findMany({
+          where: {
+            conversationId: conversation.id
+          },
+          orderBy: {
+            createdAt: "asc"
+          }
+        });
+
+        return {
+          conversationId: conversation.id,
+          messages,
+          request: latestRequest ?? null,
+          servicePoint,
+          chatAvailability: this.publicChatAvailability(venue),
+          venue: this.publicVenueSummary(venue)
+        };
+      }
+
       const status = deterministicPriority === "urgent" ? RequestStatus.ESCALATED : RequestStatus.NEW;
       const supportRequest = hasOpenRequest
         ? latestRequest
         : await tx.supportRequest.create({
             data: {
-              agentConfidence: triage.confidence,
+              agentConfidence: triage!.confidence,
               agentPolicyVersion: "v1-semi-autonomous",
-              agentSuggestedAction: triage.suggestedAction,
-              category: triage.category,
+              agentSuggestedAction: triage!.suggestedAction,
+              category: triage!.category,
               conversationId: conversation.id,
-              deterministicPriority: prismaPriority,
+              deterministicPriority: prismaPriority!,
               guestLocationLabel: locationLabel,
               guestLocationSource: locationSource,
-              priority: prismaPriority,
+              priority: prismaPriority!,
               servicePointId: servicePoint.id,
               status,
-              summary: triage.summary || input.message,
-              title: triage.title,
+              summary: triage!.summary || input.message,
+              title: triage!.title,
               venueId: venue.id
             }
           });
@@ -465,11 +837,11 @@ export class ServicePointsService {
 
       await tx.message.create({
         data: {
-          body: triage.assistantReply,
+          body: triage!.assistantReply,
           conversationId: conversation.id,
           metadata: {
             source: "public_venue_qr",
-            triage
+            triage: triage!
           },
           requestId: supportRequest.id,
           sender: SenderType.ASSISTANT,
@@ -507,7 +879,9 @@ export class ServicePointsService {
         conversationId: conversation.id,
         messages,
         request: supportRequest,
-        servicePoint
+        servicePoint,
+        chatAvailability: this.publicChatAvailability(venue),
+        venue: this.publicVenueSummary(venue)
       };
     });
   }
@@ -517,6 +891,17 @@ export class ServicePointsService {
       where: {
         qrToken: token,
         isActive: true
+      },
+      include: {
+        venue: {
+          include: {
+            openingHours: {
+              orderBy: {
+                dayOfWeek: "asc"
+              }
+            }
+          }
+        }
       }
     });
 
@@ -557,7 +942,65 @@ export class ServicePointsService {
       conversationId: conversation.id,
       messages: conversation.messages,
       request: conversation.requests[0] ?? null,
-      servicePoint
+      servicePoint,
+      chatAvailability: this.publicChatAvailability((servicePoint as any).venue),
+      ...(this.publicVenueSummary((servicePoint as any).venue) ? { venue: this.publicVenueSummary((servicePoint as any).venue) } : {})
+    };
+  }
+
+  async getVenueGuestConversation(venueSlug: string, conversationId: string) {
+    const venue = await this.prisma.venue.findFirst({
+      where: { slug: venueSlug },
+      include: {
+        openingHours: {
+          orderBy: {
+            dayOfWeek: "asc"
+          }
+        }
+      }
+    });
+
+    if (!venue) {
+      throw new NotFoundException("Venue not found");
+    }
+
+    const servicePoint = await this.findOrCreateVenueSupportServicePoint(venue);
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        servicePointId: servicePoint.id,
+        venueId: venue.id
+      },
+      include: {
+        messages: {
+          orderBy: {
+            createdAt: "asc"
+          }
+        },
+        requests: {
+          include: {
+            assignedTo: true,
+            servicePoint: true
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 1
+        }
+      }
+    });
+
+    if (!conversation) {
+      throw new NotFoundException("Conversation not found");
+    }
+
+    return {
+      conversationId: conversation.id,
+      messages: conversation.messages,
+      request: conversation.requests[0] ?? null,
+      servicePoint,
+      chatAvailability: this.publicChatAvailability(venue),
+      venue: this.publicVenueSummary(venue)
     };
   }
 }

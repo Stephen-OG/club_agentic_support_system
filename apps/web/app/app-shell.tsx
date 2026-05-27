@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import { Activity, Building2, LayoutDashboard, LogOut, RadioTower, Settings, UserCheck, Users } from "lucide-react";
 import { AccountCommand } from "./components/account-command";
@@ -10,7 +11,7 @@ import { StaffDashboard } from "./components/staff-dashboard";
 import { TeamCommand } from "./components/team-command";
 import { VenuesCommand } from "./components/venues-command";
 import type { CommandView } from "@/lib/auth/role-policy";
-import { getPrimaryMembership, getRoleDashboardMode, getVisibleCommandViews } from "@/lib/auth/role-policy";
+import { getCommandViewHref, getPrimaryMembership, getRoleDashboardMode, getVisibleCommandViews, resolveCommandView } from "@/lib/auth/role-policy";
 import type { CommandUser } from "@/lib/auth/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
@@ -24,11 +25,14 @@ const iconByView: Record<CommandView, LucideIcon> = {
 };
 
 export function AppShell({ currentUser, initialView }: { currentUser: CommandUser; initialView?: CommandView }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const defaultView = getRoleDashboardMode(currentUser) === "staff" ? "staff" : "dashboard";
   const visibleViews = useMemo(() => getVisibleCommandViews(currentUser), [currentUser]);
-  const visibleViewIds = useMemo(() => new Set(visibleViews.map((item) => item.id)), [visibleViews]);
-  const startingView = initialView && visibleViewIds.has(initialView) ? initialView : defaultView;
+  const requestedView = searchParams.get("view");
+  const startingView = resolveCommandView(currentUser, requestedView, initialView || defaultView);
   const [view, setView] = useState<CommandView>(startingView);
   const primaryMembership = getPrimaryMembership(currentUser);
 
@@ -43,10 +47,17 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
   }
 
   useEffect(() => {
-    if (!visibleViewIds.has(view)) {
-      setView(defaultView);
+    const nextView = resolveCommandView(currentUser, requestedView, initialView || defaultView);
+
+    if (view !== nextView) {
+      setView(nextView);
     }
-  }, [defaultView, view, visibleViewIds]);
+  }, [currentUser, defaultView, initialView, requestedView, view]);
+
+  function selectView(nextView: CommandView) {
+    setView(nextView);
+    router.replace(getCommandViewHref(pathname, nextView), { scroll: false });
+  }
 
   return (
     <main className="command-shell">
@@ -64,7 +75,7 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
           {visibleViews.map((item) => {
             const Icon = iconByView[item.id];
             return (
-              <button className={view === item.id ? "active" : ""} key={item.id} onClick={() => setView(item.id)} type="button">
+              <button className={view === item.id ? "active" : ""} key={item.id} onClick={() => selectView(item.id)} type="button">
                 <Icon size={17} />
                 {item.label}
               </button>
@@ -83,7 +94,7 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
       <section className="command-main">
         {view === "dashboard" ? <CommandCenterDashboard /> : null}
         {view === "operations" ? <OperationsCommand /> : null}
-        {view === "team" ? <TeamCommand /> : null}
+        {view === "team" ? <TeamCommand currentUser={currentUser} /> : null}
         {view === "venues" ? <VenuesCommand /> : null}
         {view === "staff" ? <StaffDashboard currentUser={currentUser} /> : null}
         {view === "account" ? <AccountCommand /> : null}

@@ -71,6 +71,21 @@ function recentMessages(messages: Array<{ id: string; sender: SenderType; body: 
     }));
 }
 
+function guestVisibleStatusMessage(status: RequestStatus) {
+  const messages: Partial<Record<RequestStatus, string>> = {
+    acknowledged: "The team has acknowledged your request and will help from here.",
+    assigned: "A team member has been assigned to your request.",
+    declined: "That team member could not take it, so we are sending it back for another teammate to pick up.",
+    in_progress: "The team is working on this now.",
+    completed: "The team marked this complete. How did it go?",
+    resolved: "Thank you for confirming. We have closed this request.",
+    cancelled: "No problem, this request is cancelled. Send another message if you need anything else.",
+    escalated: "We have escalated this so the right team can respond quickly."
+  };
+
+  return messages[status];
+}
+
 @Injectable()
 export class RequestsService {
   constructor(
@@ -142,6 +157,7 @@ export class RequestsService {
     const updateData = {
       status: prismaToStatus,
       ...(input.assignedToId ? { assignedToId: input.assignedToId } : {}),
+      ...(toStatus === "acknowledged" ? { acknowledgedAt: new Date() } : {}),
       ...(toStatus === "completed" ? { completedAt: new Date() } : {}),
       ...(toStatus === "resolved" ? { resolvedAt: new Date() } : {}),
       ...(toStatus === "in_progress" ? { resolvedAt: null } : {})
@@ -168,6 +184,24 @@ export class RequestsService {
           metadata: input.assignedToId ? { assignedToId: input.assignedToId } : {}
         }
       });
+
+      const guestMessage = guestVisibleStatusMessage(toStatus);
+      if (guestMessage) {
+        await tx.message.create({
+          data: {
+            venueId: request.venueId,
+            servicePointId: request.servicePointId,
+            conversationId: request.conversationId,
+            requestId: request.id,
+            sender: SenderType.SYSTEM,
+            body: guestMessage,
+            metadata: {
+              source: "request_status",
+              status: toStatus
+            }
+          }
+        });
+      }
 
       return updatedRequest;
     });
@@ -238,11 +272,11 @@ export class RequestsService {
   }
 
   private actorFromAuth(auth: AuthContext): RequestActor {
-    if (auth.role === "owner" || auth.role === "admin") {
+    if (auth.role === "admin") {
       return "admin";
     }
 
-    if (auth.role === "manager") {
+    if (auth.role === "owner" || auth.role === "manager") {
       return "manager";
     }
 
