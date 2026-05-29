@@ -1,10 +1,11 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Send, Star } from "lucide-react";
+import { Send, Sparkles, Star } from "lucide-react";
 import { publicApiRequest } from "@/lib/api/client";
 import type { CommandMessage, CommandSupportRequest, PublicChatAvailability, PublicQrConversationState, PublicQrIntakeState } from "@/lib/auth/types";
 import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, createWelcomeBody } from "@/lib/chat-copy";
+import { appendSessionId, getOrCreateGuestSessionId } from "@/lib/guest-session";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
 import { supportQuickActions } from "@/lib/support-intake";
 
@@ -57,6 +58,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   const [venueName, setVenueName] = useState<string | null>(null);
   const [messages, setMessages] = useState<LocalMessage[]>(() => [createWelcomeMessage("this QR point")]);
   const [chatAvailability, setChatAvailability] = useState<PublicChatAvailability | null>(null);
+  const [guestSessionId, setGuestSessionId] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
 
   const statusText = useMemo(() => statusLabel(request), [request]);
@@ -81,6 +83,10 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       }
     ]);
   }, [qrToken, servicePointLabel]);
+
+  useEffect(() => {
+    setGuestSessionId(getOrCreateGuestSessionId(`qr-chat:${qrToken}:sessionId`));
+  }, [qrToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,7 +134,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   }, [conversationId, qrToken]);
 
   useEffect(() => {
-    if (!conversationId) {
+    if (!conversationId || !guestSessionId) {
       return;
     }
 
@@ -137,7 +143,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
 
     async function loadConversation() {
       const result = await publicApiRequest<PublicQrConversationState>(
-        `/public/qr/${encodeURIComponent(qrToken)}/conversations/${encodeURIComponent(activeConversationId)}`,
+        appendSessionId(`/public/qr/${encodeURIComponent(qrToken)}/conversations/${encodeURIComponent(activeConversationId)}`, guestSessionId),
         { cache: "no-store" }
       ).catch(() => null);
 
@@ -166,11 +172,11 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [applyClosedState, conversationId, qrToken, servicePointLabel]);
+  }, [applyClosedState, conversationId, guestSessionId, qrToken, servicePointLabel]);
 
   async function sendMessage(nextMessage?: string) {
     const body = (nextMessage || input).trim();
-    if (!body || isSending || chatClosed) {
+    if (!body || isSending || chatClosed || !guestSessionId) {
       return;
     }
 
@@ -180,7 +186,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
     try {
       const result = await publicApiRequest<PublicQrConversationState>(`/public/qr/${encodeURIComponent(qrToken)}/messages`, {
         method: "POST",
-        body: JSON.stringify({ message: body, conversationId })
+        body: JSON.stringify({ message: body, conversationId, sessionId: guestSessionId })
       });
 
       setServicePointLabel(result.servicePoint.label);
@@ -211,7 +217,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   }
 
   async function updateRequest(action: ClientRequestAction, rating?: SatisfactionRating) {
-    if (!request || isSending) {
+    if (!request || isSending || !guestSessionId) {
       return;
     }
 
@@ -223,7 +229,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         message?: CommandMessage;
       }>(`/public/requests/${request.id}/action`, {
         method: "PATCH",
-        body: JSON.stringify({ action, rating })
+        body: JSON.stringify({ action, rating, sessionId: guestSessionId })
       });
 
       setRequest(result.request);
@@ -262,9 +268,26 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         </div>
 
         <div className="chat-messages" aria-live="polite">
-          {messages.map((message) => (
-            <div className={`bubble ${message.sender}`} key={message.id}>
-              {message.body}
+          {messages.map((message, index) => (
+            <div className="message-cluster" key={message.id}>
+              <div className={`bubble ${message.sender}`}>
+                {message.body}
+              </div>
+              {index === 0 && !awaitingSatisfaction && !chatClosed ? (
+                <div className="quick-actions intro-actions" aria-label="Common requests">
+                  {supportQuickActions.map((action) => (
+                    <button disabled={isSending} key={`intro-${action.id}`} onClick={() => void sendMessage(action.prompt)} type="button">
+                      <span className="quick-action-icon">
+                        <Sparkles size={14} />
+                      </span>
+                      <span>
+                        <strong>{action.label}</strong>
+                        <small>{action.prompt}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -299,16 +322,6 @@ export function QrChat({ qrToken }: { qrToken: string }) {
             <button className="button ghost" disabled={isSending} onClick={() => void updateRequest("cancel")} type="button">
               Cancel request
             </button>
-          </div>
-        ) : null}
-
-        {!awaitingSatisfaction && !chatClosed ? (
-          <div className="quick-actions">
-            {supportQuickActions.slice(0, 6).map((action) => (
-              <button disabled={isSending} key={action.id} onClick={() => void sendMessage(action.prompt)} type="button">
-                {action.label}
-              </button>
-            ))}
           </div>
         ) : null}
 

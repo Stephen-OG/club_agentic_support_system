@@ -4,6 +4,7 @@ import { NotFoundException } from "@nestjs/common";
 import { RequestPriority, RequestStatus, SenderType } from "@prisma/client";
 import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
+import { isEncryptedMessageBody } from "../security/message-crypto";
 import { PublicGuestMessageDto } from "./dto/public-guest-message.dto";
 import { ServicePointsService } from "./service-points.service";
 
@@ -262,6 +263,102 @@ describe("ServicePointsService public QR workflow", () => {
         }
       }
     ]);
+  });
+
+  it("stores encrypted message bodies and returns decrypted conversation messages", async () => {
+    const previousKey = process.env.MESSAGE_ENCRYPTION_KEY;
+    process.env.MESSAGE_ENCRYPTION_KEY = Buffer.from("12345678901234567890123456789012").toString("base64");
+
+    try {
+      const servicePoint = {
+        id: "sp_encrypted",
+        venueId: "venue_encrypted",
+        label: "Terrace 7",
+        qrToken: "qr_encrypted_123",
+        isActive: true
+      };
+      const conversation = {
+        id: "conversation_encrypted_1",
+        venueId: servicePoint.venueId,
+        servicePointId: servicePoint.id,
+        guestSessionId: "session_encrypted_123"
+      };
+      const supportRequest = {
+        id: "request_encrypted_1",
+        venueId: servicePoint.venueId,
+        servicePointId: servicePoint.id,
+        conversationId: conversation.id,
+        title: "Guest needs water",
+        category: "service",
+        summary: "Please bring water",
+        priority: RequestPriority.NORMAL,
+        deterministicPriority: RequestPriority.NORMAL,
+        status: RequestStatus.NEW
+      };
+      const createdMessages: any[] = [];
+      const tx = {
+        conversation: {
+          create: async () => conversation
+        },
+        supportRequest: {
+          create: async () => supportRequest
+        },
+        message: {
+          create: async (args: any) => {
+            createdMessages.push({
+              id: `message_${createdMessages.length + 1}`,
+              ...args.data
+            });
+            return createdMessages.at(-1);
+          },
+          findMany: async () => createdMessages
+        },
+        requestEvent: {
+          create: async () => ({})
+        }
+      };
+      const prisma = {
+        servicePoint: {
+          findFirst: async () => servicePoint
+        },
+        $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
+      };
+      const service = new ServicePointsService(
+        {
+          createFallback: () => ({
+            assistantReply: "Thanks, the team has been notified.",
+            category: "service",
+            needsStaff: true,
+            priority: "normal",
+            summary: "Please bring water",
+            title: "Guest needs water"
+          })
+        } as never,
+        {
+          classifyOrDefault: () => "normal"
+        } as never,
+        prisma as never,
+        {} as never
+      );
+
+      const result = (await service.createGuestMessage("qr_encrypted_123", {
+        message: "Please bring water",
+        sessionId: "session_encrypted_123"
+      })) as unknown as PublicGuestMessageResult;
+
+      assert.equal(createdMessages.every((message) => isEncryptedMessageBody(message.body)), true);
+      assert.equal(createdMessages.some((message) => message.body.includes("Please bring water")), false);
+      assert.deepEqual(
+        result.messages.map((message: any) => message.body),
+        ["Please bring water", "Thanks, the team has been notified."]
+      );
+    } finally {
+      if (previousKey === undefined) {
+        delete process.env.MESSAGE_ENCRYPTION_KEY;
+      } else {
+        process.env.MESSAGE_ENCRYPTION_KEY = previousKey;
+      }
+    }
   });
 
   it("handles simple greetings without creating a support request", async () => {

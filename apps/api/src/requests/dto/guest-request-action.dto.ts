@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, Max, Min } from "class-validator";
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
 import type { GuestRequestAction } from "@guestos/shared";
 
 export class GuestRequestActionDto {
@@ -10,4 +10,10 @@ export class GuestRequestActionDto {
   @Min(1)
   @Max(5)
   rating?: number;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(160)
+  sessionId?: string;
 }

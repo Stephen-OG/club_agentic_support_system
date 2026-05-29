@@ -106,10 +106,15 @@ export function OperationsCommand() {
       return;
     }
 
-    const nextRequests = await apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venueId}/requests`);
-    notifyForNewRequests(nextRequests);
-    setRequests(nextRequests);
-    setLastUpdatedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    try {
+      const nextRequests = await apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venueId}/requests`);
+      notifyForNewRequests(nextRequests);
+      setRequests(nextRequests);
+      setLastUpdatedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    } catch {
+      // Poll failures are expected when the session token rotates;
+      // the manual Refresh button still surfaces errors to the user.
+    }
   }, [notifyForNewRequests, supabase]);
 
   const refresh = useCallback(async () => {

@@ -7,6 +7,7 @@ import { PrismaService } from "../database/prisma.service";
 import { AiTriageService } from "../triage/ai-triage.service";
 import { PriorityClassifierService } from "../triage/priority-classifier.service";
 import { VenueAccessService } from "../venues/access.service";
+import { decryptMessageBody, decryptMessageRecords, encryptMessageCreateData } from "../security/message-crypto";
 import { CreateServicePointDto } from "./dto/create-service-point.dto";
 import { CreateVenueDto } from "./dto/create-venue.dto";
 import type { PublicGuestMessageDto } from "./dto/public-guest-message.dto";
@@ -247,13 +248,14 @@ export class ServicePointsService {
       throw new BadRequestException("Opening hours must include one entry for each day of the week");
     }
 
-    await this.prisma.$transaction([
-      this.prisma.venueOpeningHour.deleteMany({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.venueOpeningHour.deleteMany({
         where: {
           venueId
         }
-      }),
-      this.prisma.venueOpeningHour.createMany({
+      });
+
+      await tx.venueOpeningHour.createMany({
         data: input.openingHours
           .slice()
           .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
@@ -264,8 +266,8 @@ export class ServicePointsService {
             opensAt: hours.opensAt,
             venueId
           }))
-      })
-    ]);
+      });
+    });
 
     return this.prisma.venue.findFirstOrThrow({
       where: {
@@ -293,7 +295,7 @@ export class ServicePointsService {
 
   private isGreetingMessage(message: string) {
     const normalized = message.trim().toLowerCase();
-    return /^(hi|hello|hey|hiya|howdy|greetings|good morning|good afternoon|good evening)(\s+(there|everyone|team))?[.!]?$/i.test(normalized);
+    return /^(hi|hello|hey|hiya|howdy|greetings|yo|good morning|good afternoon|good evening)(\s+(there|everyone|team))?[.!]?$/i.test(normalized);
   }
 
   private informationalReply(message: string, venueName: string) {
@@ -447,7 +449,7 @@ export class ServicePointsService {
       if (nonRequestReply || triage?.needsStaff === false) {
         const assistantReply = nonRequestReply ?? triage!.assistantReply;
         await tx.message.create({
-          data: {
+          data: encryptMessageCreateData({
             venueId: servicePoint.venueId,
             servicePointId: servicePoint.id,
             conversationId: conversation.id,
@@ -457,11 +459,11 @@ export class ServicePointsService {
               source: "public_qr",
               qrToken: token
             }
-          }
+          })
         });
 
         await tx.message.create({
-          data: {
+          data: encryptMessageCreateData({
             venueId: servicePoint.venueId,
             servicePointId: servicePoint.id,
             conversationId: conversation.id,
@@ -482,7 +484,7 @@ export class ServicePointsService {
                   }
                 : {})
             }
-          }
+          })
         });
 
         const messages = await tx.message.findMany({
@@ -496,7 +498,7 @@ export class ServicePointsService {
 
         return {
           conversationId: conversation.id,
-          messages,
+          messages: decryptMessageRecords(messages),
           request: latestRequest ?? null,
           servicePoint,
           chatAvailability: this.publicChatAvailability((servicePoint as any).venue),
@@ -504,10 +506,22 @@ export class ServicePointsService {
         };
       }
 
+      // If this is a follow-up with an urgent priority, escalate the existing request
+      const isUrgentFollowup = Boolean(hasExistingRequest && deterministicPriority === "urgent");
       const status = deterministicPriority === "urgent" ? RequestStatus.ESCALATED : RequestStatus.NEW;
-      const supportRequest = hasExistingRequest
-        ? latestRequest
-        : await tx.supportRequest.create({
+      
+      let supportRequest;
+      if (hasExistingRequest) {
+        supportRequest = latestRequest;
+        // Update existing request status if escalated by urgent follow-up
+        if (isUrgentFollowup) {
+          supportRequest = await tx.supportRequest.update({
+            where: { id: latestRequest.id },
+            data: { status: RequestStatus.ESCALATED }
+          });
+        }
+      } else {
+        supportRequest = await tx.supportRequest.create({
             data: {
               venueId: servicePoint.venueId,
               servicePointId: servicePoint.id,
@@ -520,10 +534,11 @@ export class ServicePointsService {
               status
             }
           });
-      const eventType = hasExistingRequest ? "request.updated" : deterministicPriority === "urgent" ? "request.escalated" : "request.created";
+      }
+      const eventType = isUrgentFollowup ? "request.escalated" : hasExistingRequest ? "request.updated" : "request.created";
 
       await tx.message.create({
-        data: {
+        data: encryptMessageCreateData({
           venueId: servicePoint.venueId,
           servicePointId: servicePoint.id,
           conversationId: conversation.id,
@@ -534,11 +549,11 @@ export class ServicePointsService {
             source: "public_qr",
             qrToken: token
           }
-        }
+        })
       });
 
       await tx.message.create({
-        data: {
+        data: encryptMessageCreateData({
           venueId: servicePoint.venueId,
           servicePointId: servicePoint.id,
           conversationId: conversation.id,
@@ -555,7 +570,7 @@ export class ServicePointsService {
               title: triage!.title
             }
           }
-        }
+        })
       });
 
       await tx.requestEvent.create({
@@ -582,7 +597,7 @@ export class ServicePointsService {
 
       return {
         conversationId: conversation.id,
-        messages,
+        messages: decryptMessageRecords(messages),
         request: supportRequest,
         servicePoint,
         chatAvailability: this.publicChatAvailability((servicePoint as any).venue),
@@ -658,7 +673,7 @@ export class ServicePointsService {
     const pendingGuestMessage = Array.isArray((existingConversation as any)?.messages)
       ? (existingConversation as any).messages.find((message: any) => message.sender === SenderType.GUEST && !message.requestId)
       : null;
-    const triageMessage = !hasOpenRequest && locationLabel && pendingGuestMessage ? pendingGuestMessage.body : input.message;
+    const triageMessage = !hasOpenRequest && locationLabel && pendingGuestMessage ? decryptMessageBody(pendingGuestMessage.body) : input.message;
     const triage =
       nonRequestReply
         ? null
@@ -694,7 +709,7 @@ export class ServicePointsService {
       if (!hasOpenRequest && (nonRequestReply || triage?.needsStaff === false)) {
         const assistantReply = nonRequestReply ?? triage!.assistantReply;
         await tx.message.create({
-          data: {
+          data: encryptMessageCreateData({
             body: input.message,
             conversationId: conversation.id,
             metadata: {
@@ -706,11 +721,11 @@ export class ServicePointsService {
             sender: SenderType.GUEST,
             servicePointId: servicePoint.id,
             venueId: venue.id
-          }
+          })
         });
 
         await tx.message.create({
-          data: {
+          data: encryptMessageCreateData({
             body: assistantReply,
             conversationId: conversation.id,
             metadata: {
@@ -722,7 +737,7 @@ export class ServicePointsService {
             sender: SenderType.ASSISTANT,
             servicePointId: servicePoint.id,
             venueId: venue.id
-          }
+          })
         });
 
         const messages = await tx.message.findMany({
@@ -736,7 +751,7 @@ export class ServicePointsService {
 
         return {
           conversationId: conversation.id,
-          messages,
+          messages: decryptMessageRecords(messages),
           request: latestRequest ?? null,
           servicePoint,
           chatAvailability: this.publicChatAvailability(venue),
@@ -746,7 +761,7 @@ export class ServicePointsService {
 
       if (!hasOpenRequest && initialTriage!.needsStaff !== false && !locationLabel) {
         await tx.message.create({
-          data: {
+          data: encryptMessageCreateData({
             body: input.message,
             conversationId: conversation.id,
             metadata: {
@@ -758,11 +773,11 @@ export class ServicePointsService {
             sender: SenderType.GUEST,
             servicePointId: servicePoint.id,
             venueId: venue.id
-          }
+          })
         });
 
         await tx.message.create({
-          data: {
+          data: encryptMessageCreateData({
             body: this.locationPrompt(venue.name),
             conversationId: conversation.id,
             metadata: {
@@ -773,7 +788,7 @@ export class ServicePointsService {
             sender: SenderType.ASSISTANT,
             servicePointId: servicePoint.id,
             venueId: venue.id
-          }
+          })
         });
 
         const messages = await tx.message.findMany({
@@ -787,7 +802,7 @@ export class ServicePointsService {
 
         return {
           conversationId: conversation.id,
-          messages,
+          messages: decryptMessageRecords(messages),
           request: latestRequest ?? null,
           servicePoint,
           chatAvailability: this.publicChatAvailability(venue),
@@ -795,10 +810,22 @@ export class ServicePointsService {
         };
       }
 
+      // If this is a follow-up with an urgent priority, escalate the existing request
+      const isUrgentFollowup = Boolean(hasOpenRequest && deterministicPriority === "urgent");
       const status = deterministicPriority === "urgent" ? RequestStatus.ESCALATED : RequestStatus.NEW;
-      const supportRequest = hasOpenRequest
-        ? latestRequest
-        : await tx.supportRequest.create({
+      
+      let supportRequest;
+      if (hasOpenRequest) {
+        supportRequest = latestRequest;
+        // Update existing request status if escalated by urgent follow-up
+        if (isUrgentFollowup) {
+          supportRequest = await tx.supportRequest.update({
+            where: { id: latestRequest.id },
+            data: { status: RequestStatus.ESCALATED }
+          });
+        }
+      } else {
+        supportRequest = await tx.supportRequest.create({
             data: {
               agentConfidence: triage!.confidence,
               agentPolicyVersion: "v1-semi-autonomous",
@@ -816,10 +843,11 @@ export class ServicePointsService {
               venueId: venue.id
             }
           });
-      const eventType = hasOpenRequest ? "request.updated" : deterministicPriority === "urgent" ? "request.escalated" : "request.created";
+      }
+      const eventType = isUrgentFollowup ? "request.escalated" : hasOpenRequest ? "request.updated" : "request.created";
 
       await tx.message.create({
-        data: {
+        data: encryptMessageCreateData({
           body: input.message,
           conversationId: conversation.id,
           metadata: {
@@ -832,11 +860,11 @@ export class ServicePointsService {
           sender: SenderType.GUEST,
           servicePointId: servicePoint.id,
           venueId: venue.id
-        }
+        })
       });
 
       await tx.message.create({
-        data: {
+        data: encryptMessageCreateData({
           body: triage!.assistantReply,
           conversationId: conversation.id,
           metadata: {
@@ -847,7 +875,7 @@ export class ServicePointsService {
           sender: SenderType.ASSISTANT,
           servicePointId: servicePoint.id,
           venueId: venue.id
-        }
+        })
       });
 
       await tx.requestEvent.create({
@@ -877,7 +905,7 @@ export class ServicePointsService {
 
       return {
         conversationId: conversation.id,
-        messages,
+        messages: decryptMessageRecords(messages),
         request: supportRequest,
         servicePoint,
         chatAvailability: this.publicChatAvailability(venue),
@@ -886,7 +914,7 @@ export class ServicePointsService {
     });
   }
 
-  async getGuestConversation(token: string, conversationId: string) {
+  async getGuestConversation(token: string, conversationId: string, sessionId?: string) {
     const servicePoint = await this.prisma.servicePoint.findFirst({
       where: {
         qrToken: token,
@@ -938,9 +966,13 @@ export class ServicePointsService {
       throw new NotFoundException("Conversation not found");
     }
 
+    if (conversation.guestSessionId && sessionId !== conversation.guestSessionId) {
+      throw new NotFoundException("Conversation not found");
+    }
+
     return {
       conversationId: conversation.id,
-      messages: conversation.messages,
+      messages: decryptMessageRecords(conversation.messages),
       request: conversation.requests[0] ?? null,
       servicePoint,
       chatAvailability: this.publicChatAvailability((servicePoint as any).venue),
@@ -948,7 +980,7 @@ export class ServicePointsService {
     };
   }
 
-  async getVenueGuestConversation(venueSlug: string, conversationId: string) {
+  async getVenueGuestConversation(venueSlug: string, conversationId: string, sessionId?: string) {
     const venue = await this.prisma.venue.findFirst({
       where: { slug: venueSlug },
       include: {
@@ -994,9 +1026,13 @@ export class ServicePointsService {
       throw new NotFoundException("Conversation not found");
     }
 
+    if (conversation.guestSessionId && sessionId !== conversation.guestSessionId) {
+      throw new NotFoundException("Conversation not found");
+    }
+
     return {
       conversationId: conversation.id,
-      messages: conversation.messages,
+      messages: decryptMessageRecords(conversation.messages),
       request: conversation.requests[0] ?? null,
       servicePoint,
       chatAvailability: this.publicChatAvailability(venue),

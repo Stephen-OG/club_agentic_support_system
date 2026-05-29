@@ -1,5 +1,6 @@
 import { createCancelledReply, createSatisfactionReply, createServiceRecoveryReply } from "./chat-copy";
 import type { RequestStatus } from "./chat-copy";
+import { normalizeSatisfactionRating } from "@guestos/shared";
 
 export type ClientRequestAction = "cancel" | "confirm_resolved" | "not_satisfied";
 export type SatisfactionRating = 1 | 2 | 3 | 4 | 5;
@@ -61,10 +62,4 @@ export function getClientActionResult(
   };
 }
 
-function normalizeSatisfactionRating(rating: unknown): SatisfactionRating | null {
-  if (typeof rating !== "number" || !Number.isInteger(rating)) {
-    return null;
-  }
 
-  return rating >= 1 && rating <= 5 ? (rating as SatisfactionRating) : null;
-}

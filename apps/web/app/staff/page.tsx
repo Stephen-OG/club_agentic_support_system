@@ -28,7 +28,6 @@ export default function StaffPage() {
     }
 
     let cancelled = false;
-    setCurrentUser(undefined);
     void apiRequest<CommandUser>(supabase, "/me")
       .then((user) => {
         if (!cancelled) {
@@ -62,11 +61,7 @@ export default function StaffPage() {
   }, [session, currentUser, router]);
 
   if (session === undefined || currentUser === undefined) {
-    return (
-      <main className="auth-screen">
-        <div className="loading-panel">Checking staff access…</div>
-      </main>
-    );
+    return <main aria-busy="true" className="auth-screen" />;
   }
 
   return <CommandCenterPage initialView="staff" />;

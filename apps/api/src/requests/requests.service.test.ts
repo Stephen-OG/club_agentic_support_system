@@ -439,7 +439,8 @@ describe("RequestsService lifecycle", () => {
       venueId: "venue_1",
       servicePointId: "sp_1",
       conversationId: "conversation_1",
-      status: RequestStatus.COMPLETED
+      status: RequestStatus.COMPLETED,
+      conversation: { guestSessionId: null }
     };
     const prisma = {
       supportRequest: {
@@ -461,7 +462,8 @@ describe("RequestsService lifecycle", () => {
       venueId: "venue_1",
       servicePointId: "sp_1",
       conversationId: "conversation_1",
-      status: RequestStatus.COMPLETED
+      status: RequestStatus.COMPLETED,
+      conversation: { guestSessionId: null }
     };
     const updatedRequest = {
       ...request,
@@ -526,7 +528,8 @@ describe("RequestsService lifecycle", () => {
       {
         model: "supportRequest.findUnique",
         args: {
-          where: { id: request.id }
+          where: { id: request.id },
+          include: { conversation: true }
         }
       },
       {
@@ -583,7 +586,8 @@ describe("RequestsService lifecycle", () => {
       venueId: "venue_1",
       servicePointId: "sp_1",
       conversationId: "conversation_1",
-      status: RequestStatus.COMPLETED
+      status: RequestStatus.COMPLETED,
+      conversation: { guestSessionId: null }
     };
     const updatedRequest = {
       ...request,

@@ -11,6 +11,7 @@ import type {
   PublicVenueSummary
 } from "@/lib/auth/types";
 import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, createVenueWelcomeBody } from "@/lib/chat-copy";
+import { appendSessionId, getOrCreateGuestSessionId } from "@/lib/guest-session";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
 import { supportLocationOptions, supportQuickActions } from "@/lib/support-intake";
 
@@ -56,6 +57,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
   const [venueName, setVenueName] = useState<string | null>(null);
   const [chatAvailability, setChatAvailability] = useState<PublicChatAvailability | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [guestSessionId, setGuestSessionId] = useState("");
   const chatClosed = chatAvailability?.isOpen === false;
   const formRef = useRef<HTMLFormElement>(null);
   const statusText = useMemo(() => statusLabel(request), [request]);
@@ -70,6 +72,10 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
     setConversationId(null);
     setRequest(null);
     setMessages([createLocalMessage(createClosedVenueBody(), "SYSTEM")]);
+  }, [venueSlug]);
+
+  useEffect(() => {
+    setGuestSessionId(getOrCreateGuestSessionId(`venue-support:${venueSlug}:sessionId`));
   }, [venueSlug]);
 
   useEffect(() => {
@@ -117,7 +123,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
   }, [applyClosedState, conversationId, venueSlug]);
 
   useEffect(() => {
-    if (!conversationId) {
+    if (!conversationId || !guestSessionId) {
       return;
     }
 
@@ -126,7 +132,10 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
 
     async function loadConversation() {
       const result = await publicApiRequest<PublicQrConversationState>(
-        `/public/qr/venues/${encodeURIComponent(venueSlug)}/conversations/${encodeURIComponent(activeConversationId)}`,
+        appendSessionId(
+          `/public/qr/venues/${encodeURIComponent(venueSlug)}/conversations/${encodeURIComponent(activeConversationId)}`,
+          guestSessionId
+        ),
         { cache: "no-store" }
       ).catch(() => null);
 
@@ -154,11 +163,11 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [applyClosedState, conversationId, venueName, venueSlug]);
+  }, [applyClosedState, conversationId, guestSessionId, venueName, venueSlug]);
 
   async function sendMessage(nextMessage?: string, quickAction?: string) {
     const body = (nextMessage || input).trim();
-    if (!body || isSending || chatClosed) {
+    if (!body || isSending || chatClosed || !guestSessionId) {
       return;
     }
 
@@ -174,7 +183,8 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
             conversationId,
             locationLabel: locationLabel.trim() || undefined,
             message: body,
-            quickAction
+            quickAction,
+            sessionId: guestSessionId
           })
         }
       );
@@ -198,7 +208,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
   }
 
   async function updateRequest(action: ClientRequestAction, rating?: SatisfactionRating) {
-    if (!request || isSending) {
+    if (!request || isSending || !guestSessionId) {
       return;
     }
 
@@ -210,7 +220,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
         message?: CommandMessage;
       }>(`/public/requests/${request.id}/action`, {
         method: "PATCH",
-        body: JSON.stringify({ action, rating })
+        body: JSON.stringify({ action, rating, sessionId: guestSessionId })
       });
 
       setRequest(result.request);
@@ -242,9 +252,26 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
           <span className={statusClassName}>{statusText}</span>
         </div>
         <div className="chat-messages" aria-live="polite">
-          {messages.map((message) => (
-            <div className={`bubble ${message.sender.toLowerCase()}`} key={message.id}>
-              {message.body}
+          {messages.map((message, index) => (
+            <div className="message-cluster" key={message.id}>
+              <div className={`bubble ${message.sender.toLowerCase()}`}>
+                {message.body}
+              </div>
+              {index === 0 && !awaitingSatisfaction && !chatClosed ? (
+                <div className="quick-actions intro-actions" aria-label="Common requests">
+                  {supportQuickActions.map((action) => (
+                    <button disabled={isSending} key={`intro-${action.id}`} onClick={() => void sendMessage(action.prompt, action.id)} type="button">
+                      <span className="quick-action-icon">
+                        <Sparkles size={14} />
+                      </span>
+                      <span>
+                        <strong>{action.label}</strong>
+                        <small>{action.prompt}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -278,15 +305,6 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
             <button className="button ghost" disabled={isSending} onClick={() => void updateRequest("cancel")} type="button">
               Cancel request
             </button>
-          </div>
-        ) : null}
-        {!awaitingSatisfaction && !chatClosed ? (
-          <div className="quick-actions chat-quick-actions" aria-label="Common requests">
-            {supportQuickActions.slice(0, 6).map((action) => (
-              <button disabled={isSending} key={`chat-${action.id}`} onClick={() => void sendMessage(action.prompt, action.id)} type="button">
-                <Sparkles size={15} /> {action.label}
-              </button>
-            ))}
           </div>
         ) : null}
         <form ref={formRef} className="composer" onSubmit={onSubmit}>
@@ -326,13 +344,6 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
           {supportLocationOptions.map((option) => (
             <button disabled={chatClosed} key={option} onClick={() => setLocationLabel(option)} type="button">
               {option}
-            </button>
-          ))}
-        </div>
-        <div className="quick-actions">
-          {supportQuickActions.map((action) => (
-            <button disabled={isSending || chatClosed} key={action.id} onClick={() => void sendMessage(action.prompt, action.id)} type="button">
-              <Sparkles size={15} /> {action.label}
             </button>
           ))}
         </div>

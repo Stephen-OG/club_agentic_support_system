@@ -23,8 +23,6 @@ export function CommandCenterPage({ initialView }: { initialView?: CommandView }
     }
 
     let cancelled = false;
-    setCurrentUser(undefined);
-    setProfileError(null);
 
     void apiRequest<CommandUser>(supabase, "/me")
       .then((user) => {
@@ -45,11 +43,7 @@ export function CommandCenterPage({ initialView }: { initialView?: CommandView }
   }, [session, supabase]);
 
   if (session === undefined) {
-    return (
-      <main className="auth-screen">
-        <div className="loading-panel">Loading command center...</div>
-      </main>
-    );
+    return <main aria-busy="true" className="auth-screen" />;
   }
 
   if (!session) {
@@ -61,11 +55,7 @@ export function CommandCenterPage({ initialView }: { initialView?: CommandView }
   }
 
   if (currentUser === undefined) {
-    return (
-      <main className="auth-screen">
-        <div className="loading-panel">Loading your workspace...</div>
-      </main>
-    );
+    return <main aria-busy="true" className="auth-screen" />;
   }
 
   if (!currentUser) {

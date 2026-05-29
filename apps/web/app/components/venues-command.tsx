@@ -7,7 +7,7 @@ import { apiRequest } from "@/lib/api/client";
 import type { CommandServicePoint, CommandVenue, CommandVenueOpeningHour } from "@/lib/auth/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { generateQrCodeDataUrl } from "@/lib/qr";
-import { createServicePointPayload, servicePointGuestUrl, venueWideGuestUrl } from "@/lib/venue-controls";
+import { createOpeningHoursPayload, createServicePointPayload, servicePointGuestUrl, venueWideGuestUrl } from "@/lib/venue-controls";
 
 type QrPreview = {
   label: string;
@@ -153,7 +153,7 @@ export function VenuesCommand() {
       const openingHours = hourDrafts[venue.id] ?? normalizeOpeningHours(venue.openingHours);
       const updated = await apiRequest<CommandVenue>(supabase, `/admin/venues/${venue.id}/opening-hours`, {
         method: "PATCH",
-        body: JSON.stringify({ openingHours })
+        body: JSON.stringify(createOpeningHoursPayload(openingHours))
       });
       setVenues((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setHourDrafts((current) => ({ ...current, [venue.id]: normalizeOpeningHours(updated.openingHours) }));

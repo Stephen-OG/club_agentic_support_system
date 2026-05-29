@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { ArrayMinSize, IsArray, IsBoolean, IsInt, IsString, Matches, Max, Min, ValidateNested } from "class-validator";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsString, Matches, Max, Min, ValidateNested } from "class-validator";
 
 export class VenueOpeningHourDto {
   @IsInt()
@@ -21,7 +21,8 @@ export class VenueOpeningHourDto {
 
 export class UpdateVenueOpeningHoursDto {
   @IsArray()
-  @ArrayMinSize(1)
+  @ArrayMinSize(7)
+  @ArrayMaxSize(7)
   @ValidateNested({ each: true })
   @Type(() => VenueOpeningHourDto)
   openingHours!: VenueOpeningHourDto[];

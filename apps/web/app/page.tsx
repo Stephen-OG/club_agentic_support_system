@@ -72,9 +72,5 @@ export default function HomePage() {
     }
   }, [session, currentUser, router]);
 
-  return (
-    <main className="auth-screen">
-      <div className="loading-panel">Checking access…</div>
-    </main>
-  );
+  return <main aria-busy="true" className="auth-screen" />;
 }

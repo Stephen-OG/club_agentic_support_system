@@ -18,9 +18,27 @@ const sessionState: {
   subscription: null
 };
 
-function notifySubscribers(session: Session | null | undefined) {
-  sessionState.session = session;
-  sessionState.subscribers.forEach((subscriber) => subscriber(session));
+function notifySubscribers(nextSession: Session | null | undefined) {
+  // Deduplicate: skip if the session hasn't changed (same access_token)
+  const prev = sessionState.session;
+
+  if (!shouldNotifySessionChange(prev, nextSession)) {
+    return;
+  }
+
+  sessionState.session = nextSession;
+  sessionState.subscribers.forEach((subscriber) => subscriber(nextSession));
+}
+
+export function shouldNotifySessionChange(previous: Session | null | undefined, next: Session | null | undefined) {
+  if (previous === undefined) {
+    return true;
+  }
+
+  const prevToken = previous?.access_token ?? null;
+  const nextToken = next?.access_token ?? null;
+
+  return prevToken !== nextToken || previous?.user?.id !== next?.user?.id;
 }
 
 export function getCachedSupabaseSession() {
@@ -35,15 +53,22 @@ function initSession() {
     return;
   }
 
+  // Fall back to null if getSession takes longer than 15 s
+  const timeout = window.setTimeout(() => {
+    notifySubscribers(null);
+  }, 15_000);
+
   void supabase.auth.getSession().then(({ data }) => {
-    notifySubscribers(data.session);
+    window.clearTimeout(timeout);
+    notifySubscribers(data.session ?? null);
   }).catch(() => {
+    window.clearTimeout(timeout);
     notifySubscribers(null);
   });
 
   if (!sessionState.subscription) {
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      notifySubscribers(nextSession);
+      notifySubscribers(nextSession ?? null);
     });
     sessionState.subscription = data.subscription;
   }

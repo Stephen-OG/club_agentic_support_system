@@ -1,4 +1,6 @@
-import type { INestApplication } from "@nestjs/common";
+import type { ExecutionContext, INestApplication } from "@nestjs/common";
+import type { ThrottlerModuleOptions } from "@nestjs/throttler";
+import { RedisThrottlerStorage } from "./redis-throttler-storage";
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -24,13 +26,56 @@ export function isCorsOriginAllowed(origin: string | undefined, allowedOrigins: 
   return !origin || allowedOrigins.includes(origin);
 }
 
-export function getRateLimitConfig(env: EnvMap = process.env) {
-  return [
+export function getRateLimitConfig(env: EnvMap = process.env): ThrottlerModuleOptions {
+  const ttl = positiveInteger(env.API_RATE_LIMIT_TTL_MS, 60000);
+  const limit = positiveInteger(env.API_RATE_LIMIT_MAX, 60);
+  const publicQrLimit = positiveInteger(env.PUBLIC_QR_RATE_LIMIT_MAX, 20);
+  const redisUrl = env.REDIS_URL;
+
+  const throttlers = [
     {
-      ttl: positiveInteger(env.API_RATE_LIMIT_TTL_MS, 60000),
-      limit: positiveInteger(env.API_RATE_LIMIT_MAX, 60)
+      name: "default",
+      ttl,
+      limit
+    },
+    {
+      name: "public_qr",
+      ttl,
+      limit: publicQrLimit,
+      skipIf: (context: ExecutionContext) => {
+        const request = context.switchToHttp().getRequest() as { path?: string; url?: string };
+        const path = request.path || request.url || "";
+        return !path.startsWith("/public/qr") && !path.startsWith("/public/requests");
+      }
     }
   ];
+
+  if (redisUrl) {
+    return {
+      throttlers,
+      storage: new RedisThrottlerStorage()
+    };
+  }
+
+  return { throttlers };
+}
+
+export function shouldExposeApiDocs(env: EnvMap = process.env) {
+  return env.NODE_ENV !== "production" || env.ENABLE_API_DOCS === "true";
+}
+
+export function getApiHost(env: EnvMap = process.env) {
+  return env.HOST || (env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
+}
+
+export function assertProductionSecurityConfig(env: EnvMap = process.env) {
+  if (env.NODE_ENV !== "production") {
+    return;
+  }
+
+  if (!env.MESSAGE_ENCRYPTION_KEY?.trim()) {
+    throw new Error("MESSAGE_ENCRYPTION_KEY is required in production");
+  }
 }
 
 export function applySecurityHeaders(app: INestApplication) {

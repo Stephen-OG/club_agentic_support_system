@@ -56,11 +56,7 @@ export default function AdminPage() {
   }, [session, currentUser, router]);
 
   if (session === undefined || currentUser === undefined) {
-    return (
-      <main className="auth-screen">
-        <div className="loading-panel">Checking admin access…</div>
-      </main>
-    );
+    return <main aria-busy="true" className="auth-screen" />;
   }
 
   return <CommandCenterPage initialView="dashboard" />;

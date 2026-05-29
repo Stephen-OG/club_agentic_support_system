@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, UseGuards } from "@nestjs/common";
+import { SkipThrottle, Throttle } from "@nestjs/throttler";
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import type { AuthContext } from "../auth/auth-context";
 import { CurrentAuth } from "../auth/auth-context.decorator";
@@ -31,12 +32,14 @@ export class RequestsController {
   }
 }
 
+@SkipThrottle({ default: true })
 @ApiTags("public requests")
 @Controller("public/requests")
 export class PublicRequestsController {
   constructor(private readonly requests: RequestsService) {}
 
   @Patch(":requestId/action")
+  @Throttle({ public_qr: { limit: 10, ttl: 60000 } })
   @ApiOkResponse({ description: "Applies a guest request action" })
   applyGuestAction(@Param("requestId", ParseUUIDPipe) requestId: string, @Body() input: GuestRequestActionDto) {
     return this.requests.applyGuestAction({

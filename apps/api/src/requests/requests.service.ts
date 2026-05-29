@@ -1,8 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { RequestStatus as PrismaRequestStatus, SenderType } from "@prisma/client";
 import {
   canTransitionRequest,
   getNextGuestActionStatus,
+  normalizeSatisfactionRating,
   type RequestActor,
   type RequestStatus
 } from "@guestos/shared";
@@ -11,6 +12,7 @@ import { PrismaService } from "../database/prisma.service";
 import { VenueAccessService } from "../venues/access.service";
 import type { GuestRequestActionDto } from "./dto/guest-request-action.dto";
 import type { UpdateRequestStatusDto } from "./dto/update-request-status.dto";
+import { decryptMessageRecord, encryptMessageCreateData } from "../security/message-crypto";
 
 const prismaStatusBySharedStatus: Record<RequestStatus, PrismaRequestStatus> = {
   new: PrismaRequestStatus.NEW,
@@ -40,10 +42,6 @@ type GuestActionInput = GuestRequestActionDto & {
   requestId: string;
 };
 
-function normalizeSatisfactionRating(value: unknown) {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 5 ? value : null;
-}
-
 function latestSatisfactionRating(messages: Array<{ metadata: unknown; createdAt: Date | string }>) {
   const sortedMessages = [...messages].sort((left, right) =>
     String(right.createdAt).localeCompare(String(left.createdAt))
@@ -63,6 +61,7 @@ function latestSatisfactionRating(messages: Array<{ metadata: unknown; createdAt
 function recentMessages(messages: Array<{ id: string; sender: SenderType; body: string; createdAt: Date | string }>) {
   return [...messages]
     .sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt)))
+    .map(decryptMessageRecord)
     .map((message) => ({
       id: message.id,
       sender: message.sender,
@@ -188,7 +187,7 @@ export class RequestsService {
       const guestMessage = guestVisibleStatusMessage(toStatus);
       if (guestMessage) {
         await tx.message.create({
-          data: {
+          data: encryptMessageCreateData({
             venueId: request.venueId,
             servicePointId: request.servicePointId,
             conversationId: request.conversationId,
@@ -199,7 +198,7 @@ export class RequestsService {
               source: "request_status",
               status: toStatus
             }
-          }
+          })
         });
       }
 
@@ -209,11 +208,18 @@ export class RequestsService {
 
   async applyGuestAction(input: GuestActionInput) {
     const request = await this.prisma.supportRequest.findUnique({
-      where: { id: input.requestId }
+      where: { id: input.requestId },
+      include: { conversation: true }
     });
 
     if (!request) {
       throw new NotFoundException("Request not found");
+    }
+
+    if (request.conversation.guestSessionId) {
+      if (!input.sessionId || input.sessionId !== request.conversation.guestSessionId) {
+        throw new ForbiddenException("You are not allowed to act on this request");
+      }
     }
 
     if (input.action === "confirm_resolved" && !this.isValidRating(input.rating)) {
@@ -242,7 +248,7 @@ export class RequestsService {
       });
 
       const message = await tx.message.create({
-        data: {
+        data: encryptMessageCreateData({
           venueId: request.venueId,
           servicePointId: request.servicePointId,
           conversationId: request.conversationId,
@@ -250,7 +256,7 @@ export class RequestsService {
           sender: SenderType.SYSTEM,
           body: this.guestActionMessage(input.action, input.rating),
           metadata: { ...metadata }
-        }
+        })
       });
 
       await tx.requestEvent.create({
@@ -266,7 +272,7 @@ export class RequestsService {
 
       return {
         request: updatedRequest,
-        message
+        message: decryptMessageRecord(message)
       };
     });
   }
@@ -284,7 +290,7 @@ export class RequestsService {
   }
 
   private isValidRating(rating: unknown): rating is number {
-    return Number.isInteger(rating) && typeof rating === "number" && rating >= 1 && rating <= 5;
+    return normalizeSatisfactionRating(rating) !== null;
   }
 
   private guestActionMessage(action: GuestActionInput["action"], rating?: number) {

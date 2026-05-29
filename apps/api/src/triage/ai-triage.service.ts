@@ -176,7 +176,7 @@ export class AiTriageService {
   private nonStaffReply(message: string, servicePointLabel: string) {
     const normalized = message.trim().toLowerCase();
 
-    if (/^(hi|hello|hey|yo|hiya|good morning|good afternoon|good evening)[!. ]*$/.test(normalized)) {
+    if (/^(hi|hello|hey|yo|hiya|howdy|greetings|good morning|good afternoon|good evening)[!. ]*$/.test(normalized)) {
       return `Hello. I am Lily for ${servicePointLabel}. Ask me for help when you need the team.`;
     }
 

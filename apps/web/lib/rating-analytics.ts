@@ -1,3 +1,5 @@
+import { normalizeSatisfactionRating } from "@guestos/shared";
+
 type RatingValue = 1 | 2 | 3 | 4 | 5;
 
 type RatingMessage = {
@@ -94,10 +96,7 @@ function requestRating(request: RateableRequest) {
   return normalizeRating(request.satisfactionRating ?? request.satisfaction_rating);
 }
 
+// Using normalizeSatisfactionRating from @guestos/shared
 function normalizeRating(value: unknown): RatingValue | null {
-  if (typeof value !== "number" || !Number.isInteger(value)) {
-    return null;
-  }
-
-  return value >= 1 && value <= 5 ? (value as RatingValue) : null;
+  return normalizeSatisfactionRating(value) as RatingValue | null;
 }

@@ -4,9 +4,18 @@ import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
-import { applySecurityHeaders, isCorsOriginAllowed, parseCorsOrigins } from "./security/security-config";
+import {
+  applySecurityHeaders,
+  assertProductionSecurityConfig,
+  getApiHost,
+  isCorsOriginAllowed,
+  parseCorsOrigins,
+  shouldExposeApiDocs
+} from "./security/security-config";
 
 async function bootstrap() {
+  assertProductionSecurityConfig(process.env);
+
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
   const allowedOrigins = parseCorsOrigins(config.get<string>("CORS_ORIGINS"));
@@ -30,17 +39,19 @@ async function bootstrap() {
     })
   );
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle("GuestOS API")
-    .setDescription("AI guest support and staff orchestration API")
-    .setVersion("0.1.0")
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup("docs", app, document);
+  if (shouldExposeApiDocs(process.env)) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle("GuestOS API")
+      .setDescription("AI guest support and staff orchestration API")
+      .setVersion("0.1.0")
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup("docs", app, document);
+  }
 
   const port = 4000;
-  const host = config.get<string>("HOST") || "127.0.0.1";
+  const host = getApiHost(process.env);
   console.log(`Starting API server on ${host}:${port}...`);
   await app.listen(port, host);
 }

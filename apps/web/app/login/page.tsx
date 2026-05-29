@@ -62,7 +62,12 @@ export default function LoginPage() {
           return;
         }
 
-        await supabase.auth.signOut();
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // signOut can fail if the session is already gone
+        }
+
         setSessionValidated(false);
       })
       .finally(() => {
@@ -81,11 +86,7 @@ export default function LoginPage() {
   }
 
   if (session === undefined || isChecking || sessionValidated === null) {
-    return (
-      <main className="auth-screen">
-        <div className="loading-panel">Loading login…</div>
-      </main>
-    );
+    return <main aria-busy="true" className="auth-screen" />;
   }
 
   if (session && sessionValidated === false) {

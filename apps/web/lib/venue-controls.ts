@@ -3,6 +3,14 @@ type ServicePointDraft = {
   locationId?: string;
 };
 
+type OpeningHourDraft = {
+  dayOfWeek: number;
+  opensAt: string;
+  closesAt: string;
+  isClosed: boolean;
+  [key: string]: unknown;
+};
+
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
 }
@@ -22,5 +30,16 @@ export function createServicePointPayload(draft: ServicePointDraft) {
   return {
     label,
     ...(locationId ? { locationId } : {})
+  };
+}
+
+export function createOpeningHoursPayload(openingHours: OpeningHourDraft[]) {
+  return {
+    openingHours: openingHours.map((hours) => ({
+      dayOfWeek: hours.dayOfWeek,
+      opensAt: hours.opensAt,
+      closesAt: hours.closesAt,
+      isClosed: hours.isClosed
+    }))
   };
 }
