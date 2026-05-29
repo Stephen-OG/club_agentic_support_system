@@ -1,0 +1,6 @@
+{
+  "buildCommand": "npm run build -w @guestos/shared && npx next build",
+  "installCommand": "npm install --install-strategy=nested",
+  "framework": "nextjs",
+  "outputDirectory": ".next"
+}
