@@ -156,7 +156,7 @@ export class ServicePointsService {
   }
 
   async listVenues(auth: AuthContext) {
-    const canReadWorkspace = auth.role === "admin";
+    const canReadWorkspace = auth.role === "admin" || auth.role === "owner";
     const where = canReadWorkspace
       ? {
           workspaceId: auth.workspaceId
