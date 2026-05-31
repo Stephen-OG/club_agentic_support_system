@@ -70,7 +70,7 @@ export function LoginPanel() {
       }
 
       // Redirect to setup wizard
-      router.replace("/setup");
+      router.replace("/signup");
       return;
     }
 
@@ -109,8 +109,8 @@ export function LoginPanel() {
         router.replace(action.path);
       }
     } catch {
-      // /me failed — staff profile not found, redirect to setup
-      router.replace("/setup");
+      // /me failed — staff profile not found, redirect to signup
+      router.replace("/signup");
     }
   }
 

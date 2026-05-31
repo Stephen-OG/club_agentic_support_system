@@ -2,8 +2,8 @@ import { ConflictException, Injectable, InternalServerErrorException } from "@ne
 import { PrismaService } from "../database/prisma.service";
 import { SupabaseAdminService } from "../auth/supabase-admin.service";
 import { StructuredLogger } from "../common/logger/structured-logger.service";
-import type { SetupRequestDto } from "./dto/setup-request.dto";
-import type { SetupResponseDto } from "./dto/setup-response.dto";
+import type { SetupRequestDto } from "./dto/signup-request.dto";
+import type { SetupResponseDto } from "./dto/signup-response.dto";
 
 function defaultOpeningHours() {
   return Array.from({ length: 7 }, (_, dayOfWeek) => ({
@@ -25,7 +25,7 @@ export class SetupService {
   async initialize(input: SetupRequestDto): Promise<SetupResponseDto> {
     const email = input.email.trim().toLowerCase();
 
-    this.logger.logEvent("setup.started", {
+    this.logger.logEvent("signup.started", {
       email,
       workspaceName: input.workspaceName,
       venueName: input.venueName
@@ -76,7 +76,7 @@ export class SetupService {
           slug: input.workspaceSlug
         }
       });
-      this.logger.logEvent("setup.workspace_created", { workspaceId: workspace.id, name: workspace.name }, "SetupService");
+      this.logger.logEvent("signup.workspace_created", { workspaceId: workspace.id, name: workspace.name }, "SetupService");
 
       // 2. Create staff profile with auth link
       const staff = await tx.staffProfile.create({
@@ -95,7 +95,7 @@ export class SetupService {
           role: "OWNER"
         }
       });
-      this.logger.logEvent("setup.staff_created", { staffProfileId: staff.id, email }, "SetupService");
+      this.logger.logEvent("signup.staff_created", { staffProfileId: staff.id, email }, "SetupService");
 
       // 4. Create venue with default opening hours
       const venue = await tx.venue.create({
@@ -109,12 +109,12 @@ export class SetupService {
           }
         }
       });
-      this.logger.logEvent("setup.venue_created", { venueId: venue.id, name: venue.name }, "SetupService");
+      this.logger.logEvent("signup.venue_created", { venueId: venue.id, name: venue.name }, "SetupService");
 
       return { workspace, staff, venue };
     });
 
-    this.logger.logEvent("setup.completed", {
+    this.logger.logEvent("signup.completed", {
       workspaceId: result.workspace.id,
       staffProfileId: result.staff.id,
       venueId: result.venue.id

@@ -1,15 +1,15 @@
 import { Body, Controller, Headers, Post, UnauthorizedException } from "@nestjs/common";
 import { ApiCreatedResponse, ApiTags } from "@nestjs/swagger";
 import { SupabaseAdminService } from "../auth/supabase-admin.service";
-import { SetupRequestDto } from "./dto/setup-request.dto";
-import type { SetupResponseDto } from "./dto/setup-response.dto";
-import { SetupService } from "./setup.service";
+import { SetupRequestDto } from "./dto/signup-request.dto";
+import type { SetupResponseDto } from "./dto/signup-response.dto";
+import { SetupService } from "./signup.service";
 
-@ApiTags("setup")
-@Controller("setup")
+@ApiTags("signup")
+@Controller("signup")
 export class SetupController {
   constructor(
-    private readonly setupService: SetupService,
+    private readonly signupService: SetupService,
     private readonly supabaseAdmin: SupabaseAdminService
   ) {}
 
@@ -35,6 +35,6 @@ export class SetupController {
       throw new UnauthorizedException("Email must match your authenticated session");
     }
 
-    return this.setupService.initialize(input);
+    return this.signupService.initialize(input);
   }
 }

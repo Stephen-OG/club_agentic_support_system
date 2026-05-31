@@ -109,7 +109,7 @@ export default function SetupPage() {
 
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
-      const response = await fetch(`${apiUrl}/setup`, {
+      const response = await fetch(`${apiUrl}/signup`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

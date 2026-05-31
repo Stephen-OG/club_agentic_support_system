@@ -16,7 +16,7 @@ import { NotificationsModule } from "./notifications/notifications.module";
 import { RequestsModule } from "./requests/requests.module";
 import { getRateLimitConfig } from "./security/security-config";
 import { ServicePointsModule } from "./service-points/service-points.module";
-import { SetupModule } from "./setup/setup.module";
+import { SetupModule } from "./signup/signup.module";
 import { StaffModule } from "./staff/staff.module";
 import { TenantsModule } from "./tenants/tenants.module";
 import { TriageModule } from "./triage/triage.module";

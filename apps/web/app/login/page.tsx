@@ -64,7 +64,7 @@ export default function LoginPage() {
 
         // /me failed — user has no staff profile yet, redirect to setup
         if (!cancelled) {
-          safeReplace(router, "/setup");
+          safeReplace(router, "/signup");
         }
       })
       .finally(() => {
