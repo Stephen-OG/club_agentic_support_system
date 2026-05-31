@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, InternalServerErrorException } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import { SupabaseAdminService } from "../auth/supabase-admin.service";
+import { StructuredLogger } from "../common/logger/structured-logger.service";
 import type { SetupRequestDto } from "./dto/setup-request.dto";
 import type { SetupResponseDto } from "./dto/setup-response.dto";
 
@@ -17,21 +18,30 @@ function defaultOpeningHours() {
 export class SetupService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly supabaseAdmin: SupabaseAdminService
+    private readonly supabaseAdmin: SupabaseAdminService,
+    private readonly logger: StructuredLogger
   ) {}
 
   async initialize(input: SetupRequestDto): Promise<SetupResponseDto> {
     const email = input.email.trim().toLowerCase();
 
+    this.logger.logEvent("setup.started", {
+      email,
+      workspaceName: input.workspaceName,
+      venueName: input.venueName
+    }, "SetupService");
+
     // Check if email already has a staff profile
     const existingProfile = await this.prisma.staffProfile.findUnique({ where: { email } });
     if (existingProfile) {
+      this.logger.warn(`Setup failed: profile already exists for ${email}`, "SetupService");
       throw new ConflictException("A staff profile already exists for this email. Please sign in instead.");
     }
 
     // Check if workspace slug is taken
     const existingWorkspace = await this.prisma.workspace.findUnique({ where: { slug: input.workspaceSlug } });
     if (existingWorkspace) {
+      this.logger.warn(`Setup failed: workspace slug "${input.workspaceSlug}" already taken`, "SetupService");
       throw new ConflictException(`Workspace slug "${input.workspaceSlug}" is already taken.`);
     }
 
@@ -40,15 +50,16 @@ export class SetupService {
       where: { slug: input.venueSlug }
     });
     if (existingVenue) {
+      this.logger.warn(`Setup failed: venue slug "${input.venueSlug}" already taken`, "SetupService");
       throw new ConflictException(`Venue slug "${input.venueSlug}" is already taken.`);
     }
 
     // Look up the Supabase user by email to get their authUserId
-    // The user must already exist in Supabase Auth (signed up via the login page)
     const { data: users } = await this.supabaseAdmin.getClient().auth.admin.listUsers();
     const authUser = users?.users?.find((u) => u.email === email);
 
     if (!authUser) {
+      this.logger.error(`Setup failed: no Supabase auth user found for ${email}`, undefined, "SetupService");
       throw new InternalServerErrorException(
         "No Supabase auth user found for this email. Please sign up first."
       );
@@ -65,6 +76,7 @@ export class SetupService {
           slug: input.workspaceSlug
         }
       });
+      this.logger.logEvent("setup.workspace_created", { workspaceId: workspace.id, name: workspace.name }, "SetupService");
 
       // 2. Create staff profile with auth link
       const staff = await tx.staffProfile.create({
@@ -83,6 +95,7 @@ export class SetupService {
           role: "OWNER"
         }
       });
+      this.logger.logEvent("setup.staff_created", { staffProfileId: staff.id, email }, "SetupService");
 
       // 4. Create venue with default opening hours
       const venue = await tx.venue.create({
@@ -96,9 +109,16 @@ export class SetupService {
           }
         }
       });
+      this.logger.logEvent("setup.venue_created", { venueId: venue.id, name: venue.name }, "SetupService");
 
       return { workspace, staff, venue };
     });
+
+    this.logger.logEvent("setup.completed", {
+      workspaceId: result.workspace.id,
+      staffProfileId: result.staff.id,
+      venueId: result.venue.id
+    }, "SetupService");
 
     return {
       workspaceId: result.workspace.id,

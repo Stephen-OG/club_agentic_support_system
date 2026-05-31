@@ -4,6 +4,8 @@ import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
+import { StructuredLogger } from "./common/logger/structured-logger.service";
+import { HttpLoggingInterceptor } from "./common/logger/http-logging.interceptor";
 import {
   applySecurityHeaders,
   assertProductionSecurityConfig,
@@ -16,7 +18,17 @@ import {
 async function bootstrap() {
   assertProductionSecurityConfig(process.env);
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true
+  });
+
+  // Use structured JSON logger
+  const logger = app.get(StructuredLogger);
+  app.useLogger(logger);
+
+  // Log all HTTP requests
+  app.useGlobalInterceptors(new HttpLoggingInterceptor(logger));
+
   const config = app.get(ConfigService);
   const allowedOrigins = parseCorsOrigins(config.get<string>("CORS_ORIGINS"));
 
@@ -52,7 +64,7 @@ async function bootstrap() {
 
   const port = 4000;
   const host = getApiHost(process.env);
-  console.log(`Starting API server on ${host}:${port}...`);
+  logger.log(`Starting API server on ${host}:${port}`, "Bootstrap");
   await app.listen(port, host);
 }
 

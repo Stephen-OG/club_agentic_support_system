@@ -11,6 +11,7 @@ import { DatabaseModule } from "./database/database.module";
 import { HealthModule } from "./health/health.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
 import { JobsModule } from "./jobs/jobs.module";
+import { LoggerModule } from "./common/logger/logger.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { RequestsModule } from "./requests/requests.module";
 import { getRateLimitConfig } from "./security/security-config";
@@ -45,7 +46,8 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     AnalyticsModule,
     AuditModule,
     JobsModule,
-    SetupModule
+    SetupModule,
+    LoggerModule
   ],
   providers: [
     {
