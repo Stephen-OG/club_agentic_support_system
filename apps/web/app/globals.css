@@ -2164,3 +2164,192 @@ body {
   background: rgba(255, 107, 74, 0.13);
   color: var(--danger);
 }
+
+.auth-switch {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.auth-switch p {
+  align-items: center;
+  display: inline-flex;
+  font-size: 13px;
+  gap: 4px;
+  margin: 0;
+}
+
+.link-button {
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 4px;
+  padding: 2px 4px;
+}
+
+.link-button:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.form-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.form-actions .command-button {
+  flex: 1;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.setup-panel {
+  max-width: 480px;
+  width: 100%;
+}
+
+.auth-hero.compact {
+  margin-bottom: 16px;
+  padding: 0;
+}
+
+.setup-creating {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.setup-creating h2 {
+  margin: 0;
+}
+
+.setup-creating p {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.setup-panel select {
+  background: #0a100e;
+  border: none;
+  color: var(--ink);
+  font-size: 14px;
+  min-height: 40px;
+  outline: none;
+  width: 100%;
+}
+
+
+.auth-switch {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.auth-switch p {
+  align-items: center;
+  display: inline-flex;
+  font-size: 13px;
+  gap: 4px;
+  margin: 0;
+}
+
+.link-button {
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 4px;
+  padding: 2px 4px;
+}
+
+.link-button:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.form-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.form-actions .command-button {
+  flex: 1;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.setup-panel {
+  max-width: 480px;
+  width: 100%;
+}
+
+.auth-hero.compact {
+  margin-bottom: 16px;
+  padding: 0;
+}
+
+.setup-creating {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.setup-creating h2 {
+  margin: 0;
+}
+
+.setup-creating p {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.setup-panel select {
+  background: #0a100e;
+  border: none;
+  color: var(--ink);
+  font-size: 14px;
+  min-height: 40px;
+  outline: none;
+  width: 100%;
+}

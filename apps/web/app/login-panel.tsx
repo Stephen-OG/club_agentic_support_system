@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LockKeyhole, Mail, Radar } from "lucide-react";
+import { LockKeyhole, Mail, Radar, UserPlus } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { apiRequest } from "@/lib/api/client";
 import { getSignedInRouteAction, mustChangePassword } from "@/lib/auth/session-route-policy";
@@ -11,8 +11,10 @@ import type { CommandUser } from "@/lib/auth/types";
 export function LoginPanel() {
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -27,6 +29,52 @@ export function LoginPanel() {
     setLoading(true);
     setError(null);
 
+    if (mode === "signup") {
+      if (password.length < 10) {
+        setError("Use at least 10 characters for the password.");
+        setLoading(false);
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        setLoading(false);
+        return;
+      }
+
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { mustChangePassword: false }
+        }
+      });
+
+      setLoading(false);
+
+      if (signUpError) {
+        setError(signUpError.message);
+        return;
+      }
+
+      // Sign up succeeded — now sign in
+      const signInResult = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (signInResult.error || !signInResult.data.session) {
+        setError("Account created but could not sign in. Please sign in manually.");
+        setMode("signin");
+        return;
+      }
+
+      // Redirect to setup wizard
+      router.replace("/setup");
+      return;
+    }
+
+    // Sign in flow
     const result = await supabase.auth.signInWithPassword({
       email,
       password
@@ -61,7 +109,8 @@ export function LoginPanel() {
         router.replace(action.path);
       }
     } catch {
-      setError("Signed in, but your staff profile could not be loaded. Please ask an admin to check your account.");
+      // /me failed — staff profile not found, redirect to setup
+      router.replace("/setup");
     }
   }
 
@@ -79,8 +128,12 @@ export function LoginPanel() {
       <section className="auth-panel" aria-label="Sign in">
         <div>
           <div className="eyebrow">Secure access</div>
-          <h2>Sign in</h2>
-          <p className="muted">Accounts are created by workspace admins. There is no public signup.</p>
+          <h2>{mode === "signin" ? "Sign in" : "Create account"}</h2>
+          <p className="muted">
+            {mode === "signin"
+              ? "Sign in with your email and password."
+              : "First time? Create an account and set up your workspace."}
+          </p>
         </div>
 
         <form className="auth-form" onSubmit={submit}>
@@ -95,14 +148,58 @@ export function LoginPanel() {
             <span>Password</span>
             <span className="input-shell">
               <LockKeyhole size={16} />
-              <input autoComplete="current-password" onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
+              <input
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                type="password"
+                value={password}
+              />
             </span>
           </label>
+          {mode === "signup" && (
+            <label>
+              <span>Confirm password</span>
+              <span className="input-shell">
+                <LockKeyhole size={16} />
+                <input
+                  autoComplete="new-password"
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  required
+                  type="password"
+                  value={confirmPassword}
+                />
+              </span>
+            </label>
+          )}
           {error ? <div className="form-error">{error}</div> : null}
           <button className="command-button primary" disabled={loading} type="submit">
-            {loading ? "Checking credentials..." : "Enter command center"}
+            {loading
+              ? "Please wait..."
+              : mode === "signin"
+              ? "Enter command center"
+              : "Create account"}
           </button>
         </form>
+
+        <div className="auth-switch">
+          {mode === "signin" ? (
+            <p>
+              Don&apos;t have an account?{" "}
+              <button className="link-button" onClick={() => { setMode("signup"); setError(null); }} type="button">
+                <UserPlus size={14} />
+                Create one
+              </button>
+            </p>
+          ) : (
+            <p>
+              Already have an account?{" "}
+              <button className="link-button" onClick={() => { setMode("signin"); setError(null); }} type="button">
+                Sign in
+              </button>
+            </p>
+          )}
+        </div>
       </section>
     </main>
   );

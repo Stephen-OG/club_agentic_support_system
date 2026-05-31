@@ -62,13 +62,10 @@ export default function LoginPage() {
           return;
         }
 
-        try {
-          await supabase.auth.signOut();
-        } catch {
-          // signOut can fail if the session is already gone
+        // /me failed — user has no staff profile yet, redirect to setup
+        if (!cancelled) {
+          safeReplace(router, "/setup");
         }
-
-        setSessionValidated(false);
       })
       .finally(() => {
         if (!cancelled) {
@@ -99,3 +96,4 @@ export default function LoginPage() {
 
   return null;
 }
+

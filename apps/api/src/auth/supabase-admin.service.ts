@@ -34,6 +34,10 @@ export const supabaseAdminProvider = {
 export class SupabaseAdminService {
   constructor(@Inject(SUPABASE_ADMIN_CLIENT) private readonly supabase: SupabaseAdminClient) {}
 
+  getClient() {
+    return this.supabase;
+  }
+
   async createTemporaryPasswordUser(input: { email: string; password: string; displayName: string }) {
     const result = await this.supabase.auth.admin.createUser({
       email: input.email,
@@ -66,3 +70,4 @@ export class SupabaseAdminService {
     return result.data.user;
   }
 }
+
