@@ -38,6 +38,8 @@ const sharedStatusByPrismaStatus: Record<PrismaRequestStatus, RequestStatus> = {
   [PrismaRequestStatus.ESCALATED]: "escalated"
 };
 
+const terminalConversationStatuses = new Set<RequestStatus>(["resolved", "cancelled"]);
+
 type GuestActionInput = GuestRequestActionDto & {
   requestId: string;
 };
@@ -186,6 +188,8 @@ export class RequestsService {
         }
       });
 
+      await this.closeConversationIfTerminal(tx, request.conversationId, toStatus);
+
       await tx.requestEvent.create({
         data: {
           venueId: request.venueId,
@@ -261,6 +265,8 @@ export class RequestsService {
         }
       });
 
+      await this.closeConversationIfTerminal(tx, request.conversationId, nextStatus);
+
       const message = await tx.message.create({
         data: encryptMessageCreateData({
           venueId: request.venueId,
@@ -305,6 +311,24 @@ export class RequestsService {
 
   private isValidRating(rating: unknown): rating is number {
     return normalizeSatisfactionRating(rating) !== null;
+  }
+
+  private async closeConversationIfTerminal(
+    tx: { conversation: { update: (args: { where: { id: string }; data: { status: string; closedAt: Date } }) => Promise<unknown> } },
+    conversationId: string,
+    status: RequestStatus
+  ) {
+    if (!terminalConversationStatuses.has(status)) {
+      return;
+    }
+
+    await tx.conversation.update({
+      where: { id: conversationId },
+      data: {
+        status: "closed",
+        closedAt: new Date()
+      }
+    });
   }
 
   private guestActionMessage(action: GuestActionInput["action"], rating?: number) {

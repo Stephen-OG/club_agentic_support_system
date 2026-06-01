@@ -505,6 +505,12 @@ describe("RequestsService lifecycle", () => {
           return updatedRequest;
         }
       },
+      conversation: {
+        update: async (args: unknown) => {
+          calls.push({ model: "conversation.update", args });
+          return args;
+        }
+      },
       message: {
         create: async (args: unknown) => {
           calls.push({ model: "message.create", args });
@@ -542,6 +548,9 @@ describe("RequestsService lifecycle", () => {
     const updateCall = calls[2] as { args: { data: { resolvedAt?: unknown } } };
     assert.ok(updateCall.args.data.resolvedAt instanceof Date);
     updateCall.args.data.resolvedAt = "Any<Date>";
+    const conversationUpdateCall = calls[3] as { args: { data: { closedAt?: unknown } } };
+    assert.ok(conversationUpdateCall.args.data.closedAt instanceof Date);
+    conversationUpdateCall.args.data.closedAt = "Any<Date>";
     assert.deepEqual(calls, [
       {
         model: "supportRequest.findUnique",
@@ -561,6 +570,16 @@ describe("RequestsService lifecycle", () => {
           data: {
             status: RequestStatus.RESOLVED,
             resolvedAt: "Any<Date>"
+          }
+        }
+      },
+      {
+        model: "conversation.update",
+        args: {
+          where: { id: request.conversationId },
+          data: {
+            status: "closed",
+            closedAt: "Any<Date>"
           }
         }
       },
@@ -596,6 +615,69 @@ describe("RequestsService lifecycle", () => {
         }
       }
     ]);
+  });
+
+  it("closes the guest conversation when guests cancel a request", async () => {
+    const request = {
+      id: "request_cancel_1",
+      venueId: "venue_1",
+      servicePointId: "sp_1",
+      conversationId: "conversation_cancel_1",
+      status: RequestStatus.NEW,
+      conversation: { guestSessionId: "session_cancel_1" }
+    };
+    const calls: Array<{ model: string; args: unknown }> = [];
+    const tx = {
+      supportRequest: {
+        update: async (args: unknown) => {
+          calls.push({ model: "supportRequest.update", args });
+          return { ...request, status: RequestStatus.CANCELLED };
+        }
+      },
+      conversation: {
+        update: async (args: unknown) => {
+          calls.push({ model: "conversation.update", args });
+          return args;
+        }
+      },
+      message: {
+        create: async (args: unknown) => {
+          calls.push({ model: "message.create", args });
+          return { id: "message_cancel_1" };
+        }
+      },
+      requestEvent: {
+        create: async (args: unknown) => {
+          calls.push({ model: "requestEvent.create", args });
+          return args;
+        }
+      }
+    };
+    const prisma = {
+      supportRequest: {
+        findUnique: async () => request
+      },
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
+    };
+    const service = new RequestsService(prisma as never, createVenueAccess() as never);
+
+    await service.applyGuestAction({ requestId: request.id, action: "cancel", sessionId: "session_cancel_1" });
+
+    const conversationUpdateCall = calls.find((call) => call.model === "conversation.update") as {
+      args: { data: { closedAt?: unknown } };
+    };
+    assert.ok(conversationUpdateCall.args.data.closedAt instanceof Date);
+    conversationUpdateCall.args.data.closedAt = "Any<Date>";
+    assert.deepEqual(conversationUpdateCall, {
+      model: "conversation.update",
+      args: {
+        where: { id: request.conversationId },
+        data: {
+          status: "closed",
+          closedAt: "Any<Date>"
+        }
+      }
+    });
   });
 
   it("reopens completed requests when guests are not satisfied without requiring a rating", async () => {

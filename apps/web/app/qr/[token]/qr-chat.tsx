@@ -14,16 +14,46 @@ type LocalMessage = {
   sender: "guest" | "assistant" | "staff" | "system";
   body: string;
   createdAt: string;
+  isPending?: boolean;
 };
 
 const satisfactionRatings: SatisfactionRating[] = [1, 2, 3, 4, 5];
 const intakeRefreshMs = 5000;
+const endedRequestStatuses = new Set(["RESOLVED", "CANCELLED"]);
 
 function createWelcomeMessage(label: string): LocalMessage {
   return {
     id: "welcome",
     sender: "assistant",
     body: createWelcomeBody(label),
+    createdAt: new Date().toISOString()
+  };
+}
+
+function createGuestDraftMessage(body: string): LocalMessage {
+  return {
+    id: `draft-${crypto.randomUUID()}`,
+    sender: "guest",
+    body,
+    createdAt: new Date().toISOString()
+  };
+}
+
+function createPendingAssistantMessage(): LocalMessage {
+  return {
+    id: `pending-${crypto.randomUUID()}`,
+    sender: "assistant",
+    body: "",
+    createdAt: new Date().toISOString(),
+    isPending: true
+  };
+}
+
+function createSessionEndedMessage(): LocalMessage {
+  return {
+    id: "session-ended",
+    sender: "system",
+    body: "This chat session has ended. Send a new message if you need anything else.",
     createdAt: new Date().toISOString()
   };
 }
@@ -60,6 +90,10 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   const [chatAvailability, setChatAvailability] = useState<PublicChatAvailability | null>(null);
   const [guestSessionId, setGuestSessionId] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const isSendingRef = useRef(false);
+  const conversationStorageKey = `qr-chat:${qrToken}:conversationId`;
+  const sessionStorageKey = `qr-chat:${qrToken}:sessionId`;
 
   const statusText = useMemo(() => statusLabel(request), [request]);
   const statusClassName = request
@@ -69,10 +103,25 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   const awaitingSatisfaction = request?.status === "COMPLETED";
   const chatClosed = chatAvailability?.isOpen === false;
 
-  const applyClosedState = useCallback(() => {
-    window.localStorage.removeItem(`qr-chat:${qrToken}:conversationId`);
+  useEffect(() => {
+    isSendingRef.current = isSending;
+  }, [isSending]);
+
+  useEffect(() => {
+    const messagesElement = messagesRef.current;
+    messagesElement?.scrollTo({ top: messagesElement.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  const resetGuestSession = useCallback(() => {
+    window.localStorage.removeItem(conversationStorageKey);
+    window.localStorage.removeItem(sessionStorageKey);
     setConversationId(null);
     setRequest(null);
+    setGuestSessionId(getOrCreateGuestSessionId(sessionStorageKey));
+  }, [conversationStorageKey, sessionStorageKey]);
+
+  const applyClosedState = useCallback(() => {
+    resetGuestSession();
     setMessages([
       createWelcomeMessage(servicePointLabel),
       {
@@ -82,11 +131,16 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         createdAt: new Date().toISOString()
       }
     ]);
-  }, [qrToken, servicePointLabel]);
+  }, [resetGuestSession, servicePointLabel]);
+
+  const applyEndedState = useCallback((label: string) => {
+    resetGuestSession();
+    setMessages([createWelcomeMessage(label), createSessionEndedMessage()]);
+  }, [resetGuestSession]);
 
   useEffect(() => {
-    setGuestSessionId(getOrCreateGuestSessionId(`qr-chat:${qrToken}:sessionId`));
-  }, [qrToken]);
+    setGuestSessionId(getOrCreateGuestSessionId(sessionStorageKey));
+  }, [sessionStorageKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,17 +175,17 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   }, [applyClosedState, conversationId, qrToken]);
 
   useEffect(() => {
-    const storedConversationId = window.localStorage.getItem(`qr-chat:${qrToken}:conversationId`);
+    const storedConversationId = window.localStorage.getItem(conversationStorageKey);
     if (storedConversationId) {
       setConversationId(storedConversationId);
     }
-  }, [qrToken]);
+  }, [conversationStorageKey]);
 
   useEffect(() => {
     if (conversationId) {
-      window.localStorage.setItem(`qr-chat:${qrToken}:conversationId`, conversationId);
+      window.localStorage.setItem(conversationStorageKey, conversationId);
     }
-  }, [conversationId, qrToken]);
+  }, [conversationId, conversationStorageKey]);
 
   useEffect(() => {
     if (!conversationId || !guestSessionId) {
@@ -142,6 +196,10 @@ export function QrChat({ qrToken }: { qrToken: string }) {
     const activeConversationId = conversationId;
 
     async function loadConversation() {
+      if (isSendingRef.current) {
+        return;
+      }
+
       const result = await publicApiRequest<PublicQrConversationState>(
         appendSessionId(`/public/qr/${encodeURIComponent(qrToken)}/conversations/${encodeURIComponent(activeConversationId)}`, guestSessionId),
         { cache: "no-store" }
@@ -161,6 +219,11 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         return;
       }
 
+      if (result.request && endedRequestStatuses.has(result.request.status)) {
+        applyEndedState(label);
+        return;
+      }
+
       setMessages([createWelcomeMessage(label), ...result.messages.map(normalizeMessage)]);
       setRequest(result.request);
     }
@@ -172,7 +235,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [applyClosedState, conversationId, guestSessionId, qrToken, servicePointLabel]);
+  }, [applyClosedState, applyEndedState, conversationId, guestSessionId, qrToken, servicePointLabel]);
 
   async function sendMessage(nextMessage?: string) {
     const body = (nextMessage || input).trim();
@@ -182,6 +245,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
 
     setInput("");
     setIsSending(true);
+    setMessages((current) => [...current.filter((message) => !message.isPending), createGuestDraftMessage(body), createPendingAssistantMessage()]);
 
     try {
       const result = await publicApiRequest<PublicQrConversationState>(`/public/qr/${encodeURIComponent(qrToken)}/messages`, {
@@ -198,12 +262,17 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         return;
       }
 
+      if (result.request && endedRequestStatuses.has(result.request.status)) {
+        applyEndedState(result.servicePoint.label);
+        return;
+      }
+
       setMessages([createWelcomeMessage(result.servicePoint.label), ...result.messages.map(normalizeMessage)]);
       setConversationId(result.conversationId);
       setRequest(result.request);
     } catch {
       setMessages((current) => [
-        ...current,
+        ...current.filter((message) => !message.isPending),
         {
           id: crypto.randomUUID(),
           sender: "system",
@@ -233,6 +302,11 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       });
 
       setRequest(result.request);
+      if (endedRequestStatuses.has(result.request.status)) {
+        applyEndedState(servicePointLabel);
+        return;
+      }
+
       if (result.message) {
         setMessages((current) => [...current, normalizeMessage(result.message as CommandMessage)]);
       }
@@ -267,11 +341,19 @@ export function QrChat({ qrToken }: { qrToken: string }) {
           <span className={statusClassName}>{statusText}</span>
         </div>
 
-        <div className="chat-messages" aria-live="polite">
+        <div ref={messagesRef} className="chat-messages" aria-live="polite">
           {messages.map((message, index) => (
             <div className="message-cluster" key={message.id}>
-              <div className={`bubble ${message.sender}`}>
-                {message.body}
+              <div className={`bubble ${message.sender}${message.isPending ? " pending" : ""}`}>
+                {message.isPending ? (
+                  <span className="typing-loader" aria-label="Lily is typing">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                ) : (
+                  message.body
+                )}
               </div>
               {index === 0 && !awaitingSatisfaction && !chatClosed ? (
                 <div className="quick-actions intro-actions" aria-label="Common requests">

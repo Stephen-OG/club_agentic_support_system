@@ -1358,6 +1358,91 @@ describe("ServicePointsService public QR workflow", () => {
     ]);
   });
 
+  it("rejects public QR conversation reads after the conversation is closed", async () => {
+    const servicePoint = {
+      id: "sp_public_closed",
+      venueId: "venue_public_closed",
+      label: "Cabana 9",
+      qrToken: "qr_public_closed_123",
+      isActive: true
+    };
+    const service = createService(
+      {} as never,
+      {} as never,
+      {
+        servicePoint: {
+          findFirst: async () => servicePoint
+        },
+        conversation: {
+          findFirst: async () => ({
+            id: "conversation_public_closed_1",
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            status: "closed",
+            closedAt: new Date("2026-06-01T10:00:00.000Z"),
+            updatedAt: new Date(),
+            messages: [],
+            requests: []
+          })
+        }
+      } as never,
+      {} as never
+    );
+
+    await assert.rejects(
+      service.getGuestConversation("qr_public_closed_123", "conversation_public_closed_1"),
+      NotFoundException
+    );
+  });
+
+  it("rejects public QR conversation reads after the guest session TTL expires", async () => {
+    const previousTtl = process.env.PUBLIC_GUEST_SESSION_TTL_MINUTES;
+    process.env.PUBLIC_GUEST_SESSION_TTL_MINUTES = "30";
+
+    try {
+      const servicePoint = {
+        id: "sp_public_expired",
+        venueId: "venue_public_expired",
+        label: "Cabana 10",
+        qrToken: "qr_public_expired_123",
+        isActive: true
+      };
+      const service = createService(
+        {} as never,
+        {} as never,
+        {
+          servicePoint: {
+            findFirst: async () => servicePoint
+          },
+          conversation: {
+            findFirst: async () => ({
+              id: "conversation_public_expired_1",
+              venueId: servicePoint.venueId,
+              servicePointId: servicePoint.id,
+              status: "open",
+              closedAt: null,
+              updatedAt: new Date(Date.now() - 31 * 60 * 1000),
+              messages: [],
+              requests: []
+            })
+          }
+        } as never,
+        {} as never
+      );
+
+      await assert.rejects(
+        service.getGuestConversation("qr_public_expired_123", "conversation_public_expired_1"),
+        NotFoundException
+      );
+    } finally {
+      if (previousTtl === undefined) {
+        delete process.env.PUBLIC_GUEST_SESSION_TTL_MINUTES;
+      } else {
+        process.env.PUBLIC_GUEST_SESSION_TTL_MINUTES = previousTtl;
+      }
+    }
+  });
+
   it("loads public venue QR conversation state scoped to the venue support service point", async () => {
     const venue = { id: "venue_venue_state", slug: "blue-note", name: "Blue Note" };
     const servicePoint = {

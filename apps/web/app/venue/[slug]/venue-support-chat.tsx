@@ -17,8 +17,10 @@ import { supportLocationOptions, supportQuickActions } from "@/lib/support-intak
 
 const satisfactionRatings: SatisfactionRating[] = [1, 2, 3, 4, 5];
 const intakeRefreshMs = 5000;
+const endedRequestStatuses = new Set(["RESOLVED", "CANCELLED"]);
+type LocalVenueMessage = CommandMessage & { isPending?: boolean };
 
-function createLocalMessage(body: string, sender: CommandMessage["sender"]): CommandMessage {
+function createLocalMessage(body: string, sender: CommandMessage["sender"]): LocalVenueMessage {
   return {
     body,
     conversationId: "",
@@ -30,6 +32,18 @@ function createLocalMessage(body: string, sender: CommandMessage["sender"]): Com
     servicePointId: "",
     venueId: ""
   };
+}
+
+function createPendingAssistantMessage(): LocalVenueMessage {
+  return {
+    ...createLocalMessage("", "ASSISTANT"),
+    id: `pending-${crypto.randomUUID()}`,
+    isPending: true
+  };
+}
+
+function createSessionEndedMessage() {
+  return createLocalMessage("This chat session has ended. Send a new message if you need anything else.", "SYSTEM");
 }
 
 function createWelcomeMessage(venueName: string) {
@@ -52,7 +66,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
-  const [messages, setMessages] = useState<CommandMessage[]>([]);
+  const [messages, setMessages] = useState<LocalVenueMessage[]>([]);
   const [request, setRequest] = useState<CommandSupportRequest | null>(null);
   const [venueName, setVenueName] = useState<string | null>(null);
   const [chatAvailability, setChatAvailability] = useState<PublicChatAvailability | null>(null);
@@ -60,6 +74,10 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
   const [guestSessionId, setGuestSessionId] = useState("");
   const chatClosed = chatAvailability?.isOpen === false;
   const formRef = useRef<HTMLFormElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const isSendingRef = useRef(false);
+  const conversationStorageKey = `venue-support:${venueSlug}:conversationId`;
+  const sessionStorageKey = `venue-support:${venueSlug}:sessionId`;
   const statusText = useMemo(() => statusLabel(request), [request]);
   const statusClassName = request
     ? `pill status-${request.status.toLowerCase()} priority-${request.priority.toLowerCase()}`
@@ -67,16 +85,37 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
   const canCancel = request && !["COMPLETED", "RESOLVED", "CANCELLED"].includes(request.status);
   const awaitingSatisfaction = request?.status === "COMPLETED";
 
-  const applyClosedState = useCallback(() => {
-    window.localStorage.removeItem(`venue-support:${venueSlug}:conversationId`);
-    setConversationId(null);
-    setRequest(null);
-    setMessages([createLocalMessage(createClosedVenueBody(), "SYSTEM")]);
-  }, [venueSlug]);
+  useEffect(() => {
+    isSendingRef.current = isSending;
+  }, [isSending]);
 
   useEffect(() => {
-    setGuestSessionId(getOrCreateGuestSessionId(`venue-support:${venueSlug}:sessionId`));
-  }, [venueSlug]);
+    const messagesElement = messagesRef.current;
+    messagesElement?.scrollTo({ top: messagesElement.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  const resetGuestSession = useCallback(() => {
+    window.localStorage.removeItem(conversationStorageKey);
+    window.localStorage.removeItem(sessionStorageKey);
+    setConversationId(null);
+    setRequest(null);
+    setLocationLabel("");
+    setGuestSessionId(getOrCreateGuestSessionId(sessionStorageKey));
+  }, [conversationStorageKey, sessionStorageKey]);
+
+  const applyClosedState = useCallback(() => {
+    resetGuestSession();
+    setMessages([createLocalMessage(createClosedVenueBody(), "SYSTEM")]);
+  }, [resetGuestSession]);
+
+  const applyEndedState = useCallback((name: string) => {
+    resetGuestSession();
+    setMessages([createWelcomeMessage(name), createSessionEndedMessage()]);
+  }, [resetGuestSession]);
+
+  useEffect(() => {
+    setGuestSessionId(getOrCreateGuestSessionId(sessionStorageKey));
+  }, [sessionStorageKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,17 +149,17 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
   }, [applyClosedState, conversationId, venueSlug]);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(`venue-support:${venueSlug}:conversationId`);
+    const stored = window.localStorage.getItem(conversationStorageKey);
     if (stored) {
       setConversationId(stored);
     }
-  }, [venueSlug]);
+  }, [conversationStorageKey]);
 
   useEffect(() => {
     if (conversationId) {
-      window.localStorage.setItem(`venue-support:${venueSlug}:conversationId`, conversationId);
+      window.localStorage.setItem(conversationStorageKey, conversationId);
     }
-  }, [applyClosedState, conversationId, venueSlug]);
+  }, [conversationId, conversationStorageKey]);
 
   useEffect(() => {
     if (!conversationId || !guestSessionId) {
@@ -131,6 +170,10 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
     const activeConversationId = conversationId;
 
     async function loadConversation() {
+      if (isSendingRef.current) {
+        return;
+      }
+
       const result = await publicApiRequest<PublicQrConversationState>(
         appendSessionId(
           `/public/qr/venues/${encodeURIComponent(venueSlug)}/conversations/${encodeURIComponent(activeConversationId)}`,
@@ -152,6 +195,11 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
       }
 
       const name = result.venue?.name ?? venueName ?? "the venue";
+      if (result.request && endedRequestStatuses.has(result.request.status)) {
+        applyEndedState(name);
+        return;
+      }
+
       setMessages([createWelcomeMessage(name), ...result.messages]);
       setRequest(result.request);
     }
@@ -163,7 +211,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [applyClosedState, conversationId, guestSessionId, venueName, venueSlug]);
+  }, [applyClosedState, applyEndedState, conversationId, guestSessionId, venueName, venueSlug]);
 
   async function sendMessage(nextMessage?: string, quickAction?: string) {
     const body = (nextMessage || input).trim();
@@ -173,6 +221,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
 
     setInput("");
     setIsSending(true);
+    setMessages((current) => [...current.filter((message) => !message.isPending), createLocalMessage(body, "GUEST"), createPendingAssistantMessage()]);
 
     try {
       const result = await publicApiRequest<PublicQrConversationState>(
@@ -198,10 +247,16 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
         return;
       }
 
-      setMessages([createWelcomeMessage(result.venue?.name ?? venueName ?? "the venue"), ...result.messages]);
+      const name = result.venue?.name ?? venueName ?? "the venue";
+      if (result.request && endedRequestStatuses.has(result.request.status)) {
+        applyEndedState(name);
+        return;
+      }
+
+      setMessages([createWelcomeMessage(name), ...result.messages]);
       setRequest(result.request);
     } catch {
-      setMessages((current) => [...current, createLocalMessage(createSendErrorBody(), "SYSTEM")]);
+      setMessages((current) => [...current.filter((message) => !message.isPending), createLocalMessage(createSendErrorBody(), "SYSTEM")]);
     } finally {
       setIsSending(false);
     }
@@ -224,6 +279,11 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
       });
 
       setRequest(result.request);
+      if (endedRequestStatuses.has(result.request.status)) {
+        applyEndedState(venueName ?? "the venue");
+        return;
+      }
+
       if (result.message) {
         setMessages((current) => [...current, result.message as CommandMessage]);
       }
@@ -251,11 +311,19 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
           </div>
           <span className={statusClassName}>{statusText}</span>
         </div>
-        <div className="chat-messages" aria-live="polite">
+        <div ref={messagesRef} className="chat-messages" aria-live="polite">
           {messages.map((message, index) => (
             <div className="message-cluster" key={message.id}>
-              <div className={`bubble ${message.sender.toLowerCase()}`}>
-                {message.body}
+              <div className={`bubble ${message.sender.toLowerCase()}${message.isPending ? " pending" : ""}`}>
+                {message.isPending ? (
+                  <span className="typing-loader" aria-label="Lily is typing">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                ) : (
+                  message.body
+                )}
               </div>
               {index === 0 && !awaitingSatisfaction && !chatClosed ? (
                 <div className="quick-actions intro-actions" aria-label="Common requests">

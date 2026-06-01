@@ -24,6 +24,7 @@ const prismaPriorityBySharedPriority: Record<RequestPriority, PrismaRequestPrior
 };
 
 const publicConversationMessageLimit = 50;
+const defaultPublicGuestSessionTtlMinutes = 12 * 60;
 const publicConversationMessageSelect = {
   id: true,
   venueId: true,
@@ -35,6 +36,12 @@ const publicConversationMessageSelect = {
   metadata: true,
   createdAt: true
 } as const;
+
+type PublicConversationSession = {
+  closedAt?: Date | string | null;
+  status?: string | null;
+  updatedAt?: Date | string | null;
+};
 
 function defaultVenueOpeningHours() {
   return Array.from({ length: 7 }, (_, dayOfWeek) => ({
@@ -392,6 +399,26 @@ export class ServicePointsService {
 
   private publicConversationMessages<T extends { body?: unknown }>(messages: T[]) {
     return decryptMessageRecords([...messages].reverse());
+  }
+
+  private publicGuestSessionTtlMs() {
+    const configured = Number(process.env.PUBLIC_GUEST_SESSION_TTL_MINUTES);
+    const minutes =
+      Number.isFinite(configured) && configured > 0 ? configured : defaultPublicGuestSessionTtlMinutes;
+
+    return minutes * 60 * 1000;
+  }
+
+  private isPublicConversationClosedOrExpired(conversation: PublicConversationSession) {
+    if (conversation.closedAt || conversation.status === "closed") {
+      return true;
+    }
+
+    if (!conversation.updatedAt) {
+      return false;
+    }
+
+    return Date.now() - new Date(conversation.updatedAt).getTime() > this.publicGuestSessionTtlMs();
   }
 
   private triageMetadata(triage: { category: string; needsStaff: boolean; priority: string; summary?: string | null; title: string }) {
@@ -995,6 +1022,10 @@ export class ServicePointsService {
       throw new NotFoundException("Conversation not found");
     }
 
+    if (this.isPublicConversationClosedOrExpired(conversation)) {
+      throw new NotFoundException("Conversation not found");
+    }
+
     return {
       conversationId: conversation.id,
       messages: this.publicConversationMessages(conversation.messages),
@@ -1054,6 +1085,10 @@ export class ServicePointsService {
     }
 
     if (conversation.guestSessionId && sessionId !== conversation.guestSessionId) {
+      throw new NotFoundException("Conversation not found");
+    }
+
+    if (this.isPublicConversationClosedOrExpired(conversation)) {
       throw new NotFoundException("Conversation not found");
     }
 

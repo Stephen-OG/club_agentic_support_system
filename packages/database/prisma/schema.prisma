@@ -200,6 +200,7 @@ model Conversation {
   guestLocationLabel String?
   guestLocationSource String?
   status         String           @default("open")
+  closedAt       DateTime?
   messages       Message[]
   requests       SupportRequest[]
   createdAt      DateTime         @default(now())
