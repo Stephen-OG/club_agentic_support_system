@@ -32,14 +32,11 @@ function defaultVenueOpeningHours() {
   }));
 }
 
-const VENUE_CACHE_TTL = 30;
-const SERVICE_POINT_CACHE_TTL = 30;
-
 @Injectable()
 export class ServicePointsService {
   constructor(
     private readonly aiTriage: AiTriageService,
-    private readonly cache: RedisCacheService = new RedisCacheService(),
+    private readonly cache: RedisCacheService,
     private readonly priorityClassifier: PriorityClassifierService,
     private readonly prisma: PrismaService,
     private readonly venueAccess: VenueAccessService
@@ -76,6 +73,10 @@ export class ServicePointsService {
   }
 
   async getVenueIntake(venueSlug: string) {
+    const cacheKey = `venue:intake:${venueSlug}`;
+    const cached = await this.cache.get<any>(cacheKey);
+    if (cached) return cached;
+
     const venue = await this.prisma.venue.findFirst({
       where: { slug: venueSlug },
       include: {
@@ -91,7 +92,7 @@ export class ServicePointsService {
       throw new NotFoundException("Venue not found");
     }
 
-    return {
+    const result = {
       chatAvailability: this.publicChatAvailability(venue),
       openingHours: venue.openingHours,
       venue,
@@ -111,9 +112,16 @@ export class ServicePointsService {
         "general"
       ]
     };
+
+    await this.cache.set(cacheKey, result, 30);
+    return result;
   }
 
   async getServicePointIntake(token: string) {
+    const cacheKey = `sp:intake:${token}`;
+    const cached = await this.cache.get<any>(cacheKey);
+    if (cached) return cached;
+
     const servicePoint = await this.prisma.servicePoint.findFirst({
       where: {
         isActive: true,
@@ -136,11 +144,14 @@ export class ServicePointsService {
       throw new NotFoundException("Service point not found");
     }
 
-    return {
+    const result = {
       chatAvailability: this.publicChatAvailability((servicePoint as any).venue),
       servicePoint,
       venue: this.publicVenueSummary((servicePoint as any).venue)
     };
+
+    await this.cache.set(cacheKey, result, 30);
+    return result;
   }
 
   async createVenue(auth: AuthContext, input: CreateVenueDto) {
@@ -362,12 +373,18 @@ export class ServicePointsService {
     }
   }
 
-  private async triageGuestMessage(input: Parameters<AiTriageService["createFallback"]>[0]) {
-    const aiTriage = this.aiTriage as AiTriageService & {
-      triage?: (nextInput: Parameters<AiTriageService["createFallback"]>[0]) => Promise<ReturnType<AiTriageService["createFallback"]>>;
-    };
+  private async triageGuestMessage(input: Parameters<AiTriageService["triage"]>[0]) {
+    return this.aiTriage.triage(input);
+  }
 
-    return aiTriage.triage ? aiTriage.triage(input) : this.aiTriage.createFallback(input);
+  private triageMetadata(triage: { category: string; needsStaff: boolean; priority: string; summary?: string | null; title: string }) {
+    return {
+      category: triage.category,
+      needsStaff: triage.needsStaff,
+      priority: triage.priority,
+      summary: triage.summary,
+      title: triage.title
+    };
   }
 
   async createGuestMessage(token: string, input: PublicGuestMessageDto) {
@@ -477,17 +494,7 @@ export class ServicePointsService {
             metadata: {
               source: "public_qr",
               intent: "non_request",
-              ...(triage
-                ? {
-                    triage: {
-                      category: triage.category,
-                      needsStaff: triage.needsStaff,
-                      priority: triage.priority,
-                      summary: triage.summary,
-                      title: triage.title
-                    }
-                  }
-                : {})
+              ...(triage ? { triage: this.triageMetadata(triage) } : {})
             }
           })
         });
@@ -567,13 +574,7 @@ export class ServicePointsService {
           body: triage!.assistantReply,
           metadata: {
             source: "public_qr",
-            triage: {
-              category: triage!.category,
-              needsStaff: triage!.needsStaff,
-              priority: triage!.priority,
-              summary: triage!.summary,
-              title: triage!.title
-            }
+            triage: this.triageMetadata(triage!)
           }
         })
       });

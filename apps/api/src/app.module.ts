@@ -5,6 +5,7 @@ import { ThrottlerGuard } from "@nestjs/throttler";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { AnalyticsModule } from "./analytics/analytics.module";
 import { AuditModule } from "./audit/audit.module";
+import { CacheModule } from "./common/cache/cache.module";
 import { AuthModule } from "./auth/auth.module";
 import { ConversationsModule } from "./conversations/conversations.module";
 import { DatabaseModule } from "./database/database.module";
@@ -45,6 +46,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     IntegrationsModule,
     AnalyticsModule,
     AuditModule,
+    CacheModule,
     JobsModule,
     SetupModule,
     LoggerModule
