@@ -8,6 +8,27 @@ import { isEncryptedMessageBody } from "../security/message-crypto";
 import { PublicGuestMessageDto } from "./dto/public-guest-message.dto";
 import { ServicePointsService } from "./service-points.service";
 
+function createService(
+  aiTriage: ConstructorParameters<typeof ServicePointsService>[0],
+  priorityClassifier: ConstructorParameters<typeof ServicePointsService>[2],
+  prisma: ConstructorParameters<typeof ServicePointsService>[3],
+  venueAccess: ConstructorParameters<typeof ServicePointsService>[4]
+) {
+  const triageService =
+    aiTriage && typeof (aiTriage as { triage?: unknown }).triage === "function"
+      ? aiTriage
+      : ({
+          ...(aiTriage as object),
+          triage: (input: unknown) => (aiTriage as { createFallback?: (input: unknown) => unknown }).createFallback?.(input)
+        } as never);
+  const cache = {
+    get: async () => null,
+    set: async () => undefined
+  } as never;
+
+  return new ServicePointsService(triageService, cache, priorityClassifier, prisma, venueAccess);
+}
+
 type PublicGuestMessageResult = {
   conversationId: string;
   messages: unknown[];
@@ -106,7 +127,7 @@ describe("ServicePointsService public QR workflow", () => {
         return callback(tx);
       }
     };
-    const service = new ServicePointsService(
+    const service = createService(
       {
         createFallback: (args: unknown) => {
           calls.push({ model: "aiTriage.createFallback", args });
@@ -323,7 +344,7 @@ describe("ServicePointsService public QR workflow", () => {
         },
         $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
       };
-      const service = new ServicePointsService(
+      const service = createService(
         {
           createFallback: () => ({
             assistantReply: "Thanks, the team has been notified.",
@@ -427,7 +448,7 @@ describe("ServicePointsService public QR workflow", () => {
         return callback(tx);
       }
     } as never;
-    const service = new ServicePointsService(
+    const service = createService(
       {} as never,
       {} as never,
       prisma,
@@ -618,7 +639,7 @@ describe("ServicePointsService public QR workflow", () => {
         return callback(tx);
       }
     };
-    const service = new ServicePointsService(
+    const service = createService(
       {
         createFallback: () => ({
           assistantReply: "The team has your request.",
@@ -866,7 +887,7 @@ describe("ServicePointsService public QR workflow", () => {
         return callback(tx);
       }
     };
-    const service = new ServicePointsService(
+    const service = createService(
       {
         createFallback: () => ({
           assistantReply: "Thanks, I added that to your open request for Table 2.",
@@ -1059,7 +1080,7 @@ describe("ServicePointsService public QR workflow", () => {
         create: async (args: unknown) => args
       }
     };
-    const service = new ServicePointsService(
+    const service = createService(
       {
         createFallback: () => ({
           assistantReply: "Of course. I have notified the team.",
@@ -1147,7 +1168,7 @@ describe("ServicePointsService public QR workflow", () => {
         return callback(tx);
       }
     };
-    const service = new ServicePointsService(
+    const service = createService(
       {
         createFallback: () => {
           throw new Error("triage should not run for a missing conversation");
@@ -1242,7 +1263,7 @@ describe("ServicePointsService public QR workflow", () => {
       requests: [request]
     };
     const calls: Array<{ model: string; args: unknown }> = [];
-    const service = new ServicePointsService(
+    const service = createService(
       {} as never,
       {} as never,
       {
@@ -1305,9 +1326,21 @@ describe("ServicePointsService public QR workflow", () => {
           },
           include: {
             messages: {
+              select: {
+                id: true,
+                venueId: true,
+                servicePointId: true,
+                conversationId: true,
+                requestId: true,
+                sender: true,
+                body: true,
+                metadata: true,
+                createdAt: true
+              },
               orderBy: {
-                createdAt: "asc"
-              }
+                createdAt: "desc"
+              },
+              take: 50
             },
             requests: {
               include: {
@@ -1357,7 +1390,7 @@ describe("ServicePointsService public QR workflow", () => {
       requests: [request]
     };
     const calls: Array<{ model: string; args: unknown }> = [];
-    const service = new ServicePointsService(
+    const service = createService(
       {} as never,
       {} as never,
       {
@@ -1429,9 +1462,21 @@ describe("ServicePointsService public QR workflow", () => {
           },
           include: {
             messages: {
+              select: {
+                id: true,
+                venueId: true,
+                servicePointId: true,
+                conversationId: true,
+                requestId: true,
+                sender: true,
+                body: true,
+                metadata: true,
+                createdAt: true
+              },
               orderBy: {
-                createdAt: "asc"
-              }
+                createdAt: "desc"
+              },
+              take: 50
             },
             requests: {
               include: {
@@ -1518,7 +1563,7 @@ describe("ServicePointsService public QR workflow", () => {
         return callback(tx);
       }
     };
-    const service = new ServicePointsService(
+    const service = createService(
       {
         createFallback: () => ({
           assistantReply: "The team has your request.",
@@ -1657,7 +1702,7 @@ describe("ServicePointsService public QR workflow", () => {
       },
       $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
     };
-    const service = new ServicePointsService(
+    const service = createService(
       {
         createFallback: () => ({
           assistantReply: "Sorry about that. I have sent this to the team for Table 14.",
@@ -1729,7 +1774,7 @@ describe("ServicePointsService public QR workflow", () => {
         }
       }
     };
-    const service = new ServicePointsService(
+    const service = createService(
       {
         createFallback: () => ({
           assistantReply: "I have notified the team.",
@@ -1806,7 +1851,7 @@ describe("ServicePointsService public QR workflow", () => {
         }
       }
     };
-    const service = new ServicePointsService(
+    const service = createService(
       {
         createFallback: () => {
           throw new Error("triage should not run for deterministic non-request intent");
@@ -1853,7 +1898,7 @@ describe("ServicePointsService public QR workflow", () => {
       timezone: "UTC",
       openingHours: closedHours
     };
-    const service = new ServicePointsService(
+    const service = createService(
       {} as never,
       {} as never,
       {

@@ -36,10 +36,17 @@ function replyGuard() {
   };
 }
 
+function cacheStub() {
+  return {
+    get: async () => null,
+    set: async () => undefined
+  };
+}
+
 describe("AI triage", () => {
   it("uses GPT-4o mini with the GuestOS structured triage prompt", async () => {
     let capturedBody: any;
-    const service = new AiTriageService(replyGuard() as never, {
+    const service = new AiTriageService(cacheStub() as never, replyGuard() as never, {
       get(key: string) {
         return key === "OPENAI_API_KEY" ? "test-key" : undefined;
       }
@@ -84,7 +91,7 @@ describe("AI triage", () => {
   });
 
   it("keeps deterministic urgent safety classification even if the model under-prioritizes", async () => {
-    const service = new AiTriageService(replyGuard() as never, {
+    const service = new AiTriageService(cacheStub() as never, replyGuard() as never, {
       get(key: string) {
         return key === "OPENAI_API_KEY" ? "test-key" : undefined;
       }
@@ -119,7 +126,7 @@ describe("AI triage", () => {
   });
 
   it("classifies greetings and venue information questions as no-staff fallback intents", () => {
-    const service = new AiTriageService(replyGuard() as never);
+    const service = new AiTriageService(cacheStub() as never, replyGuard() as never);
 
     const greeting = service.createFallback({
       deterministicPriority: "normal",

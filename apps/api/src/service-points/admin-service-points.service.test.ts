@@ -8,9 +8,23 @@ import { CreateVenueDto } from "./dto/create-venue.dto";
 import { UpdateVenueOpeningHoursDto, VenueOpeningHourDto } from "./dto/update-venue-opening-hours.dto";
 import { ServicePointsService } from "./service-points.service";
 
+function createService(
+  aiTriage: ConstructorParameters<typeof ServicePointsService>[0],
+  priorityClassifier: ConstructorParameters<typeof ServicePointsService>[2],
+  prisma: ConstructorParameters<typeof ServicePointsService>[3],
+  venueAccess: ConstructorParameters<typeof ServicePointsService>[4]
+) {
+  const cache = {
+    get: async () => null,
+    set: async () => undefined
+  } as never;
+
+  return new ServicePointsService(aiTriage, cache, priorityClassifier, prisma, venueAccess);
+}
+
 describe("ServicePointsService admin helpers", () => {
   it("creates URL-safe QR tokens", () => {
-    const service = new ServicePointsService({} as never, {} as never, {} as never, {} as never);
+    const service = createService({} as never, {} as never, {} as never, {} as never);
     const token = service.createQrToken("Main Bar");
 
     assert.match(token, /^sp_[a-z0-9_]+_[a-f0-9]{24}$/);
@@ -18,7 +32,7 @@ describe("ServicePointsService admin helpers", () => {
 
   it("rejects a location that is not attached to the venue", async () => {
     let created = false;
-    const service = new ServicePointsService(
+    const service = createService(
       {} as never,
       {} as never,
       {
@@ -52,7 +66,7 @@ describe("ServicePointsService admin helpers", () => {
 
   it("uses workspace-scoped venue lookup before authorization", async () => {
     let authorizeCalled = false;
-    const service = new ServicePointsService(
+    const service = createService(
       {} as never,
       {} as never,
       {
@@ -97,7 +111,7 @@ describe("ServicePointsService admin helpers", () => {
       }
     ];
     const calls: unknown[] = [];
-    const service = new ServicePointsService(
+    const service = createService(
       {} as never,
       {} as never,
       {
@@ -149,7 +163,7 @@ describe("ServicePointsService admin helpers", () => {
 
   it("scopes venue listing to the assigned venue for staff", async () => {
     const calls: unknown[] = [];
-    const service = new ServicePointsService(
+    const service = createService(
       {} as never,
       {} as never,
       {
@@ -240,7 +254,7 @@ describe("updateVenueOpeningHours", () => {
         });
       }
     };
-    const service = new ServicePointsService(
+    const service = createService(
       {} as never,
       {} as never,
       prisma as never,
@@ -280,7 +294,7 @@ describe("updateVenueOpeningHours", () => {
 
   it("throws BadRequestException when fewer than 7 days are provided", async () => {
     const venue = { id: "venue_hours_2", workspaceId: "workspace_1" };
-    const service = new ServicePointsService(
+    const service = createService(
       {} as never,
       {} as never,
       {
@@ -314,7 +328,7 @@ describe("updateVenueOpeningHours", () => {
       { closesAt: "23:00", dayOfWeek: 5, isClosed: false, opensAt: "09:00" },
       { closesAt: "23:00", dayOfWeek: 5, isClosed: false, opensAt: "09:00" }
     ];
-    const service = new ServicePointsService(
+    const service = createService(
       {} as never,
       {} as never,
       {
@@ -338,7 +352,7 @@ describe("updateVenueOpeningHours", () => {
   });
 
   it("throws NotFoundException when the venue does not exist", async () => {
-    const service = new ServicePointsService(
+    const service = createService(
       {} as never,
       {} as never,
       {

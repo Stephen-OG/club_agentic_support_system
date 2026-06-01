@@ -43,11 +43,7 @@ type GuestActionInput = GuestRequestActionDto & {
 };
 
 function latestSatisfactionRating(messages: Array<{ metadata: unknown; createdAt: Date | string }>) {
-  const sortedMessages = [...messages].sort((left, right) =>
-    String(right.createdAt).localeCompare(String(left.createdAt))
-  );
-
-  for (const message of sortedMessages) {
+  for (const message of messages) {
     const metadata = message.metadata as { satisfactionRating?: unknown } | null;
     const rating = normalizeSatisfactionRating(metadata?.satisfactionRating);
     if (rating) {
@@ -60,7 +56,7 @@ function latestSatisfactionRating(messages: Array<{ metadata: unknown; createdAt
 
 function recentMessages(messages: Array<{ id: string; sender: SenderType; body: string; createdAt: Date | string }>) {
   return [...messages]
-    .sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt)))
+    .reverse()
     .map(decryptMessageRecord)
     .map((message) => ({
       id: message.id,
@@ -111,13 +107,31 @@ export class RequestsService {
         venueId
       },
       include: {
-        assignedTo: true,
-        servicePoint: true,
+        assignedTo: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true
+          }
+        },
+        servicePoint: {
+          select: {
+            id: true,
+            label: true
+          }
+        },
         messages: {
+          select: {
+            id: true,
+            sender: true,
+            body: true,
+            metadata: true,
+            createdAt: true
+          },
           orderBy: {
             createdAt: "desc"
           },
-          take: 6
+          take: 2
         }
       },
       orderBy: {

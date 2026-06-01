@@ -71,13 +71,31 @@ describe("RequestsService lifecycle", () => {
             venueId: venue.id
           },
           include: {
-            assignedTo: true,
-            servicePoint: true,
+            assignedTo: {
+              select: {
+                id: true,
+                displayName: true,
+                email: true
+              }
+            },
+            servicePoint: {
+              select: {
+                id: true,
+                label: true
+              }
+            },
             messages: {
+              select: {
+                id: true,
+                sender: true,
+                body: true,
+                metadata: true,
+                createdAt: true
+              },
               orderBy: {
                 createdAt: "desc"
               },
-              take: 6
+              take: 2
             }
           },
           orderBy: {

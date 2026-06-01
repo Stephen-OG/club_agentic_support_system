@@ -23,6 +23,19 @@ const prismaPriorityBySharedPriority: Record<RequestPriority, PrismaRequestPrior
   urgent: PrismaRequestPriority.URGENT
 };
 
+const publicConversationMessageLimit = 50;
+const publicConversationMessageSelect = {
+  id: true,
+  venueId: true,
+  servicePointId: true,
+  conversationId: true,
+  requestId: true,
+  sender: true,
+  body: true,
+  metadata: true,
+  createdAt: true
+} as const;
+
 function defaultVenueOpeningHours() {
   return Array.from({ length: 7 }, (_, dayOfWeek) => ({
     closesAt: "23:00",
@@ -375,6 +388,10 @@ export class ServicePointsService {
 
   private async triageGuestMessage(input: Parameters<AiTriageService["triage"]>[0]) {
     return this.aiTriage.triage(input);
+  }
+
+  private publicConversationMessages<T extends { body?: unknown }>(messages: T[]) {
+    return decryptMessageRecords([...messages].reverse());
   }
 
   private triageMetadata(triage: { category: string; needsStaff: boolean; priority: string; summary?: string | null; title: string }) {
@@ -951,9 +968,11 @@ export class ServicePointsService {
       },
       include: {
         messages: {
+          select: publicConversationMessageSelect,
           orderBy: {
-            createdAt: "asc"
-          }
+            createdAt: "desc"
+          },
+          take: publicConversationMessageLimit
         },
         requests: {
           include: {
@@ -978,7 +997,7 @@ export class ServicePointsService {
 
     return {
       conversationId: conversation.id,
-      messages: decryptMessageRecords(conversation.messages),
+      messages: this.publicConversationMessages(conversation.messages),
       request: conversation.requests[0] ?? null,
       servicePoint,
       chatAvailability: this.publicChatAvailability((servicePoint as any).venue),
@@ -1011,9 +1030,11 @@ export class ServicePointsService {
       },
       include: {
         messages: {
+          select: publicConversationMessageSelect,
           orderBy: {
-            createdAt: "asc"
-          }
+            createdAt: "desc"
+          },
+          take: publicConversationMessageLimit
         },
         requests: {
           include: {
@@ -1038,7 +1059,7 @@ export class ServicePointsService {
 
     return {
       conversationId: conversation.id,
-      messages: decryptMessageRecords(conversation.messages),
+      messages: this.publicConversationMessages(conversation.messages),
       request: conversation.requests[0] ?? null,
       servicePoint,
       chatAvailability: this.publicChatAvailability(venue),
