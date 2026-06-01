@@ -10,7 +10,10 @@ import {
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
+import { RedisCacheService } from "../common/cache/redis-cache.service";
 import { ReplyGuardService } from "./reply-guard.service";
+
+const TRIAGE_CACHE_TTL = 60; // 1 minute — venue context changes slowly
 
 export const GUESTOS_TRIAGE_SYSTEM_PROMPT = `You are Lily, the GuestOS AI operations assistant for hospitality venues.
 
@@ -59,7 +62,8 @@ export class AiTriageService {
   private openai: OpenAI | null;
 
   constructor(
-    private readonly replyGuard: ReplyGuardService,
+    @Optional() private readonly cache?: RedisCacheService,
+    @Optional() private readonly replyGuard?: ReplyGuardService,
     @Optional() private readonly config?: ConfigService
   ) {
     const apiKey = this.config?.get<string>("OPENAI_API_KEY");
@@ -69,6 +73,15 @@ export class AiTriageService {
 
   async triage(input: TriageInput): Promise<AiTriageOutput> {
     const fallback = this.createFallback(input);
+
+    // Try cache first for non-followup messages
+    if (!input.isFollowup) {
+      const cacheKey = this.buildCacheKey(input);
+      const cached = await this.cache?.get<AiTriageOutput>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
 
     if (!this.openai) {
       return fallback;
@@ -91,7 +104,15 @@ export class AiTriageService {
       });
 
       const parsed = this.normalizeModelOutput(response.output_parsed);
-      return this.applyDeterministicGuardrails(parsed, fallback, input.deterministicPriority);
+      const result = this.applyDeterministicGuardrails(parsed, fallback, input.deterministicPriority);
+
+      // Cache the result for future similar messages
+      if (!input.isFollowup) {
+        const cacheKey = this.buildCacheKey(input);
+        await this.cache?.set(cacheKey, result, TRIAGE_CACHE_TTL);
+      }
+
+      return result;
     } catch {
       return fallback;
     }
@@ -114,11 +135,11 @@ export class AiTriageService {
     }
 
     return AiTriageSchema.parse({
-      assistantReply: this.replyGuard.createGuestReply(
+      assistantReply: this.replyGuard?.createGuestReply(
         input.deterministicPriority,
         input.servicePointLabel,
         input.isFollowup
-      ),
+      ) ?? `A staff member will be with you at ${input.servicePointLabel}.`,
       category: this.categoryFromMessage(input.message),
       confidence: 0.72,
       guestLocationLabel: this.locationFromMessage(input.message),
@@ -128,6 +149,21 @@ export class AiTriageService {
       summary: input.message,
       title: this.titleFromPriority(input.deterministicPriority)
     });
+  }
+
+  /**
+   * Build a cache key from the triage input.
+   * Normalizes the message to handle common variations.
+   */
+  private buildCacheKey(input: TriageInput): string {
+    const normalizedMessage = input.message
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .replace(/\s+/g, " ")
+      .slice(0, 100);
+
+    return `triage:${input.deterministicPriority}:${input.servicePointLabel}:${normalizedMessage}`;
   }
 
   private normalizeModelOutput(output: unknown): AiTriageOutput {

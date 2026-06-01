@@ -3,6 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { RequestPriority as PrismaRequestPriority, RequestStatus, SenderType } from "@prisma/client";
 import type { RequestPriority } from "@guestos/shared";
 import type { AuthContext } from "../auth/auth-context";
+import { RedisCacheService } from "../common/cache/redis-cache.service";
 import { PrismaService } from "../database/prisma.service";
 import { AiTriageService } from "../triage/ai-triage.service";
 import { PriorityClassifierService } from "../triage/priority-classifier.service";
@@ -31,10 +32,14 @@ function defaultVenueOpeningHours() {
   }));
 }
 
+const VENUE_CACHE_TTL = 30;
+const SERVICE_POINT_CACHE_TTL = 30;
+
 @Injectable()
 export class ServicePointsService {
   constructor(
     private readonly aiTriage: AiTriageService,
+    private readonly cache: RedisCacheService = new RedisCacheService(),
     private readonly priorityClassifier: PriorityClassifierService,
     private readonly prisma: PrismaService,
     private readonly venueAccess: VenueAccessService
