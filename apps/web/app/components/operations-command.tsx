@@ -11,6 +11,7 @@ import {
   getOperationsBucket,
   getOperationsStatusTone,
   getRequestOperationAction,
+  mergeOperationRequestUpdate,
   operationsPollIntervalMs,
   summarizeOperationsBuckets
 } from "@/lib/operations-workflow";
@@ -143,7 +144,7 @@ export function OperationsCommand() {
       body: JSON.stringify({ status: sharedStatus(status) })
     });
 
-    setRequests((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    setRequests((current) => current.map((item) => (item.id === updated.id ? mergeOperationRequestUpdate(item, updated) : item)));
     return updated;
   }
 

@@ -91,3 +91,18 @@ export function getOperationsNotifications<T extends { id: string; title: string
       body: request.title
     }));
 }
+
+export function mergeOperationRequestUpdate<
+  T extends {
+    id: string;
+    recentMessages?: unknown;
+    satisfactionRating?: unknown;
+  }
+>(existing: T, updated: Partial<T> & { id: string }): T {
+  return {
+    ...existing,
+    ...updated,
+    recentMessages: updated.recentMessages ?? existing.recentMessages,
+    satisfactionRating: updated.satisfactionRating ?? existing.satisfactionRating
+  };
+}

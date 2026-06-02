@@ -1808,6 +1808,147 @@ body {
   gap: 6px;
 }
 
+.settings-layout {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 230px minmax(0, 1fr);
+}
+
+.settings-nav {
+  background: rgba(15, 22, 20, 0.72);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  position: sticky;
+  top: 18px;
+}
+
+.settings-nav button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  gap: 9px;
+  min-height: 40px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.settings-nav button.active,
+.settings-nav button:hover {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.settings-stack {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.settings-panel {
+  align-content: start;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.settings-facts {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-facts div,
+.hours-status {
+  background: #0a100e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 13px;
+}
+
+.settings-facts span,
+.hours-status span {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.settings-facts strong,
+.hours-status strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  text-transform: capitalize;
+}
+
+.venue-hours-toolbar,
+.settings-schedule-actions {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.venue-hours-toolbar .field-group {
+  min-width: min(100%, 260px);
+}
+
+.hours-status {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.hours-status svg {
+  flex: 0 0 auto;
+}
+
+.hours-status.open {
+  border-color: rgba(84, 216, 167, 0.42);
+}
+
+.hours-status.open svg,
+.hours-status.open strong {
+  color: var(--success);
+}
+
+.hours-status.closed {
+  border-color: rgba(255, 204, 92, 0.38);
+}
+
+.hours-status.closed svg,
+.hours-status.closed strong {
+  color: var(--warning);
+}
+
+.warning-note {
+  background: rgba(255, 204, 92, 0.1);
+  border-color: rgba(255, 204, 92, 0.3);
+  color: #ffe3a3;
+}
+
+.settings-hours-grid {
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-3);
+}
+
+.settings-hours-row {
+  background: #0a100e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
 .service-point-row {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
@@ -1875,6 +2016,8 @@ body {
   .metric-strip,
   .ops-layout,
   .venue-grid,
+  .settings-layout,
+  .settings-facts,
   .request-row,
   .staff-task,
   .service-point-form,
@@ -1885,6 +2028,10 @@ body {
 
   .command-sidebar {
     min-height: auto;
+  }
+
+  .settings-nav {
+    position: static;
   }
 }
 

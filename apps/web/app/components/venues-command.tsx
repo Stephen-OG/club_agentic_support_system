@@ -12,8 +12,10 @@ import {
   createOpeningHoursPayload,
   createServicePointPayload,
   createServicePointUpdatePayload,
+  normalizeOpeningHours,
   servicePointGuestUrl,
-  venueWideGuestUrl
+  venueWideGuestUrl,
+  weekdayLabels
 } from "@/lib/venue-controls";
 
 type QrPreview = {
@@ -30,22 +32,6 @@ type ServicePointDraft = {
 type LocationDraft = {
   name: string;
 };
-
-const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function defaultOpeningHours(): CommandVenueOpeningHour[] {
-  return weekdayLabels.map((_, dayOfWeek) => ({
-    closesAt: "23:00",
-    dayOfWeek,
-    isClosed: false,
-    opensAt: "09:00"
-  }));
-}
-
-function normalizeOpeningHours(hours: CommandVenueOpeningHour[] | undefined) {
-  const byDay = new Map((hours || []).map((item) => [item.dayOfWeek, item]));
-  return defaultOpeningHours().map((fallback) => byDay.get(fallback.dayOfWeek) ?? fallback);
-}
 
 export function VenuesCommand() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);

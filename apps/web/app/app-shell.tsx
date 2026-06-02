@@ -97,7 +97,7 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
         {view === "team" ? <TeamCommand currentUser={currentUser} /> : null}
         {view === "venues" ? <VenuesCommand /> : null}
         {view === "staff" ? <StaffDashboard currentUser={currentUser} /> : null}
-        {view === "account" ? <AccountCommand /> : null}
+        {view === "account" ? <AccountCommand currentUser={currentUser} /> : null}
       </section>
     </main>
   );

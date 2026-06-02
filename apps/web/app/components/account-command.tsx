@@ -1,18 +1,149 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { Eye, EyeOff, LogOut, ShieldCheck } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Bell, Building2, CalendarClock, Clock3, Copy, Eye, EyeOff, LogOut, RefreshCw, Save, ShieldCheck, UserRound } from "lucide-react";
 import { validatePasswordChange } from "@/lib/account-security";
+import { apiRequest } from "@/lib/api/client";
+import { getPrimaryMembership, hasCommandDashboardAccess } from "@/lib/auth/role-policy";
+import type { CommandUser, CommandVenue, CommandVenueOpeningHour } from "@/lib/auth/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import {
+  copyMondayHoursToWeekdays,
+  createOpeningHoursPayload,
+  getVenueChatAvailabilityPreview,
+  normalizeOpeningHours,
+  type OpeningHourDraft,
+  weekdayLabels
+} from "@/lib/venue-controls";
 
-export function AccountCommand() {
-  const supabase = createBrowserSupabaseClient();
+type SettingsSection = "profile" | "workspace" | "venue-hours" | "notifications" | "security";
+
+const settingsSections: Array<{ id: SettingsSection; label: string; icon: typeof UserRound }> = [
+  { id: "profile", label: "Profile", icon: UserRound },
+  { id: "workspace", label: "Workspace", icon: Building2 },
+  { id: "venue-hours", label: "Venue Hours", icon: CalendarClock },
+  { id: "notifications", label: "Notifications", icon: Bell },
+  { id: "security", label: "Security", icon: ShieldCheck }
+];
+
+export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const primaryMembership = getPrimaryMembership(currentUser);
+  const canManageVenueSettings = hasCommandDashboardAccess(currentUser);
+  const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [visibleFields, setVisibleFields] = useState({ old: false, next: false, confirm: false });
+  const [venues, setVenues] = useState<CommandVenue[]>([]);
+  const [selectedVenueId, setSelectedVenueId] = useState("");
+  const [hourDrafts, setHourDrafts] = useState<Record<string, OpeningHourDraft[]>>({});
+  const [venuesLoading, setVenuesLoading] = useState(false);
+  const [updatingHoursId, setUpdatingHoursId] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [lastHoursSavedAt, setLastHoursSavedAt] = useState<string | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+
+  const selectedVenue = venues.find((venue) => venue.id === selectedVenueId) ?? venues[0] ?? null;
+  const selectedHours = selectedVenue ? hourDrafts[selectedVenue.id] ?? normalizeOpeningHours(selectedVenue.openingHours) : [];
+  const availabilityPreview = selectedVenue
+    ? getVenueChatAvailabilityPreview(selectedHours, selectedVenue.timezone)
+    : { isOpen: false, label: "No venue selected" };
+
+  const loadVenues = useCallback(async () => {
+    if (!canManageVenueSettings) {
+      return;
+    }
+
+    if (!supabase) {
+      setSettingsError("Supabase is not configured.");
+      return;
+    }
+
+    setVenuesLoading(true);
+    setSettingsError(null);
+
+    try {
+      const nextVenues = await apiRequest<CommandVenue[]>(supabase, "/admin/venues");
+      setVenues(nextVenues);
+      setSelectedVenueId((current) => current || nextVenues[0]?.id || "");
+      setHourDrafts((current) => {
+        const next = { ...current };
+        for (const venue of nextVenues) {
+          next[venue.id] = next[venue.id] ?? normalizeOpeningHours(venue.openingHours);
+        }
+        return next;
+      });
+    } catch (nextError) {
+      setSettingsError(nextError instanceof Error ? nextError.message : "Could not load venue settings");
+    } finally {
+      setVenuesLoading(false);
+    }
+  }, [canManageVenueSettings, setSelectedVenueId, supabase]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotificationPermission(window.Notification.permission);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadVenues();
+  }, [loadVenues]);
+
+  function updateHourDraft(venue: CommandVenue, dayOfWeek: number, patch: Partial<CommandVenueOpeningHour>) {
+    setHourDrafts((current) => {
+      const draft = current[venue.id] ?? normalizeOpeningHours(venue.openingHours);
+      return {
+        ...current,
+        [venue.id]: draft.map((hours) => (hours.dayOfWeek === dayOfWeek ? { ...hours, ...patch } : hours))
+      };
+    });
+  }
+
+  function copyMondayToWeekdays(venue: CommandVenue) {
+    setHourDrafts((current) => ({
+      ...current,
+      [venue.id]: copyMondayHoursToWeekdays(current[venue.id] ?? normalizeOpeningHours(venue.openingHours))
+    }));
+  }
+
+  async function saveOpeningHours(venue: CommandVenue) {
+    if (!supabase) {
+      setSettingsError("Supabase is not configured.");
+      return;
+    }
+
+    setUpdatingHoursId(venue.id);
+    setSettingsError(null);
+
+    try {
+      const openingHours = hourDrafts[venue.id] ?? normalizeOpeningHours(venue.openingHours);
+      const updated = await apiRequest<CommandVenue>(supabase, `/admin/venues/${venue.id}/opening-hours`, {
+        method: "PATCH",
+        body: JSON.stringify(createOpeningHoursPayload(openingHours))
+      });
+      setVenues((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setHourDrafts((current) => ({ ...current, [venue.id]: normalizeOpeningHours(updated.openingHours) }));
+      setLastHoursSavedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    } catch (nextError) {
+      setSettingsError(nextError instanceof Error ? nextError.message : "Could not update venue hours");
+    } finally {
+      setUpdatingHoursId(null);
+    }
+  }
+
+  async function enableNotifications() {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setSettingsError("Browser notifications are not supported here.");
+      return;
+    }
+
+    const permission = await window.Notification.requestPermission();
+    setNotificationPermission(permission);
+  }
 
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,88 +198,303 @@ export function AccountCommand() {
     <section className="command-grid">
       <div className="command-heading">
         <div>
-          <div className="eyebrow">Account security</div>
-          <h1>Account</h1>
+          <div className="eyebrow">Control plane</div>
+          <h1>Settings</h1>
         </div>
       </div>
-      <div className="command-panel">
-        <h2>Change password</h2>
-        <form className="command-form" onSubmit={changePassword}>
-          <label className="password-field">
-            <span>Old password</span>
-            <div className="input-shell">
-              <input
-                autoComplete="current-password"
-                onChange={(event) => setOldPassword(event.target.value)}
-                required
-                type={visibleFields.old ? "text" : "password"}
-                value={oldPassword}
-              />
+
+      {settingsError ? <div className="form-error wide">{settingsError}</div> : null}
+
+      <div className="settings-layout">
+        <aside className="settings-nav" aria-label="Settings sections">
+          {settingsSections.map((section) => {
+            const Icon = section.icon;
+            return (
               <button
-                aria-label={visibleFields.old ? "Hide old password" : "Show old password"}
-                className="password-toggle"
-                onClick={() => setVisibleFields((current) => ({ ...current, old: !current.old }))}
+                className={activeSection === section.id ? "active" : ""}
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
                 type="button"
               >
-                {visibleFields.old ? <EyeOff size={16} /> : <Eye size={16} />}
+                <Icon size={16} />
+                {section.label}
               </button>
-            </div>
-          </label>
-          <label className="password-field">
-            <span>New password</span>
-            <div className="input-shell">
-              <input
-                autoComplete="new-password"
-                minLength={10}
-                onChange={(event) => setNewPassword(event.target.value)}
-                required
-                type={visibleFields.next ? "text" : "password"}
-                value={newPassword}
-              />
-              <button
-                aria-label={visibleFields.next ? "Hide new password" : "Show new password"}
-                className="password-toggle"
-                onClick={() => setVisibleFields((current) => ({ ...current, next: !current.next }))}
-                type="button"
-              >
-                {visibleFields.next ? <EyeOff size={16} /> : <Eye size={16} />}
+            );
+          })}
+        </aside>
+
+        <div className="settings-stack">
+          {activeSection === "profile" ? (
+            <section className="command-panel settings-panel">
+              <div className="panel-title-row">
+                <div>
+                  <h2>Profile</h2>
+                  <p className="meta">The identity shown across GuestOS operations.</p>
+                </div>
+                <UserRound size={22} />
+              </div>
+              <div className="settings-facts">
+                <div>
+                  <span>Name</span>
+                  <strong>{currentUser.displayName}</strong>
+                </div>
+                <div>
+                  <span>Email</span>
+                  <strong>{currentUser.email || "No email on profile"}</strong>
+                </div>
+                <div>
+                  <span>Primary role</span>
+                  <strong>{primaryMembership?.role.replace("_", " ") || "read only"}</strong>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {activeSection === "workspace" ? (
+            <section className="command-panel settings-panel">
+              <div className="panel-title-row">
+                <div>
+                  <h2>Workspace</h2>
+                  <p className="meta">Workspace and venue access summary.</p>
+                </div>
+                <Building2 size={22} />
+              </div>
+              <div className="settings-facts">
+                <div>
+                  <span>Workspace</span>
+                  <strong>{primaryMembership?.workspace.name || "Workspace"}</strong>
+                </div>
+                <div>
+                  <span>Assigned venue</span>
+                  <strong>{primaryMembership?.venue?.name || "Workspace-wide access"}</strong>
+                </div>
+                <div>
+                  <span>Memberships</span>
+                  <strong>{currentUser.memberships.length}</strong>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {activeSection === "venue-hours" ? (
+            <section className="command-panel settings-panel venue-hours-settings">
+              <div className="panel-title-row">
+                <div>
+                  <h2>Venue Hours</h2>
+                  <p className="meta">Opening hours control guest QR chat availability.</p>
+                </div>
+                <CalendarClock size={22} />
+              </div>
+
+              {!canManageVenueSettings ? (
+                <div className="empty-state">Venue hours are managed by owners, admins, and managers.</div>
+              ) : null}
+
+              {canManageVenueSettings ? (
+                <>
+                  <div className="venue-hours-toolbar">
+                    <label className="field-group">
+                      <span>Venue</span>
+                      <select className="command-select" onChange={(event) => setSelectedVenueId(event.target.value)} value={selectedVenueId}>
+                        {venues.map((venue) => (
+                          <option key={venue.id} value={venue.id}>
+                            {venue.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button className="command-button" disabled={venuesLoading} onClick={() => void loadVenues()} type="button">
+                      <RefreshCw size={16} />
+                      Refresh
+                    </button>
+                  </div>
+
+                  {selectedVenue ? (
+                    <>
+                      <div className={availabilityPreview.isOpen ? "hours-status open" : "hours-status closed"}>
+                        <Clock3 size={17} />
+                        <div>
+                          <strong>{availabilityPreview.label}</strong>
+                          <span>{selectedVenue.timezone}</span>
+                        </div>
+                      </div>
+
+                      <div className="form-note warning-note">Changes affect guest QR chat availability immediately after saving.</div>
+
+                      <div className="settings-schedule-actions">
+                        <button className="command-button" onClick={() => copyMondayToWeekdays(selectedVenue)} type="button">
+                          <Copy size={16} />
+                          Copy Monday to weekdays
+                        </button>
+                        <button
+                          className="command-button primary"
+                          disabled={updatingHoursId === selectedVenue.id}
+                          onClick={() => void saveOpeningHours(selectedVenue)}
+                          type="button"
+                        >
+                          <Save size={16} />
+                          {updatingHoursId === selectedVenue.id ? "Saving..." : "Save venue hours"}
+                        </button>
+                        {lastHoursSavedAt ? <span className="data-chip">Saved {lastHoursSavedAt}</span> : null}
+                      </div>
+
+                      <div className="opening-hours-grid settings-hours-grid">
+                        {selectedHours.map((hours) => (
+                          <div className="opening-hours-row settings-hours-row" key={hours.dayOfWeek}>
+                            <strong>{weekdayLabels[hours.dayOfWeek]}</strong>
+                            <label>
+                              <span>Open</span>
+                              <input
+                                disabled={hours.isClosed}
+                                onChange={(event) => updateHourDraft(selectedVenue, hours.dayOfWeek, { opensAt: event.target.value })}
+                                type="time"
+                                value={hours.opensAt}
+                              />
+                            </label>
+                            <label>
+                              <span>Close</span>
+                              <input
+                                disabled={hours.isClosed}
+                                onChange={(event) => updateHourDraft(selectedVenue, hours.dayOfWeek, { closesAt: event.target.value })}
+                                type="time"
+                                value={hours.closesAt}
+                              />
+                            </label>
+                            <label className="closed-toggle">
+                              <input
+                                checked={hours.isClosed}
+                                onChange={(event) => updateHourDraft(selectedVenue, hours.dayOfWeek, { isClosed: event.target.checked })}
+                                type="checkbox"
+                              />
+                              Closed
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="empty-state">No venues available for this workspace.</div>
+                  )}
+                </>
+              ) : null}
+            </section>
+          ) : null}
+
+          {activeSection === "notifications" ? (
+            <section className="command-panel settings-panel">
+              <div className="panel-title-row">
+                <div>
+                  <h2>Notifications</h2>
+                  <p className="meta">Browser alerts for urgent operational changes.</p>
+                </div>
+                <Bell size={22} />
+              </div>
+              <div className="settings-facts">
+                <div>
+                  <span>Browser permission</span>
+                  <strong>{notificationPermission}</strong>
+                </div>
+                <div>
+                  <span>New requests</span>
+                  <strong>Enabled in Operations</strong>
+                </div>
+                <div>
+                  <span>Urgent requests</span>
+                  <strong>High priority alerting</strong>
+                </div>
+              </div>
+              <button className="command-button primary" disabled={notificationPermission === "granted"} onClick={() => void enableNotifications()} type="button">
+                <Bell size={16} />
+                {notificationPermission === "granted" ? "Notifications enabled" : "Enable notifications"}
               </button>
-            </div>
-          </label>
-          <label className="password-field">
-            <span>Confirm new password</span>
-            <div className="input-shell">
-              <input
-                autoComplete="new-password"
-                minLength={10}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                required
-                type={visibleFields.confirm ? "text" : "password"}
-                value={confirmPassword}
-              />
-              <button
-                aria-label={visibleFields.confirm ? "Hide confirmed password" : "Show confirmed password"}
-                className="password-toggle"
-                onClick={() => setVisibleFields((current) => ({ ...current, confirm: !current.confirm }))}
-                type="button"
-              >
-                {visibleFields.confirm ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </label>
-          {message ? <div className="form-note">{message}</div> : null}
-          <button className="command-button primary" disabled={loading} type="submit">
-            <ShieldCheck size={16} />
-            {loading ? "Updating..." : "Update password"}
-          </button>
-        </form>
-      </div>
-      <div className="command-panel">
-        <h2>Session</h2>
-        <button className="command-button danger" onClick={signOut} type="button">
-          <LogOut size={16} />
-          Sign out
-        </button>
+            </section>
+          ) : null}
+
+          {activeSection === "security" ? (
+            <>
+              <section className="command-panel settings-panel">
+                <h2>Change password</h2>
+                <form className="command-form" onSubmit={changePassword}>
+                  <label className="password-field">
+                    <span>Old password</span>
+                    <div className="input-shell">
+                      <input
+                        autoComplete="current-password"
+                        onChange={(event) => setOldPassword(event.target.value)}
+                        required
+                        type={visibleFields.old ? "text" : "password"}
+                        value={oldPassword}
+                      />
+                      <button
+                        aria-label={visibleFields.old ? "Hide old password" : "Show old password"}
+                        className="password-toggle"
+                        onClick={() => setVisibleFields((current) => ({ ...current, old: !current.old }))}
+                        type="button"
+                      >
+                        {visibleFields.old ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </label>
+                  <label className="password-field">
+                    <span>New password</span>
+                    <div className="input-shell">
+                      <input
+                        autoComplete="new-password"
+                        minLength={10}
+                        onChange={(event) => setNewPassword(event.target.value)}
+                        required
+                        type={visibleFields.next ? "text" : "password"}
+                        value={newPassword}
+                      />
+                      <button
+                        aria-label={visibleFields.next ? "Hide new password" : "Show new password"}
+                        className="password-toggle"
+                        onClick={() => setVisibleFields((current) => ({ ...current, next: !current.next }))}
+                        type="button"
+                      >
+                        {visibleFields.next ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </label>
+                  <label className="password-field">
+                    <span>Confirm new password</span>
+                    <div className="input-shell">
+                      <input
+                        autoComplete="new-password"
+                        minLength={10}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        required
+                        type={visibleFields.confirm ? "text" : "password"}
+                        value={confirmPassword}
+                      />
+                      <button
+                        aria-label={visibleFields.confirm ? "Hide confirmed password" : "Show confirmed password"}
+                        className="password-toggle"
+                        onClick={() => setVisibleFields((current) => ({ ...current, confirm: !current.confirm }))}
+                        type="button"
+                      >
+                        {visibleFields.confirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </label>
+                  {message ? <div className="form-note">{message}</div> : null}
+                  <button className="command-button primary" disabled={loading} type="submit">
+                    <ShieldCheck size={16} />
+                    {loading ? "Updating..." : "Update password"}
+                  </button>
+                </form>
+              </section>
+
+              <section className="command-panel settings-panel">
+                <h2>Session</h2>
+                <button className="command-button danger" onClick={signOut} type="button">
+                  <LogOut size={16} />
+                  Sign out
+                </button>
+              </section>
+            </>
+          ) : null}
+        </div>
       </div>
     </section>
   );

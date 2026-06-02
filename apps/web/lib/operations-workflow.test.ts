@@ -4,6 +4,7 @@ import {
   getOperationsNotifications,
   getOperationsBucket,
   getOperationsStatusTone,
+  mergeOperationRequestUpdate,
   getRequestOperationAction,
   operationsPollIntervalMs,
   summarizeOperationsBuckets
@@ -78,5 +79,32 @@ describe("operations workflow", () => {
         body: "Safety"
       }
     ]);
+  });
+
+  it("preserves guest message previews when status updates omit recent messages", () => {
+    const existing = {
+      id: "request-1",
+      status: "NEW",
+      recentMessages: [
+        {
+          id: "message-guest-1",
+          sender: "GUEST",
+          body: "Can I get a glass of water?",
+          createdAt: "2026-06-02T10:00:00.000Z"
+        }
+      ],
+      satisfactionRating: null
+    };
+    const updated = {
+      id: "request-1",
+      status: "ACKNOWLEDGED"
+    };
+
+    assert.deepEqual(mergeOperationRequestUpdate(existing, updated), {
+      id: "request-1",
+      status: "ACKNOWLEDGED",
+      recentMessages: existing.recentMessages,
+      satisfactionRating: null
+    });
   });
 });

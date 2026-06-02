@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  copyMondayHoursToWeekdays,
   createLocationPayload,
   createOpeningHoursPayload,
   createServicePointPayload,
   createServicePointUpdatePayload,
+  getVenueChatAvailabilityPreview,
+  normalizeOpeningHours,
   servicePointGuestUrl,
   venueWideGuestUrl
 } from "./venue-controls";
@@ -78,6 +81,60 @@ describe("venue controls", () => {
           }
         ]
       }
+    );
+  });
+
+  it("normalizes missing opening hours and copies Monday hours across weekdays", () => {
+    const normalized = normalizeOpeningHours([
+      {
+        dayOfWeek: 1,
+        opensAt: "18:00",
+        closesAt: "02:00",
+        isClosed: false
+      }
+    ]);
+
+    assert.equal(normalized.length, 7);
+    assert.equal(normalized[1].opensAt, "18:00");
+    assert.equal(normalized[0].opensAt, "09:00");
+
+    const copied = copyMondayHoursToWeekdays(normalized);
+    assert.deepEqual(
+      copied.slice(1, 6).map((hours) => ({
+        dayOfWeek: hours.dayOfWeek,
+        opensAt: hours.opensAt,
+        closesAt: hours.closesAt,
+        isClosed: hours.isClosed
+      })),
+      [
+        { dayOfWeek: 1, opensAt: "18:00", closesAt: "02:00", isClosed: false },
+        { dayOfWeek: 2, opensAt: "18:00", closesAt: "02:00", isClosed: false },
+        { dayOfWeek: 3, opensAt: "18:00", closesAt: "02:00", isClosed: false },
+        { dayOfWeek: 4, opensAt: "18:00", closesAt: "02:00", isClosed: false },
+        { dayOfWeek: 5, opensAt: "18:00", closesAt: "02:00", isClosed: false }
+      ]
+    );
+    assert.equal(copied[0].opensAt, "09:00");
+    assert.equal(copied[6].opensAt, "09:00");
+  });
+
+  it("previews venue chat availability from opening hours and timezone", () => {
+    const openingHours = normalizeOpeningHours([
+      { dayOfWeek: 1, opensAt: "09:00", closesAt: "17:00", isClosed: false },
+      { dayOfWeek: 2, opensAt: "18:00", closesAt: "02:00", isClosed: false }
+    ]);
+
+    assert.deepEqual(
+      getVenueChatAvailabilityPreview(openingHours, "Europe/London", new Date("2026-06-01T10:00:00.000Z")),
+      { isOpen: true, label: "Chat open now" }
+    );
+    assert.deepEqual(
+      getVenueChatAvailabilityPreview(openingHours, "Europe/London", new Date("2026-06-01T20:00:00.000Z")),
+      { isOpen: false, label: "Chat closed now" }
+    );
+    assert.deepEqual(
+      getVenueChatAvailabilityPreview(openingHours, "Europe/London", new Date("2026-06-03T00:30:00.000Z")),
+      { isOpen: true, label: "Chat open now" }
     );
   });
 });

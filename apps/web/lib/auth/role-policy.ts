@@ -9,7 +9,7 @@ export const commandViews: Array<{ id: CommandView; label: string }> = [
   { id: "team", label: "Team" },
   { id: "venues", label: "Venues" },
   { id: "staff", label: "Staff" },
-  { id: "account", label: "Account" }
+  { id: "account", label: "Settings" }
 ];
 
 const roleRank: Record<CommandRole, number> = {

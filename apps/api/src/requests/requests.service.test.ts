@@ -95,7 +95,7 @@ describe("RequestsService lifecycle", () => {
               orderBy: {
                 createdAt: "desc"
               },
-              take: 2
+              take: 20
             }
           },
           orderBy: {
@@ -157,7 +157,67 @@ describe("RequestsService lifecycle", () => {
 
     assert.equal((result[0] as any).satisfactionRating, 5);
     assert.equal((result[0] as any).guestLocationLabel, "Table 14");
-    assert.equal((result[0] as any).recentMessages.length, 2);
+    assert.equal((result[0] as any).recentMessages.length, 1);
+    assert.equal((result[0] as any).recentMessages[0].sender, SenderType.GUEST);
+  });
+
+  it("keeps operations previews focused on guest messages after staff acknowledgements", async () => {
+    const venue = { id: "venue_1", workspaceId: "workspace_1" };
+    const request = {
+      id: "request_guest_preview_1",
+      venueId: venue.id,
+      servicePointId: "sp_1",
+      conversationId: "conversation_1",
+      title: "Drink request",
+      category: "drink",
+      summary: "Guest asked for a drink",
+      priority: "NORMAL",
+      status: RequestStatus.ACKNOWLEDGED,
+      messages: [
+        {
+          id: "msg_acknowledged",
+          body: "The team has acknowledged your request and will help from here.",
+          sender: SenderType.SYSTEM,
+          metadata: null,
+          createdAt: "2026-05-20T10:03:00.000Z"
+        },
+        {
+          id: "msg_ai_reply",
+          body: "Thanks, I will let the team know.",
+          sender: SenderType.ASSISTANT,
+          metadata: null,
+          createdAt: "2026-05-20T10:02:00.000Z"
+        },
+        {
+          id: "msg_guest_request",
+          body: "Can I get a glass of water?",
+          sender: SenderType.GUEST,
+          metadata: null,
+          createdAt: "2026-05-20T10:01:00.000Z"
+        }
+      ],
+      assignedTo: null,
+      servicePoint: { id: "sp_1", label: "Table 4" }
+    };
+    const prisma = {
+      venue: { findFirst: async () => venue },
+      supportRequest: { findMany: async () => [request] }
+    };
+    const service = new RequestsService(prisma as never, { assertCanReadVenue: () => undefined } as never);
+
+    const result = await service.listForVenue(
+      { workspaceId: "workspace_1", role: "admin", venueId: null } as never,
+      venue.id
+    );
+
+    assert.deepEqual((result[0] as any).recentMessages, [
+      {
+        id: "msg_guest_request",
+        sender: SenderType.GUEST,
+        body: "Can I get a glass of water?",
+        createdAt: "2026-05-20T10:01:00.000Z"
+      }
+    ]);
   });
 
   it("rejects an invalid staff transition from completed to resolved", async () => {

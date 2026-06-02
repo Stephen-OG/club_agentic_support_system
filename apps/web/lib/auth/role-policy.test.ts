@@ -27,6 +27,7 @@ assert.deepEqual(visibleIds(baseUser("manager")), ["dashboard", "operations", "t
 assert.deepEqual(visibleIds(baseUser("staff")), ["staff", "account"]);
 assert.deepEqual(visibleIds(baseUser("security")), ["staff", "account"]);
 assert.deepEqual(visibleIds(baseUser("read_only")), ["staff", "account"]);
+assert.equal(getVisibleCommandViews(baseUser("admin", null)).find((view) => view.id === "account")?.label, "Settings");
 
 assert.equal(getRoleDashboardMode(baseUser("admin", null)), "command");
 assert.equal(getRoleDashboardMode(baseUser("manager")), "command");

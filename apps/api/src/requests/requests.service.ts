@@ -59,6 +59,7 @@ function latestSatisfactionRating(messages: Array<{ metadata: unknown; createdAt
 function recentMessages(messages: Array<{ id: string; sender: SenderType; body: string; createdAt: Date | string }>) {
   return [...messages]
     .reverse()
+    .filter((message) => message.sender === SenderType.GUEST)
     .map(decryptMessageRecord)
     .map((message) => ({
       id: message.id,
@@ -133,7 +134,7 @@ export class RequestsService {
           orderBy: {
             createdAt: "desc"
           },
-          take: 2
+          take: 20
         }
       },
       orderBy: {
