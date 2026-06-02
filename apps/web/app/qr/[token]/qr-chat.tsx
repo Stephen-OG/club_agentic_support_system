@@ -224,7 +224,18 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         return;
       }
 
-      setMessages([createWelcomeMessage(label), ...result.messages.map(normalizeMessage)]);
+      if (result.replyPending) {
+        // Keep the existing messages and add a pending indicator if not already present
+        setMessages((current) => {
+          const hasPending = current.some((message) => message.isPending);
+          if (hasPending) {
+            return current;
+          }
+          return [...current.filter((message) => message.id !== "welcome" || current.indexOf(message) === 0), createPendingAssistantMessage()];
+        });
+      } else {
+        setMessages([createWelcomeMessage(label), ...result.messages.map(normalizeMessage)]);
+      }
       setRequest(result.request);
     }
 

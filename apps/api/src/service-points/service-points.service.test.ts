@@ -10,9 +10,9 @@ import { ServicePointsService } from "./service-points.service";
 
 function createService(
   aiTriage: ConstructorParameters<typeof ServicePointsService>[0],
-  priorityClassifier: ConstructorParameters<typeof ServicePointsService>[2],
-  prisma: ConstructorParameters<typeof ServicePointsService>[3],
-  venueAccess: ConstructorParameters<typeof ServicePointsService>[4]
+  priorityClassifier: ConstructorParameters<typeof ServicePointsService>[3],
+  prisma: ConstructorParameters<typeof ServicePointsService>[4],
+  venueAccess: ConstructorParameters<typeof ServicePointsService>[5]
 ) {
   const triageService =
     aiTriage && typeof (aiTriage as { triage?: unknown }).triage === "function"
@@ -26,12 +26,15 @@ function createService(
     set: async () => undefined
   } as never;
 
-  return new ServicePointsService(triageService, cache, priorityClassifier, prisma, venueAccess);
+  const queue = { add: async () => ({ id: "mock-job-id" }) } as never;
+
+  return new ServicePointsService(triageService, cache, queue, priorityClassifier, prisma, venueAccess);
 }
 
 type PublicGuestMessageResult = {
   conversationId: string;
   messages: unknown[];
+  replyPending: boolean;
   request: unknown;
   servicePoint: unknown;
 };
@@ -179,15 +182,6 @@ describe("ServicePointsService public QR workflow", () => {
         }
       },
       {
-        model: "aiTriage.createFallback",
-        args: {
-          deterministicPriority: "high",
-          message: "There is a spill by our table",
-          servicePointLabel: "Patio 4",
-          isFollowup: false
-        }
-      },
-      {
         model: "$transaction",
         args: "callback"
       },
@@ -208,8 +202,8 @@ describe("ServicePointsService public QR workflow", () => {
             venueId: servicePoint.venueId,
             servicePointId: servicePoint.id,
             conversationId: conversation.id,
-            title: "High priority guest request",
-            category: "facilities",
+            title: "Guest support request",
+            category: "general",
             summary: "There is a spill by our table",
             priority: RequestPriority.HIGH,
             deterministicPriority: RequestPriority.HIGH,
@@ -230,29 +224,6 @@ describe("ServicePointsService public QR workflow", () => {
             metadata: {
               source: "public_qr",
               qrToken: "qr_public_123"
-            }
-          }
-        }
-      },
-      {
-        model: "message.create",
-        args: {
-          data: {
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
-            conversationId: conversation.id,
-            requestId: supportRequest.id,
-            sender: SenderType.ASSISTANT,
-            body: "Thanks, the team has been notified.",
-            metadata: {
-              source: "public_qr",
-              triage: {
-                category: "facilities",
-                needsStaff: true,
-                priority: "high",
-                summary: "There is a spill by our table",
-                title: "High priority guest request"
-              }
             }
           }
         }
@@ -371,7 +342,7 @@ describe("ServicePointsService public QR workflow", () => {
       assert.equal(createdMessages.some((message) => message.body.includes("Please bring water")), false);
       assert.deepEqual(
         result.messages.map((message: any) => message.body),
-        ["Please bring water", "Thanks, the team has been notified."]
+        ["Please bring water"]
       );
     } finally {
       if (previousKey === undefined) {
@@ -745,29 +716,6 @@ describe("ServicePointsService public QR workflow", () => {
         }
       },
       {
-        model: "message.create",
-        args: {
-          data: {
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
-            conversationId: conversation.id,
-            requestId: supportRequest.id,
-            sender: SenderType.ASSISTANT,
-            body: "The team has your request.",
-            metadata: {
-              source: "public_qr",
-              triage: {
-                category: "general",
-                needsStaff: true,
-                priority: "normal",
-                summary: "Could we get more water?",
-                title: "Guest support request"
-              }
-            }
-          }
-        }
-      },
-      {
         model: "requestEvent.create",
         args: {
           data: {
@@ -972,29 +920,6 @@ describe("ServicePointsService public QR workflow", () => {
             metadata: {
               source: "public_qr",
               qrToken: "qr_followup_123"
-            }
-          }
-        }
-      },
-      {
-        model: "message.create",
-        args: {
-          data: {
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
-            conversationId: conversation.id,
-            requestId: supportRequest.id,
-            sender: SenderType.ASSISTANT,
-            body: "Thanks, I added that to your open request for Table 2.",
-            metadata: {
-              source: "public_qr",
-              triage: {
-                category: "general",
-                needsStaff: true,
-                priority: "normal",
-                summary: "Could we get more water?",
-                title: "Guest support request"
-              }
             }
           }
         }
@@ -1292,6 +1217,7 @@ describe("ServicePointsService public QR workflow", () => {
       },
       conversationId: conversation.id,
       messages,
+      replyPending: false,
       request,
       servicePoint
     });
@@ -1510,6 +1436,7 @@ describe("ServicePointsService public QR workflow", () => {
       },
       conversationId: conversation.id,
       messages,
+      replyPending: false,
       request,
       servicePoint,
       venue: { id: venue.id, name: venue.name, slug: venue.slug }

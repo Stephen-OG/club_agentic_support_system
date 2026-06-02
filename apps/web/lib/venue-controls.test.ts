@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createOpeningHoursPayload, createServicePointPayload, servicePointGuestUrl, venueWideGuestUrl } from "./venue-controls";
+import {
+  createLocationPayload,
+  createOpeningHoursPayload,
+  createServicePointPayload,
+  createServicePointUpdatePayload,
+  servicePointGuestUrl,
+  venueWideGuestUrl
+} from "./venue-controls";
 
 describe("venue controls", () => {
   it("builds guest URLs for venue-wide and service-point QR codes", () => {
@@ -15,6 +22,23 @@ describe("venue controls", () => {
     assert.deepEqual(createServicePointPayload({ label: "Bar 1", locationId: "location_1" }), {
       label: "Bar 1",
       locationId: "location_1"
+    });
+  });
+
+  it("builds QR point update payloads with nullable locations", () => {
+    assert.deepEqual(createServicePointUpdatePayload({ label: "  Patio Door  ", locationId: "" }), {
+      label: "Patio Door",
+      locationId: null
+    });
+    assert.deepEqual(createServicePointUpdatePayload({ label: "DJ Booth", locationId: "location_2" }), {
+      label: "DJ Booth",
+      locationId: "location_2"
+    });
+  });
+
+  it("trims new zone names before submission", () => {
+    assert.deepEqual(createLocationPayload({ name: "  Upstairs Bar  " }), {
+      name: "Upstairs Bar"
     });
   });
 

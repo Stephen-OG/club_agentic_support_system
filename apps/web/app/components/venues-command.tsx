@@ -2,12 +2,19 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { Clock3, Copy, Download, MapPinned, Plus, QrCode, RefreshCw, Save } from "lucide-react";
+import { Check, Clock3, Copy, Download, Edit3, MapPinned, Plus, QrCode, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
-import type { CommandServicePoint, CommandVenue, CommandVenueOpeningHour } from "@/lib/auth/types";
+import type { CommandServicePoint, CommandVenue, CommandVenueLocation, CommandVenueOpeningHour } from "@/lib/auth/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { generateQrCodeDataUrl } from "@/lib/qr";
-import { createOpeningHoursPayload, createServicePointPayload, servicePointGuestUrl, venueWideGuestUrl } from "@/lib/venue-controls";
+import {
+  createLocationPayload,
+  createOpeningHoursPayload,
+  createServicePointPayload,
+  createServicePointUpdatePayload,
+  servicePointGuestUrl,
+  venueWideGuestUrl
+} from "@/lib/venue-controls";
 
 type QrPreview = {
   label: string;
@@ -18,6 +25,10 @@ type QrPreview = {
 type ServicePointDraft = {
   label: string;
   locationId: string;
+};
+
+type LocationDraft = {
+  name: string;
 };
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -46,7 +57,12 @@ export function VenuesCommand() {
   const [hourDrafts, setHourDrafts] = useState<Record<string, CommandVenueOpeningHour[]>>({});
   const [updatingHoursId, setUpdatingHoursId] = useState<string | null>(null);
   const [servicePointDrafts, setServicePointDrafts] = useState<Record<string, ServicePointDraft>>({});
+  const [editingPointDrafts, setEditingPointDrafts] = useState<Record<string, ServicePointDraft>>({});
+  const [locationDrafts, setLocationDrafts] = useState<Record<string, LocationDraft>>({});
   const [creatingPointId, setCreatingPointId] = useState<string | null>(null);
+  const [creatingLocationId, setCreatingLocationId] = useState<string | null>(null);
+  const [savingPointId, setSavingPointId] = useState<string | null>(null);
+  const [deletingPointId, setDeletingPointId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!supabase) {
@@ -105,6 +121,34 @@ export function VenuesCommand() {
     }));
   }
 
+  function updateEditingPointDraft(pointId: string, patch: Partial<ServicePointDraft>) {
+    setEditingPointDrafts((current) => ({
+      ...current,
+      [pointId]: {
+        ...(current[pointId] ?? { label: "", locationId: "" }),
+        ...patch
+      }
+    }));
+  }
+
+  function updateLocationDraft(venueId: string, patch: Partial<LocationDraft>) {
+    setLocationDrafts((current) => ({
+      ...current,
+      [venueId]: {
+        ...(current[venueId] ?? { name: "" }),
+        ...patch
+      }
+    }));
+  }
+
+  function locationForPoint(venue: CommandVenue, point: CommandServicePoint) {
+    return point.location ?? venue.locations.find((location) => location.id === point.locationId) ?? null;
+  }
+
+  function locationLabel(location: CommandVenueLocation | null) {
+    return location?.zone || location?.name || "No zone";
+  }
+
   async function createServicePoint(event: FormEvent<HTMLFormElement>, venue: CommandVenue) {
     event.preventDefault();
 
@@ -138,6 +182,128 @@ export function VenuesCommand() {
     } finally {
       setCreatingPointId(null);
     }
+  }
+
+  async function createVenueLocation(event: FormEvent<HTMLFormElement>, venue: CommandVenue) {
+    event.preventDefault();
+
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      return;
+    }
+
+    setCreatingLocationId(venue.id);
+    setError(null);
+
+    try {
+      const draft = locationDrafts[venue.id] ?? { name: "" };
+      const location = await apiRequest<CommandVenueLocation>(supabase, `/admin/venues/${venue.id}/locations`, {
+        method: "POST",
+        body: JSON.stringify(createLocationPayload(draft))
+      });
+      setVenues((current) =>
+        current.map((item) =>
+          item.id === venue.id
+            ? {
+                ...item,
+                locations: [...item.locations, location].sort((left, right) => left.name.localeCompare(right.name))
+              }
+            : item
+        )
+      );
+      setLocationDrafts((current) => ({ ...current, [venue.id]: { name: "" } }));
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Could not create zone");
+    } finally {
+      setCreatingLocationId(null);
+    }
+  }
+
+  async function updateServicePoint(venue: CommandVenue, point: CommandServicePoint) {
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      return;
+    }
+
+    const draft = editingPointDrafts[point.id] ?? { label: point.label, locationId: point.locationId ?? "" };
+    setSavingPointId(point.id);
+    setError(null);
+
+    try {
+      const updated = await apiRequest<CommandServicePoint>(supabase, `/admin/venues/${venue.id}/service-points/${point.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(createServicePointUpdatePayload(draft))
+      });
+      setVenues((current) =>
+        current.map((item) =>
+          item.id === venue.id
+            ? {
+                ...item,
+                servicePoints: item.servicePoints
+                  .map((servicePoint) => (servicePoint.id === updated.id ? updated : servicePoint))
+                  .sort((left, right) => left.label.localeCompare(right.label))
+              }
+            : item
+        )
+      );
+      setEditingPointDrafts((current) => {
+        const next = { ...current };
+        delete next[point.id];
+        return next;
+      });
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Could not update QR point");
+    } finally {
+      setSavingPointId(null);
+    }
+  }
+
+  async function deleteServicePoint(venue: CommandVenue, point: CommandServicePoint) {
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      return;
+    }
+
+    setDeletingPointId(point.id);
+    setError(null);
+
+    try {
+      await apiRequest<CommandServicePoint>(supabase, `/admin/venues/${venue.id}/service-points/${point.id}`, {
+        method: "DELETE"
+      });
+      setVenues((current) =>
+        current.map((item) =>
+          item.id === venue.id
+            ? {
+                ...item,
+                servicePoints: item.servicePoints.filter((servicePoint) => servicePoint.id !== point.id)
+              }
+            : item
+        )
+      );
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Could not delete QR point");
+    } finally {
+      setDeletingPointId(null);
+    }
+  }
+
+  function startEditingPoint(point: CommandServicePoint) {
+    setEditingPointDrafts((current) => ({
+      ...current,
+      [point.id]: {
+        label: point.label,
+        locationId: point.locationId ?? ""
+      }
+    }));
+  }
+
+  function cancelEditingPoint(pointId: string) {
+    setEditingPointDrafts((current) => {
+      const next = { ...current };
+      delete next[pointId];
+      return next;
+    });
   }
 
   async function saveOpeningHours(venue: CommandVenue) {
@@ -190,6 +356,7 @@ export function VenuesCommand() {
               const guestAppUrl = typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:3000";
               const venueUrl = venueWideGuestUrl(guestAppUrl, venue.slug);
               const servicePointDraft = servicePointDrafts[venue.id] ?? { label: "", locationId: "" };
+              const locationDraft = locationDrafts[venue.id] ?? { name: "" };
 
               return (
                 <>
@@ -279,17 +446,34 @@ export function VenuesCommand() {
                 ))}
               </div>
             </div>
+            <form className="zone-create-form" onSubmit={(event) => void createVenueLocation(event, venue)}>
+              <label className="field-group zone-name-field">
+                <span>New zone</span>
+                <input
+                  onChange={(event) => updateLocationDraft(venue.id, { name: event.target.value })}
+                  placeholder="Balcony, main bar, terrace..."
+                  required
+                  value={locationDraft.name}
+                />
+              </label>
+              <button className="command-button secondary-action" disabled={creatingLocationId === venue.id} type="submit">
+                <Plus size={15} />
+                {creatingLocationId === venue.id ? "Creating..." : "Add zone"}
+              </button>
+            </form>
             <form className="service-point-form" onSubmit={(event) => void createServicePoint(event, venue)}>
-              <label>
+              <label className="field-group qr-point-name-field">
                 <span>New QR point</span>
                 <input
+                  className="truncate-input"
                   onChange={(event) => updateServicePointDraft(venue.id, { label: event.target.value })}
                   placeholder="Table 12, bar, VIP booth..."
                   required
+                  title={servicePointDraft.label}
                   value={servicePointDraft.label}
                 />
               </label>
-              <label>
+              <label className="field-group qr-point-zone-field">
                 <span>Zone</span>
                 <select
                   onChange={(event) => updateServicePointDraft(venue.id, { locationId: event.target.value })}
@@ -311,31 +495,105 @@ export function VenuesCommand() {
             <div className="service-point-list">
               {venue.servicePoints.map((point) => {
                 const publicUrl = servicePointGuestUrl(guestAppUrl, point.qrToken);
+                const editingDraft = editingPointDrafts[point.id];
+                const pointLocation = locationForPoint(venue, point);
+                const zoneLabel = locationLabel(pointLocation);
                 return (
-                  <div className="service-point-row" key={point.id}>
-                    <QrCode size={18} />
-                    <div>
-                      <strong>{point.label}</strong>
-                      <span>{point.isActive ? "Active" : "Inactive"} guest URL</span>
-                    </div>
-                    <div className="service-point-actions">
-                      <button
-                        aria-label={`Generate QR code for ${point.label}`}
-                        className="icon-button"
-                        onClick={() => void handleGenerateQr(publicUrl, point.label)}
-                        type="button"
-                      >
-                        <QrCode size={15} />
-                      </button>
-                      <button
-                        aria-label={`Copy guest URL for ${point.label}`}
-                        className="icon-button"
-                        onClick={() => void navigator.clipboard.writeText(publicUrl)}
-                        type="button"
-                      >
-                        <Copy size={15} />
-                      </button>
-                    </div>
+                  <div className={editingDraft ? "service-point-row editing" : "service-point-row"} key={point.id}>
+                    {editingDraft ? (
+                      <>
+                        <QrCode size={18} />
+                        <div className="service-point-edit-grid">
+                          <label className="field-group qr-point-name-field">
+                            <span>QR point</span>
+                            <input
+                              className="truncate-input"
+                              onChange={(event) => updateEditingPointDraft(point.id, { label: event.target.value })}
+                              required
+                              title={editingDraft.label}
+                              value={editingDraft.label}
+                            />
+                          </label>
+                          <label className="field-group qr-point-zone-field">
+                            <span>Zone</span>
+                            <select
+                              onChange={(event) => updateEditingPointDraft(point.id, { locationId: event.target.value })}
+                              value={editingDraft.locationId}
+                            >
+                              <option value="">No zone</option>
+                              {venue.locations.map((location) => (
+                                <option key={location.id} value={location.id}>
+                                  {location.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        <div className="service-point-actions">
+                          <button
+                            aria-label={`Save QR point ${point.label}`}
+                            className="icon-button success"
+                            disabled={savingPointId === point.id}
+                            onClick={() => void updateServicePoint(venue, point)}
+                            type="button"
+                          >
+                            <Check size={15} />
+                          </button>
+                          <button
+                            aria-label={`Cancel editing ${point.label}`}
+                            className="icon-button"
+                            onClick={() => cancelEditingPoint(point.id)}
+                            type="button"
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <QrCode size={18} />
+                        <div className="service-point-copy">
+                          <strong title={point.label}>{point.label}</strong>
+                          <span>{point.isActive ? "Active guest URL" : "Inactive guest URL"}</span>
+                          <span className={pointLocation ? "zone-tag" : "zone-tag muted-zone"}>{zoneLabel}</span>
+                        </div>
+                        <div className="service-point-actions">
+                          <button
+                            aria-label={`Generate QR code for ${point.label}`}
+                            className="icon-button"
+                            onClick={() => void handleGenerateQr(publicUrl, point.label)}
+                            type="button"
+                          >
+                            <QrCode size={15} />
+                          </button>
+                          <button
+                            aria-label={`Copy guest URL for ${point.label}`}
+                            className="icon-button"
+                            onClick={() => void navigator.clipboard.writeText(publicUrl)}
+                            type="button"
+                          >
+                            <Copy size={15} />
+                          </button>
+                          <button
+                            aria-label={`Edit QR point ${point.label}`}
+                            className="icon-button"
+                            onClick={() => startEditingPoint(point)}
+                            type="button"
+                          >
+                            <Edit3 size={15} />
+                          </button>
+                          <button
+                            aria-label={`Delete QR point ${point.label}`}
+                            className="icon-button danger"
+                            disabled={deletingPointId === point.id}
+                            onClick={() => void deleteServicePoint(venue, point)}
+                            type="button"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}

@@ -1,6 +1,10 @@
 type ServicePointDraft = {
   label: string;
-  locationId?: string;
+  locationId?: string | null;
+};
+
+type LocationDraft = {
+  name: string;
 };
 
 type OpeningHourDraft = {
@@ -30,6 +34,22 @@ export function createServicePointPayload(draft: ServicePointDraft) {
   return {
     label,
     ...(locationId ? { locationId } : {})
+  };
+}
+
+export function createServicePointUpdatePayload(draft: ServicePointDraft) {
+  const label = draft.label.trim();
+  const locationId = draft.locationId?.trim();
+
+  return {
+    label,
+    locationId: locationId || null
+  };
+}
+
+export function createLocationPayload(draft: LocationDraft) {
+  return {
+    name: draft.name.trim()
   };
 }
 

@@ -61,6 +61,7 @@ export type CommandServicePoint = {
   id: string;
   venueId: string;
   locationId: string | null;
+  location?: CommandVenueLocation | null;
   label: string;
   qrToken: string;
   tokenVersion: number;
@@ -147,6 +148,7 @@ export type PublicQrConversationState = {
   chatAvailability?: PublicChatAvailability;
   conversationId: string;
   messages: CommandMessage[];
+  replyPending?: boolean;
   request: CommandSupportRequest | null;
   servicePoint: CommandServicePoint;
   venue?: PublicVenueSummary;

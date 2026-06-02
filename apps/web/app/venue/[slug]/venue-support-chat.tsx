@@ -161,6 +161,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
     }
   }, [conversationId, conversationStorageKey]);
 
+  // --- poll handler ---
   useEffect(() => {
     if (!conversationId || !guestSessionId) {
       return;
@@ -200,7 +201,17 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
         return;
       }
 
-      setMessages([createWelcomeMessage(name), ...result.messages]);
+      if (result.replyPending) {
+        setMessages((current) => {
+          const hasPending = current.some((message) => message.isPending);
+          if (hasPending) {
+            return current;
+          }
+          return [...current.filter((message) => message.id !== "welcome" || current.indexOf(message) === 0), createPendingAssistantMessage()];
+        });
+      } else {
+        setMessages([createWelcomeMessage(name), ...result.messages]);
+      }
       setRequest(result.request);
     }
 
@@ -253,7 +264,17 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
         return;
       }
 
-      setMessages([createWelcomeMessage(name), ...result.messages]);
+      if (result.replyPending) {
+        setMessages((current) => {
+          const hasPending = current.some((message) => message.isPending);
+          if (hasPending) {
+            return current;
+          }
+          return [...current.filter((message) => message.id !== "welcome" || current.indexOf(message) === 0), createPendingAssistantMessage()];
+        });
+      } else {
+        setMessages([createWelcomeMessage(name), ...result.messages]);
+      }
       setRequest(result.request);
     } catch {
       setMessages((current) => [...current.filter((message) => !message.isPending), createLocalMessage(createSendErrorBody(), "SYSTEM")]);

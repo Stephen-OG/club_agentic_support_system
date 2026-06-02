@@ -148,8 +148,8 @@ export class RedisCacheService {
         this.logger.warn(`Redis connection error: ${error.message}`);
       });
 
-      client.on("connect", () => {
-        this.logger.log("Redis connected");
+      client.on("ready", () => {
+        this.logger.log("Redis ready");
       });
 
       return client as Redis;

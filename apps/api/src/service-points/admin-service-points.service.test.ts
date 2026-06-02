@@ -4,22 +4,25 @@ import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
 import { CreateServicePointDto } from "./dto/create-service-point.dto";
+import { CreateVenueLocationDto } from "./dto/create-venue-location.dto";
 import { CreateVenueDto } from "./dto/create-venue.dto";
+import { UpdateServicePointDto } from "./dto/update-service-point.dto";
 import { UpdateVenueOpeningHoursDto, VenueOpeningHourDto } from "./dto/update-venue-opening-hours.dto";
 import { ServicePointsService } from "./service-points.service";
 
 function createService(
   aiTriage: ConstructorParameters<typeof ServicePointsService>[0],
-  priorityClassifier: ConstructorParameters<typeof ServicePointsService>[2],
-  prisma: ConstructorParameters<typeof ServicePointsService>[3],
-  venueAccess: ConstructorParameters<typeof ServicePointsService>[4]
+  priorityClassifier: ConstructorParameters<typeof ServicePointsService>[3],
+  prisma: ConstructorParameters<typeof ServicePointsService>[4],
+  venueAccess: ConstructorParameters<typeof ServicePointsService>[5]
 ) {
   const cache = {
     get: async () => null,
     set: async () => undefined
   } as never;
+  const queue = { add: async () => ({ id: "mock-job-id" }) } as never;
 
-  return new ServicePointsService(aiTriage, cache, priorityClassifier, prisma, venueAccess);
+  return new ServicePointsService(aiTriage, cache, queue, priorityClassifier, prisma, venueAccess);
 }
 
 describe("ServicePointsService admin helpers", () => {
@@ -149,6 +152,9 @@ describe("ServicePointsService admin helpers", () => {
             }
           },
           servicePoints: {
+            where: {
+              isActive: true
+            },
             orderBy: {
               label: "asc"
             }
@@ -208,6 +214,131 @@ describe("ServicePointsService admin helpers", () => {
     const errors = await validate(servicePoint);
 
     assert.equal(errors.some((error) => error.property === "locationId"), true);
+  });
+
+  it("creates a venue zone after checking workspace scope and manage permission", async () => {
+    const venue = { id: "venue_1", workspaceId: "workspace_1" };
+    const createdLocation = { id: "location_1", venueId: "venue_1", name: "Balcony", zone: null };
+    let authorizeCalled = false;
+    const service = createService(
+      {} as never,
+      {} as never,
+      {
+        venue: {
+          findFirst: async () => venue
+        },
+        venueLocation: {
+          create: async (args: unknown) => {
+            assert.deepEqual(args, {
+              data: {
+                venueId: "venue_1",
+                name: "Balcony",
+                zone: null
+              }
+            });
+            return createdLocation;
+          }
+        }
+      } as never,
+      {
+        assertCanManageVenue: () => {
+          authorizeCalled = true;
+        }
+      } as never
+    );
+
+    const result = await service.createVenueLocation(
+      { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+      "venue_1",
+      { name: "  Balcony  " }
+    );
+
+    assert.deepEqual(result, createdLocation);
+    assert.equal(authorizeCalled, true);
+  });
+
+  it("updates a QR point label and location inside the venue", async () => {
+    const venue = { id: "venue_1", workspaceId: "workspace_1" };
+    const point = { id: "point_1", venueId: "venue_1", label: "Table 1" };
+    const updatedPoint = { ...point, label: "VIP Booth", locationId: "location_1" };
+    const service = createService(
+      {} as never,
+      {} as never,
+      {
+        venue: {
+          findFirst: async () => venue
+        },
+        servicePoint: {
+          findFirst: async () => point,
+          update: async (args: unknown) => {
+            assert.deepEqual(args, {
+              where: { id: "point_1" },
+              data: {
+                label: "VIP Booth",
+                locationId: "location_1"
+              }
+            });
+            return updatedPoint;
+          }
+        },
+        venueLocation: {
+          findFirst: async () => ({ id: "location_1", venueId: "venue_1" })
+        }
+      } as never,
+      {
+        assertCanManageVenue: () => undefined
+      } as never
+    );
+
+    const result = await service.updateServicePoint(
+      { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+      "venue_1",
+      "point_1",
+      { label: "  VIP Booth  ", locationId: "location_1" }
+    );
+
+    assert.deepEqual(result, updatedPoint);
+  });
+
+  it("soft-deletes QR points so historical request data is preserved", async () => {
+    const service = createService(
+      {} as never,
+      {} as never,
+      {
+        venue: {
+          findFirst: async () => ({ id: "venue_1", workspaceId: "workspace_1" })
+        },
+        servicePoint: {
+          findFirst: async () => ({ id: "point_1", venueId: "venue_1", isActive: true }),
+          update: async (args: unknown) => {
+            assert.deepEqual(args, {
+              where: { id: "point_1" },
+              data: { isActive: false }
+            });
+            return { id: "point_1", venueId: "venue_1", isActive: false };
+          }
+        }
+      } as never,
+      {
+        assertCanManageVenue: () => undefined
+      } as never
+    );
+
+    const result = await service.deleteServicePoint(
+      { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+      "venue_1",
+      "point_1"
+    );
+
+    assert.equal(result.isActive, false);
+  });
+
+  it("validates zone and QR point update DTOs", async () => {
+    const blankLocation = plainToInstance(CreateVenueLocationDto, { name: "   " });
+    const blankUpdate = plainToInstance(UpdateServicePointDto, { label: "   " });
+
+    assert.equal((await validate(blankLocation)).some((error) => error.property === "name"), true);
+    assert.equal((await validate(blankUpdate)).some((error) => error.property === "label"), true);
   });
 });
 

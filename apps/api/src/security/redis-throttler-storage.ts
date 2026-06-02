@@ -14,6 +14,7 @@ type RedisClient = {
   pttl(key: string): Promise<number>;
   incr(key: string): Promise<number>;
   expire(key: string, seconds: number): Promise<number>;
+  on(event: "error", listener: (error: Error) => void): void;
 };
 
 @Injectable()
@@ -105,7 +106,7 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
       const Redis = require("ioredis");
-      return new Redis(url, {
+      const client = new Redis(url, {
         maxRetriesPerRequest: 1,
         retryStrategy(times: number) {
           if (times > 2) return null;
@@ -113,6 +114,12 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
         },
         lazyConnect: true
       }) as RedisClient;
+
+      client.on("error", (error: Error) => {
+        this.warnOnce(error);
+      });
+
+      return client;
     } catch {
       return null;
     }
