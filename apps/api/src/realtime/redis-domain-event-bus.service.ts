@@ -60,8 +60,20 @@ export class RedisDomainEventBusService implements OnModuleDestroy {
   }
 }
 
+export function shouldUseRedisDomainEvents(env: NodeJS.ProcessEnv = process.env) {
+  if (env.DISABLE_REDIS_EVENTS === "true") {
+    return false;
+  }
+
+  if (env.NODE_ENV === "production") {
+    return true;
+  }
+
+  return env.ENABLE_REDIS_EVENTS === "true";
+}
+
 function createRedisStreamsAdapter(url: string | undefined, logger: Logger): RedisDomainEventBusAdapter | null {
-  if (!url) {
+  if (!url || !shouldUseRedisDomainEvents()) {
     logger.log("REDIS_URL not set, realtime events use in-process fanout only");
     return null;
   }
@@ -71,6 +83,12 @@ function createRedisStreamsAdapter(url: string | undefined, logger: Logger): Red
     const Redis = require("ioredis");
     const writer = new Redis(url, { maxRetriesPerRequest: 2 });
     const reader = new Redis(url, { maxRetriesPerRequest: 2 });
+    writer.on("error", (error: Error) => {
+      logger.warn(`Redis Streams writer error: ${error.message}`);
+    });
+    reader.on("error", (error: Error) => {
+      logger.warn(`Redis Streams reader error: ${error.message}`);
+    });
 
     return {
       async append(stream, payload) {

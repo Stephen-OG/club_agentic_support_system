@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, Bell, Clock3, MessageSquareText, RadioTower, RefreshCw, ShieldAlert, Star } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import type { CommandRequestStatus, CommandSupportRequest, CommandVenue } from "@/lib/auth/types";
+import { playDefaultRequestNotificationSound } from "@/lib/default-notification-sound";
 import { calculateOperationsAnalytics } from "@/lib/operations-analytics";
 import {
   type OperationsBucket,
@@ -89,6 +90,10 @@ export function OperationsCommand() {
 
     const notifications = getOperationsNotifications(knownRequestIdsRef.current, nextRequests);
     knownRequestIdsRef.current = new Set(nextRequests.map((request) => request.id));
+
+    if (notifications.length > 0) {
+      void playDefaultRequestNotificationSound();
+    }
 
     if (typeof window === "undefined" || !("Notification" in window) || window.Notification.permission !== "granted") {
       return;

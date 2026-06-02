@@ -50,7 +50,7 @@ export function getRateLimitConfig(env: EnvMap = process.env): ThrottlerModuleOp
     }
   ];
 
-  if (redisUrl) {
+  if (redisUrl && shouldUseRedisRateLimits(env)) {
     return {
       throttlers,
       storage: new RedisThrottlerStorage()
@@ -62,6 +62,18 @@ export function getRateLimitConfig(env: EnvMap = process.env): ThrottlerModuleOp
 
 export function shouldExposeApiDocs(env: EnvMap = process.env) {
   return env.NODE_ENV !== "production" || env.ENABLE_API_DOCS === "true";
+}
+
+export function shouldUseRedisRateLimits(env: EnvMap = process.env) {
+  if (env.DISABLE_REDIS_RATE_LIMITS === "true") {
+    return false;
+  }
+
+  if (env.NODE_ENV === "production") {
+    return true;
+  }
+
+  return env.ENABLE_REDIS_RATE_LIMITS === "true";
 }
 
 export function getApiHost(env: EnvMap = process.env) {

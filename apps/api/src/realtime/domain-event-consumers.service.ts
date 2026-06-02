@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnModuleDestroy, Optional } from "@nestjs/c
 import type { DomainEvent } from "./domain-events.service";
 
 export const DOMAIN_EVENT_CONSUMER_ADAPTER = Symbol("DOMAIN_EVENT_CONSUMER_ADAPTER");
+export const DOMAIN_EVENT_CONSUMER_OPTIONS = Symbol("DOMAIN_EVENT_CONSUMER_OPTIONS");
 
 export type DomainEventConsumerLane = "notifications" | "analytics" | "audit" | "webhooks";
 
@@ -31,6 +32,7 @@ export class DomainEventConsumerService implements OnModuleDestroy {
 
   constructor(
     @Optional() @Inject(DOMAIN_EVENT_CONSUMER_ADAPTER) private readonly adapter?: DomainEventConsumerAdapter,
+    @Optional() @Inject(DOMAIN_EVENT_CONSUMER_OPTIONS)
     options: DomainEventConsumerOptions = {}
   ) {
     this.maxAttempts = options.maxAttempts ?? 3;

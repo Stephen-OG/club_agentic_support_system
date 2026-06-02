@@ -7,7 +7,8 @@ import {
   getRateLimitConfig,
   isCorsOriginAllowed,
   parseCorsOrigins,
-  shouldExposeApiDocs
+  shouldExposeApiDocs,
+  shouldUseRedisRateLimits
 } from "./security-config";
 
 describe("security config", () => {
@@ -47,6 +48,19 @@ describe("security config", () => {
     const bounded: any = getRateLimitConfig({ API_RATE_LIMIT_TTL_MS: "-1", API_RATE_LIMIT_MAX: "0" });
     assert.equal(bounded.throttlers[0].ttl, 60000);
     assert.equal(bounded.throttlers[0].limit, 60);
+  });
+
+  it("uses Redis rate limits only in production or when explicitly enabled", () => {
+    assert.equal(shouldUseRedisRateLimits({ NODE_ENV: "development", REDIS_URL: "redis://localhost:6379" }), false);
+    assert.equal(
+      shouldUseRedisRateLimits({
+        NODE_ENV: "development",
+        REDIS_URL: "redis://localhost:6379",
+        ENABLE_REDIS_RATE_LIMITS: "true"
+      }),
+      true
+    );
+    assert.equal(shouldUseRedisRateLimits({ NODE_ENV: "production", REDIS_URL: "redis://localhost:6379" }), true);
   });
 
   it("sets basic SaaS hardening headers", () => {

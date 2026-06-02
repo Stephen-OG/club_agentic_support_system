@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createRedisConnectionOptions } from "./jobs.module";
+import { createRedisConnectionOptions, shouldUseBackgroundJobs } from "./jobs.module";
 
 describe("JobsModule Redis connection", () => {
   it("preserves username, password, db, and TLS from hosted Redis URLs", () => {
@@ -14,10 +14,23 @@ describe("JobsModule Redis connection", () => {
     });
   });
 
-  it("uses local Redis when REDIS_URL is missing in development", () => {
+  it("uses local Redis options when background jobs are explicitly enabled without REDIS_URL", () => {
     assert.deepEqual(createRedisConnectionOptions(undefined), {
       host: "127.0.0.1",
       port: 6379
     });
+  });
+
+  it("keeps background jobs disabled by default outside production", () => {
+    assert.equal(shouldUseBackgroundJobs({ NODE_ENV: "development" } as NodeJS.ProcessEnv), false);
+    assert.equal(
+      shouldUseBackgroundJobs({ NODE_ENV: "development", ENABLE_BACKGROUND_JOBS: "true" } as NodeJS.ProcessEnv),
+      true
+    );
+    assert.equal(shouldUseBackgroundJobs({ NODE_ENV: "production" } as NodeJS.ProcessEnv), true);
+    assert.equal(
+      shouldUseBackgroundJobs({ NODE_ENV: "production", DISABLE_BACKGROUND_JOBS: "true" } as NodeJS.ProcessEnv),
+      false
+    );
   });
 });

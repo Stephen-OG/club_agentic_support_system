@@ -1,7 +1,7 @@
 import { Logger } from "@nestjs/common";
 import type { DomainEvent } from "./domain-events.service";
 import type { DomainEventConsumerAdapter, DomainEventConsumerLane } from "./domain-event-consumers.service";
-import type { RedisDomainEventBusPayload } from "./redis-domain-event-bus.service";
+import { shouldUseRedisDomainEvents, type RedisDomainEventBusPayload } from "./redis-domain-event-bus.service";
 
 export type RedisConsumerClient = {
   xgroup(...args: unknown[]): Promise<unknown>;
@@ -196,11 +196,13 @@ export class RedisDomainEventConsumerAdapter implements DomainEventConsumerAdapt
 }
 
 export function createRedisDomainEventConsumerAdapter(url: string | undefined): DomainEventConsumerAdapter | null {
-  if (!url) {
+  if (!url || !shouldUseRedisDomainEvents()) {
     return null;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
   const Redis = require("ioredis");
-  return new RedisDomainEventConsumerAdapter(new Redis(url));
+  const client = new Redis(url);
+  client.on("error", () => undefined);
+  return new RedisDomainEventConsumerAdapter(client);
 }

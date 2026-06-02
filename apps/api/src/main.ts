@@ -62,7 +62,7 @@ async function bootstrap() {
     SwaggerModule.setup("docs", app, document);
   }
 
-  const port = 4000;
+  const port = 4001;
   const host = getApiHost(process.env);
   logger.log(`Starting API server on ${host}:${port}`, "Bootstrap");
   await app.listen(port, host);
