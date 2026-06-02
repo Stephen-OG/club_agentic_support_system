@@ -1244,7 +1244,7 @@ describe("ServicePointsService public QR workflow", () => {
       },
       conversationId: conversation.id,
       messages,
-      replyPending: false,
+      replyPending: true,
       request,
       servicePoint
     });
@@ -1715,9 +1715,16 @@ describe("ServicePointsService public QR workflow", () => {
       agentSuggestedAction: "reply"
     };
     const storedMessages = [
-      { id: "message_guest", conversationId: conversation.id, sender: SenderType.GUEST, body: "My drinks never came" },
-      { id: "message_agent", conversationId: conversation.id, sender: SenderType.ASSISTANT, body: "Sorry about that. I have sent this to the team for Table 14." }
+      { id: "message_guest", conversationId: conversation.id, requestId: supportRequest.id, sender: SenderType.GUEST, body: "My drinks never came" },
+      {
+        id: "message_agent",
+        conversationId: conversation.id,
+        requestId: supportRequest.id,
+        sender: SenderType.ASSISTANT,
+        body: "Sorry about that. I have sent this to the team for Table 14."
+      }
     ];
+    const published: unknown[] = [];
     const tx = {
       conversation: {
         create: async () => conversation
@@ -1757,7 +1764,12 @@ describe("ServicePointsService public QR workflow", () => {
       } as never,
       { classifyOrDefault: () => "high" } as never,
       prisma as never,
-      {} as never
+      {} as never,
+      {
+        publish: (event: unknown) => {
+          published.push(event);
+        }
+      } as never
     );
 
     const result = await service.createVenueGuestMessage("blue-note", {
@@ -1769,6 +1781,99 @@ describe("ServicePointsService public QR workflow", () => {
     assert.equal((result as any).conversationId, conversation.id);
     assert.deepEqual((result as any).messages, storedMessages);
     assert.deepEqual((result as any).request, supportRequest);
+    assert.deepEqual(
+      published.map((event) => ({ ...(event as any), occurredAt: "Any<Date>" })),
+      [
+        {
+          type: "request.created",
+          venueId: supportRequest.venueId,
+          requestId: supportRequest.id,
+          conversationId: supportRequest.conversationId,
+          occurredAt: "Any<Date>"
+        },
+        {
+          type: "message.created",
+          venueId: supportRequest.venueId,
+          requestId: supportRequest.id,
+          conversationId: supportRequest.conversationId,
+          messageId: "message_guest",
+          occurredAt: "Any<Date>"
+        }
+      ]
+    );
+  });
+
+  it("keeps venue QR replies pending when a status message is newer than the latest guest message", async () => {
+    const venue = { id: "venue_pending_reply", slug: "blue-note", workspaceId: "workspace_1", name: "Blue Note" };
+    const servicePoint = {
+      id: "sp_pending_reply",
+      venueId: venue.id,
+      label: "Venue support",
+      qrToken: "venue_support_blue_note",
+      isActive: true,
+      venue
+    };
+    const conversation = {
+      id: "conversation_pending_reply",
+      venueId: venue.id,
+      servicePointId: servicePoint.id,
+      guestSessionId: "session_pending_reply",
+      status: "open",
+      updatedAt: new Date()
+    };
+    const request = {
+      id: "request_pending_reply",
+      venueId: venue.id,
+      servicePointId: servicePoint.id,
+      conversationId: conversation.id,
+      status: RequestStatus.IN_PROGRESS
+    };
+    const messages = [
+      {
+        id: "message_status",
+        conversationId: conversation.id,
+        sender: SenderType.SYSTEM,
+        body: "The team is working on this now.",
+        createdAt: new Date("2026-06-02T10:00:03.000Z")
+      },
+      {
+        id: "message_guest",
+        conversationId: conversation.id,
+        sender: SenderType.GUEST,
+        body: "Can you add napkins too?",
+        createdAt: new Date("2026-06-02T10:00:02.000Z")
+      },
+      {
+        id: "message_assistant_old",
+        conversationId: conversation.id,
+        sender: SenderType.ASSISTANT,
+        body: "Of course.",
+        createdAt: new Date("2026-06-02T10:00:01.000Z")
+      }
+    ];
+    const service = createService(
+      {} as never,
+      {} as never,
+      {
+        venue: { findFirst: async () => venue },
+        servicePoint: {
+          findFirst: async () => servicePoint,
+          create: async () => servicePoint
+        },
+        conversation: {
+          findFirst: async () => ({
+            ...conversation,
+            messages,
+            requests: [request]
+          })
+        }
+      } as never,
+      {} as never
+    );
+
+    const result = await service.getVenueGuestConversation("blue-note", conversation.id, "session_pending_reply");
+
+    assert.equal((result as any).replyPending, true);
   });
 
   it("asks venue QR guests for a location before creating a staff request", async () => {

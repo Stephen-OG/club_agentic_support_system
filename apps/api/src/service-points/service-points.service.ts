@@ -605,13 +605,13 @@ export class ServicePointsService {
    * is still running.
    */
   private requiresAsyncReply(messages: Array<{ sender: string }>): boolean {
-    if (messages.length < 2) return false;
-    // The messages are returned in descending order (newest first)
-    const newest = messages[0];
-    if (!newest || newest.sender !== "GUEST") return false;
-    // Check the second most recent — if it's not an ASSISTANT reply, a reply is pending
-    const second = messages[1];
-    return second?.sender !== "ASSISTANT";
+    const newestGuestIndex = messages.findIndex((message) => message.sender === SenderType.GUEST);
+    if (newestGuestIndex === -1) {
+      return false;
+    }
+
+    const newerMessages = messages.slice(0, newestGuestIndex);
+    return !newerMessages.some((message) => message.sender === SenderType.ASSISTANT || message.sender === SenderType.STAFF);
   }
 
   /**
@@ -1077,7 +1077,7 @@ export class ServicePointsService {
     const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
     const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const transactionResult = await this.prisma.$transaction(async (tx) => {
       const conversation =
         existingConversation ??
         (await tx.conversation.create({
@@ -1159,11 +1159,19 @@ export class ServicePointsService {
         orderBy: { createdAt: "asc" }
       });
 
-      return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
-        replyPending: true,
-        request: supportRequest
-      });
+      return {
+        eventType: hasOpenRequest ? "request.updated" : "request.created",
+        messageId: this.latestMessageId(messages, SenderType.GUEST, supportRequest.id),
+        response: this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
+          replyPending: true,
+          request: supportRequest
+        })
+      };
     });
+
+    this.publishRequestEvent(transactionResult.eventType as DomainEventType, transactionResult.response.request as any);
+    this.publishMessageEvent(transactionResult.response.request as any, transactionResult.messageId);
+    const result = transactionResult.response;
 
     try {
       await this.triageReplyQueue.add("triage-reply", {

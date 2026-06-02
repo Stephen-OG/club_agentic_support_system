@@ -5,6 +5,12 @@ import { DomainEventsService } from "./domain-events.service";
 import { RealtimeController } from "./realtime.controller";
 
 describe("RealtimeController", () => {
+  function withoutGeneratedEventId(message: unknown) {
+    const sseMessage = message as { type: string; data: Record<string, unknown> };
+    const { eventId: _eventId, ...data } = sseMessage.data;
+    return { ...sseMessage, data };
+  }
+
   it("authorizes venue streams before returning SSE events", async () => {
     const events = new DomainEventsService();
     const accessCalls: unknown[] = [];
@@ -38,7 +44,7 @@ describe("RealtimeController", () => {
       occurredAt: "2026-06-02T06:10:00.000Z"
     });
 
-    assert.deepEqual(await nextEvent, {
+    assert.deepEqual(withoutGeneratedEventId(await nextEvent), {
       type: "request.created",
       data: {
         type: "request.created",
@@ -97,7 +103,7 @@ describe("RealtimeController", () => {
       occurredAt: "2026-06-02T06:11:00.000Z"
     });
 
-    assert.deepEqual(await nextEvent, {
+    assert.deepEqual(withoutGeneratedEventId(await nextEvent), {
       type: "message.created",
       data: {
         type: "message.created",

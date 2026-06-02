@@ -41,6 +41,7 @@ const sharedStatusByPrismaStatus: Record<PrismaRequestStatus, RequestStatus> = {
 };
 
 const terminalConversationStatuses = new Set<RequestStatus>(["resolved", "cancelled"]);
+const venueRequestListLimit = 100;
 
 type GuestActionInput = GuestRequestActionDto & {
   requestId: string;
@@ -127,7 +128,8 @@ export class RequestsService {
       },
       orderBy: {
         createdAt: "desc"
-      }
+      },
+      take: venueRequestListLimit
     });
 
     return requests.map((request) => ({

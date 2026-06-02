@@ -32,6 +32,10 @@ export function shouldRefreshForRealtimeEvent(event: Pick<ClientDomainEvent, "ty
   return event.type === "request.created" || event.type === "request.updated" || event.type === "message.created";
 }
 
+export function sseReconnectDelayMs(attempt: number) {
+  return Math.min(5000, 500 * 2 ** attempt);
+}
+
 export function parseSseMessages(text: string) {
   return text
     .split(/\n\n+/)
@@ -64,7 +68,7 @@ export function connectStaffVenueEvents(options: StaffConnectOptions) {
       return;
     }
 
-    await connectSseStream(`${realtimeApiBaseUrl}/venues/${encodeURIComponent(options.venueId)}/events`, {
+    await connectSseStreamWithReconnect(`${realtimeApiBaseUrl}/venues/${encodeURIComponent(options.venueId)}/events`, {
       headers: { Authorization: `Bearer ${token}` },
       signal: abortController.signal,
       onEvent: options.onEvent,
@@ -78,7 +82,7 @@ export function connectStaffVenueEvents(options: StaffConnectOptions) {
 export function connectGuestConversationEvents(options: GuestConnectOptions) {
   const abortController = new AbortController();
 
-  void connectSseStream(
+  void connectSseStreamWithReconnect(
     `${realtimeApiBaseUrl}/public/qr/${encodeURIComponent(options.qrToken)}/conversations/${encodeURIComponent(options.conversationId)}/events`,
     {
       headers: { "X-Guest-Session": options.guestSessionId },
@@ -89,6 +93,20 @@ export function connectGuestConversationEvents(options: GuestConnectOptions) {
   );
 
   return () => abortController.abort();
+}
+
+async function connectSseStreamWithReconnect(input: string, options: ConnectOptions & { headers: Record<string, string>; signal: AbortSignal }) {
+  let attempt = 0;
+
+  while (!options.signal.aborted) {
+    await connectSseStream(input, options);
+    if (options.signal.aborted) {
+      break;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, sseReconnectDelayMs(attempt)));
+    attempt += 1;
+  }
 }
 
 async function connectSseStream(input: string, options: ConnectOptions & { headers: Record<string, string>; signal: AbortSignal }) {

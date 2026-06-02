@@ -11,7 +11,10 @@ import type {
   PublicVenueSummary
 } from "@/lib/auth/types";
 import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, createVenueWelcomeBody } from "@/lib/chat-copy";
+import { normalizeGuestChatMessages } from "@/lib/guest-chat-messages";
+import { reconcileGuestConversationMessages } from "@/lib/guest-chat-state";
 import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "@/lib/guest-session";
+import { connectGuestConversationEvents } from "@/lib/realtime-events";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
 import { createGuestRequestStatusLabel } from "@/lib/request-display";
 import { supportLocationOptions, supportQuickActions } from "@/lib/support-intake";
@@ -49,6 +52,25 @@ function createSessionEndedMessage() {
 
 function createWelcomeMessage(venueName: string) {
   return createLocalMessage(createVenueWelcomeBody(venueName), "ASSISTANT");
+}
+
+function normalizeVenueMessages(messages: CommandMessage[], venueName: string) {
+  return normalizeGuestChatMessages(messages, venueName) as LocalVenueMessage[];
+}
+
+function reconcileVenueConversationMessages(input: {
+  currentMessages: LocalVenueMessage[];
+  replyPending: boolean;
+  serverMessages: CommandMessage[];
+  venueName: string;
+}) {
+  return reconcileGuestConversationMessages({
+    currentMessages: input.currentMessages,
+    replyPending: input.replyPending,
+    serverMessages: normalizeVenueMessages(input.serverMessages, input.venueName),
+    servicePointLabel: input.venueName,
+    welcomeMessage: createWelcomeMessage(input.venueName)
+  }) as LocalVenueMessage[];
 }
 
 export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
@@ -190,25 +212,31 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
         return;
       }
 
-      if (result.replyPending) {
-        setMessages((current) => {
-          const hasPending = current.some((message) => message.isPending);
-          if (hasPending) {
-            return current;
-          }
-          return [...current.filter((message) => message.id !== "welcome" || current.indexOf(message) === 0), createPendingAssistantMessage()];
-        });
-      } else {
-        setMessages([createWelcomeMessage(name), ...result.messages]);
-      }
+      setMessages((current) =>
+        reconcileVenueConversationMessages({
+          currentMessages: current,
+          replyPending: Boolean(result.replyPending),
+          serverMessages: result.messages,
+          venueName: name
+        })
+      );
       setRequest(result.request);
     }
 
     void loadConversation();
     const interval = window.setInterval(() => void loadConversation(), 3000);
+    const disconnectRealtime = connectGuestConversationEvents({
+      conversationId: activeConversationId,
+      guestSessionId,
+      qrToken: `venue_support_${venueSlug}`,
+      onEvent: () => {
+        void loadConversation();
+      }
+    });
 
     return () => {
       cancelled = true;
+      disconnectRealtime();
       window.clearInterval(interval);
     };
   }, [applyClosedState, applyEndedState, conversationId, guestSessionId, venueName, venueSlug]);
@@ -253,17 +281,14 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
         return;
       }
 
-      if (result.replyPending) {
-        setMessages((current) => {
-          const hasPending = current.some((message) => message.isPending);
-          if (hasPending) {
-            return current;
-          }
-          return [...current.filter((message) => message.id !== "welcome" || current.indexOf(message) === 0), createPendingAssistantMessage()];
-        });
-      } else {
-        setMessages([createWelcomeMessage(name), ...result.messages]);
-      }
+      setMessages((current) =>
+        reconcileVenueConversationMessages({
+          currentMessages: current,
+          replyPending: Boolean(result.replyPending),
+          serverMessages: result.messages,
+          venueName: name
+        })
+      );
       setRequest(result.request);
     } catch {
       setMessages((current) => [...current.filter((message) => !message.isPending), createLocalMessage(createSendErrorBody(), "SYSTEM")]);
@@ -295,7 +320,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
       }
 
       if (result.message) {
-        setMessages((current) => [...current, result.message as CommandMessage]);
+        setMessages((current) => [...current, ...normalizeVenueMessages([result.message as CommandMessage], venueName ?? "the venue")]);
       }
     } catch {
       setMessages((current) => [...current, createLocalMessage(createUpdateErrorBody(), "SYSTEM")]);

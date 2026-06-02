@@ -6,7 +6,8 @@
     "dev": "next dev -p ${WEB_PORT:-3001}",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' NODE_PATH=../api/node_modules:../../packages/shared/node_modules node --test -r ts-node/register -r tsconfig-paths/register lib/*.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseSseMessages, shouldRefreshForRealtimeEvent } from "./realtime-events";
+import { parseSseMessages, shouldRefreshForRealtimeEvent, sseReconnectDelayMs } from "./realtime-events";
 
 describe("realtime event helpers", () => {
   it("parses typed SSE messages from text chunks", () => {
@@ -24,5 +24,11 @@ describe("realtime event helpers", () => {
     assert.equal(shouldRefreshForRealtimeEvent({ type: "request.updated" }), true);
     assert.equal(shouldRefreshForRealtimeEvent({ type: "message.created" }), true);
     assert.equal(shouldRefreshForRealtimeEvent({ type: "heartbeat" }), false);
+  });
+
+  it("uses bounded reconnect backoff for dropped SSE streams", () => {
+    assert.equal(sseReconnectDelayMs(0), 500);
+    assert.equal(sseReconnectDelayMs(3), 4000);
+    assert.equal(sseReconnectDelayMs(10), 5000);
   });
 });

@@ -100,7 +100,8 @@ describe("RequestsService lifecycle", () => {
           },
           orderBy: {
             createdAt: "desc"
-          }
+          },
+          take: 100
         }
       }
     ]);

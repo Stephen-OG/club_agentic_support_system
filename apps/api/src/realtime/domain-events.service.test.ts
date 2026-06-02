@@ -4,6 +4,13 @@ import { firstValueFrom, take, toArray } from "rxjs";
 import { DomainEventsService } from "./domain-events.service";
 
 describe("DomainEventsService", () => {
+  function withoutGeneratedEventIds(events: unknown[]) {
+    return events.map((event) => {
+      const { eventId: _eventId, ...rest } = event as Record<string, unknown>;
+      return rest;
+    });
+  }
+
   it("streams venue events only to matching venue subscribers", async () => {
     const service = new DomainEventsService();
     const venueEvents = firstValueFrom(service.streamForVenue("venue_1").pipe(take(2), toArray()));
@@ -28,7 +35,7 @@ describe("DomainEventsService", () => {
       occurredAt: "2026-06-02T06:02:00.000Z"
     });
 
-    assert.deepEqual(await venueEvents, [
+    assert.deepEqual(withoutGeneratedEventIds(await venueEvents), [
       {
         type: "request.created",
         venueId: "venue_1",
@@ -64,13 +71,65 @@ describe("DomainEventsService", () => {
       occurredAt: "2026-06-02T06:04:00.000Z"
     });
 
-    assert.deepEqual(await conversationEvents, [
+    assert.deepEqual(withoutGeneratedEventIds(await conversationEvents), [
       {
         type: "request.updated",
         venueId: "venue_1",
         conversationId: "conversation_1",
         requestId: "request_1",
         occurredAt: "2026-06-02T06:04:00.000Z"
+      }
+    ]);
+  });
+
+  it("publishes local events to the Redis bus with generated event ids", async () => {
+    const published: unknown[] = [];
+    const service = new DomainEventsService({
+      publish: async (event: unknown) => {
+        published.push(event);
+      },
+      subscribe: async () => undefined
+    } as never);
+
+    service.publish({
+      type: "request.created",
+      venueId: "venue_1",
+      requestId: "request_1",
+      occurredAt: "2026-06-02T07:10:00.000Z"
+    });
+
+    assert.equal(published.length, 1);
+    assert.match((published[0] as { eventId: string }).eventId, /^evt_/);
+  });
+
+  it("fans remote Redis bus events into local subscribers", async () => {
+    let redisHandler: ((event: any) => void) | null = null;
+    const service = new DomainEventsService({
+      publish: async () => undefined,
+      subscribe: async (handler: (event: any) => void) => {
+        redisHandler = handler;
+      }
+    } as never);
+    await service.onModuleInit();
+    const venueEvents = firstValueFrom(service.streamForVenue("venue_1").pipe(take(1), toArray()));
+
+    assert.ok(redisHandler);
+    const handler = redisHandler as (event: any) => void;
+    handler({
+      eventId: "event_remote",
+      type: "request.updated",
+      venueId: "venue_1",
+      requestId: "request_remote",
+      occurredAt: "2026-06-02T07:11:00.000Z"
+    });
+
+    assert.deepEqual(await venueEvents, [
+      {
+        eventId: "event_remote",
+        type: "request.updated",
+        venueId: "venue_1",
+        requestId: "request_remote",
+        occurredAt: "2026-06-02T07:11:00.000Z"
       }
     ]);
   });

@@ -1,9 +1,12 @@
-import { Injectable } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
+import { Injectable, OnModuleInit, Optional } from "@nestjs/common";
 import { filter, Observable, Subject } from "rxjs";
+import { RedisDomainEventBusService } from "./redis-domain-event-bus.service";
 
 export type DomainEventType = "request.created" | "request.updated" | "message.created";
 
 export type DomainEvent = {
+  eventId?: string;
   type: DomainEventType;
   venueId: string;
   occurredAt: string;
@@ -13,11 +16,25 @@ export type DomainEvent = {
 };
 
 @Injectable()
-export class DomainEventsService {
+export class DomainEventsService implements OnModuleInit {
   private readonly events = new Subject<DomainEvent>();
 
+  constructor(@Optional() private readonly redisBus?: RedisDomainEventBusService) {}
+
+  async onModuleInit() {
+    await this.redisBus?.subscribe((event) => {
+      this.events.next(event);
+    });
+  }
+
   publish(event: DomainEvent) {
-    this.events.next(event);
+    const eventWithId = {
+      ...event,
+      eventId: event.eventId ?? `evt_${randomUUID()}`
+    };
+
+    this.events.next(eventWithId);
+    void this.redisBus?.publish(eventWithId);
   }
 
   streamForVenue(venueId: string): Observable<DomainEvent> {

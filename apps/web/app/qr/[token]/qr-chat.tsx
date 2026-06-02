@@ -5,7 +5,7 @@ import { Send, Sparkles, Star } from "lucide-react";
 import { publicApiRequest } from "@/lib/api/client";
 import type { CommandMessage, CommandSupportRequest, PublicChatAvailability, PublicQrConversationState, PublicQrIntakeState } from "@/lib/auth/types";
 import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, createWelcomeBody } from "@/lib/chat-copy";
-import { normalizeGuestChatMessages } from "@/lib/guest-chat-messages";
+import { reconcileGuestConversationMessages } from "@/lib/guest-chat-state";
 import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "@/lib/guest-session";
 import { connectGuestConversationEvents } from "@/lib/realtime-events";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
@@ -70,8 +70,19 @@ function normalizeMessage(message: CommandMessage): LocalMessage {
   };
 }
 
-function normalizeConversationMessages(messages: CommandMessage[], servicePointLabel: string) {
-  return normalizeGuestChatMessages(messages.map(normalizeMessage), servicePointLabel);
+function reconcileConversationMessages(input: {
+  currentMessages: LocalMessage[];
+  label: string;
+  replyPending: boolean;
+  serverMessages: CommandMessage[];
+}) {
+  return reconcileGuestConversationMessages({
+    currentMessages: input.currentMessages,
+    replyPending: input.replyPending,
+    serverMessages: input.serverMessages.map(normalizeMessage),
+    servicePointLabel: input.label,
+    welcomeMessage: createWelcomeMessage(input.label)
+  }) as LocalMessage[];
 }
 
 export function QrChat({ qrToken }: { qrToken: string }) {
@@ -222,18 +233,14 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         return;
       }
 
-      if (result.replyPending) {
-        // Keep the existing messages and add a pending indicator if not already present
-        setMessages((current) => {
-          const hasPending = current.some((message) => message.isPending);
-          if (hasPending) {
-            return current;
-          }
-          return [...current.filter((message) => message.id !== "welcome" || current.indexOf(message) === 0), createPendingAssistantMessage()];
-        });
-      } else {
-        setMessages([createWelcomeMessage(label), ...normalizeConversationMessages(result.messages, label)]);
-      }
+      setMessages((current) =>
+        reconcileConversationMessages({
+          currentMessages: current,
+          label,
+          replyPending: Boolean(result.replyPending),
+          serverMessages: result.messages
+        })
+      );
       setRequest(result.request);
     }
 
@@ -285,10 +292,14 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         return;
       }
 
-      setMessages([
-        createWelcomeMessage(result.servicePoint.label),
-        ...normalizeConversationMessages(result.messages, result.servicePoint.label)
-      ]);
+      setMessages((current) =>
+        reconcileConversationMessages({
+          currentMessages: current,
+          label: result.servicePoint.label,
+          replyPending: Boolean(result.replyPending),
+          serverMessages: result.messages
+        })
+      );
       setConversationId(result.conversationId);
       setRequest(result.request);
     } catch {
@@ -331,7 +342,13 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       if (result.message) {
         setMessages((current) => [
           ...current,
-          ...normalizeConversationMessages([result.message as CommandMessage], servicePointLabel)
+          ...(reconcileGuestConversationMessages({
+            currentMessages: [],
+            replyPending: false,
+            serverMessages: [normalizeMessage(result.message as CommandMessage)],
+            servicePointLabel,
+            welcomeMessage: createWelcomeMessage(servicePointLabel)
+          }).slice(1) as LocalMessage[])
         ]);
       }
     } catch {
