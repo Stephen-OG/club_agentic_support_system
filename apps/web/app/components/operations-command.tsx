@@ -17,12 +17,9 @@ import {
   summarizeOperationsBuckets
 } from "@/lib/operations-workflow";
 import { calculateRatingAnalytics } from "@/lib/rating-analytics";
+import { createCommandRequestStatusLabel } from "@/lib/request-display";
 import { connectStaffVenueEvents } from "@/lib/realtime-events";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-
-function statusLabel(status: string) {
-  return status.toLowerCase().replace("_", " ");
-}
 
 function sharedStatus(status: CommandRequestStatus) {
   return status.toLowerCase() as Lowercase<CommandRequestStatus>;
@@ -366,7 +363,7 @@ export function OperationsCommand() {
                   </div>
                   <div className="pill-row compact">
                     <span className={`pill priority-${priorityClass(request.priority)}`}>{priorityClass(request.priority)}</span>
-                    <span className={`pill status-${sharedStatus(request.status)}`}>{statusLabel(request.status)}</span>
+                    <span className={`pill status-${sharedStatus(request.status)}`}>{createCommandRequestStatusLabel(request.status)}</span>
                     <span className={`pill rating-chip ${request.satisfactionRating && request.satisfactionRating <= 2 ? "low-rating" : ""}`}>
                       <Star size={12} />
                       {ratingLabel(request)}

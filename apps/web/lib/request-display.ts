@@ -1,5 +1,13 @@
 import type { CommandRequestStatus } from "./auth/types";
 
+function titleCaseStatus(status: CommandRequestStatus) {
+  return status
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export function createGuestRequestStatusLabel(status: CommandRequestStatus | null | undefined) {
   if (!status) {
     return "Ready";
@@ -13,9 +21,13 @@ export function createGuestRequestStatusLabel(status: CommandRequestStatus | nul
     return "Complete";
   }
 
-  return status
-    .toLowerCase()
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  if (status === "COMPLETED") {
+    return "Awaiting rating";
+  }
+
+  return titleCaseStatus(status);
+}
+
+export function createCommandRequestStatusLabel(status: CommandRequestStatus) {
+  return titleCaseStatus(status);
 }

@@ -400,7 +400,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
               ))}
             </div>
             <button className="button ghost" disabled={isSending} onClick={() => void updateRequest("not_satisfied")} type="button">
-              Not yet
+              Still need help
             </button>
           </div>
         ) : canCancel ? (
