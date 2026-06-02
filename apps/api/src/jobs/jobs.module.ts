@@ -29,7 +29,8 @@ import { TriageReplyProcessor } from "./triage-reply.processor";
     }),
     BullModule.registerQueue({
       name: "triage-reply"
-    })
+    }),
+    TriageModule
   ],
   providers: [TriageReplyProcessor],
   exports: [BullModule]
