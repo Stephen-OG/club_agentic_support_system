@@ -21,6 +21,7 @@ export type TriageReplyJobData = {
   quickAction?: string | null;
   locationLabel?: string | null;
   isFollowup?: boolean;
+  skipAssistantReply?: boolean;
   deterministicPriority?: RequestPriority;
 };
 
@@ -51,6 +52,7 @@ export class TriageReplyProcessor extends WorkerHost {
       quickAction,
       locationLabel,
       isFollowup,
+      skipAssistantReply,
       deterministicPriority
     } = job.data;
 
@@ -89,6 +91,10 @@ export class TriageReplyProcessor extends WorkerHost {
           }
         });
         this.publishRequestUpdated(venueId, conversationId, request.id);
+      }
+
+      if (skipAssistantReply) {
+        return;
       }
 
       // 3. Persist the assistant reply message

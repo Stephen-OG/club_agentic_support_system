@@ -13,6 +13,7 @@ import { VenuesCommand } from "./components/venues-command";
 import type { CommandView } from "@/lib/auth/role-policy";
 import { getCommandViewHref, getPrimaryMembership, getRoleDashboardMode, getVisibleCommandViews, resolveCommandView } from "@/lib/auth/role-policy";
 import type { CommandUser } from "@/lib/auth/types";
+import { getNextVisitedCommandViews } from "@/lib/command-tabs";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 const iconByView: Record<CommandView, LucideIcon> = {
@@ -34,6 +35,7 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
   const requestedView = searchParams.get("view");
   const startingView = resolveCommandView(currentUser, requestedView, initialView || defaultView);
   const [view, setView] = useState<CommandView>(startingView);
+  const [visitedViews, setVisitedViews] = useState<CommandView[]>([startingView]);
   const primaryMembership = getPrimaryMembership(currentUser);
 
   async function signOut() {
@@ -52,11 +54,25 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
     if (view !== nextView) {
       setView(nextView);
     }
+    setVisitedViews((current) => getNextVisitedCommandViews(current, nextView));
   }, [currentUser, defaultView, initialView, requestedView, view]);
 
   function selectView(nextView: CommandView) {
+    if (nextView === view) {
+      return;
+    }
+
     setView(nextView);
+    setVisitedViews((current) => getNextVisitedCommandViews(current, nextView));
     router.replace(getCommandViewHref(pathname, nextView), { scroll: false });
+  }
+
+  function panelProps(panelView: CommandView) {
+    return {
+      "aria-hidden": view !== panelView,
+      className: "command-view-panel",
+      hidden: view !== panelView
+    };
   }
 
   return (
@@ -92,12 +108,36 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
         </div>
       </aside>
       <section className="command-main">
-        {view === "dashboard" ? <CommandCenterDashboard /> : null}
-        {view === "operations" ? <OperationsCommand /> : null}
-        {view === "team" ? <TeamCommand currentUser={currentUser} /> : null}
-        {view === "venues" ? <VenuesCommand /> : null}
-        {view === "staff" ? <StaffDashboard currentUser={currentUser} /> : null}
-        {view === "account" ? <AccountCommand currentUser={currentUser} /> : null}
+        {visitedViews.includes("dashboard") ? (
+          <div {...panelProps("dashboard")}>
+            <CommandCenterDashboard />
+          </div>
+        ) : null}
+        {visitedViews.includes("operations") ? (
+          <div {...panelProps("operations")}>
+            <OperationsCommand />
+          </div>
+        ) : null}
+        {visitedViews.includes("team") ? (
+          <div {...panelProps("team")}>
+            <TeamCommand currentUser={currentUser} />
+          </div>
+        ) : null}
+        {visitedViews.includes("venues") ? (
+          <div {...panelProps("venues")}>
+            <VenuesCommand />
+          </div>
+        ) : null}
+        {visitedViews.includes("staff") ? (
+          <div {...panelProps("staff")}>
+            <StaffDashboard currentUser={currentUser} />
+          </div>
+        ) : null}
+        {visitedViews.includes("account") ? (
+          <div {...panelProps("account")}>
+            <AccountCommand currentUser={currentUser} />
+          </div>
+        ) : null}
       </section>
     </main>
   );

@@ -18,6 +18,7 @@ import type { CreateVenueLocationDto } from "./dto/create-venue-location.dto";
 import { CreateVenueDto } from "./dto/create-venue.dto";
 import type { PublicGuestMessageDto } from "./dto/public-guest-message.dto";
 import type { PublicVenueMessageDto } from "./dto/public-venue-message.dto";
+import { classifyOpenRequestGuestMessage } from "./guest-followup-intent";
 import type { UpdateServicePointDto } from "./dto/update-service-point.dto";
 import type { UpdateVenueOpeningHoursDto } from "./dto/update-venue-opening-hours.dto";
 import { getVenueChatAvailability, type VenueOpeningHourWindow } from "./venue-hours";
@@ -510,6 +511,20 @@ export class ServicePointsService {
     return `Hello. If you'd like help at ${servicePointLabel}, just send your request and the team will respond.`;
   }
 
+  private courtesyFollowupReply() {
+    return "You're welcome. The team has your request and will keep you updated here.";
+  }
+
+  private requestAcknowledgementReply(priority: RequestPriority, locationLabel: string | null | undefined) {
+    if (priority === "urgent") {
+      return locationLabel
+        ? `I have alerted the team that ${locationLabel} needs urgent support. Please stay where you are if it is safe to do so.`
+        : "I have alerted the team that you need urgent support. Please stay where you are if it is safe to do so.";
+    }
+
+    return locationLabel ? `Of course. I have notified the team for ${locationLabel}.` : "Of course. I have notified the team.";
+  }
+
   private locationPrompt(venueName: string) {
     return `Where are you in ${venueName}? Please send a table number, bar area, VIP booth, or nearby landmark so the team can find you.`;
   }
@@ -727,6 +742,7 @@ export class ServicePointsService {
 
     const latestPreflightRequest = Array.isArray((existingConversation as any)?.requests) ? (existingConversation as any).requests[0] : null;
     const hasOpenPreflightRequest = latestPreflightRequest ? this.isActiveRequestStatus(latestPreflightRequest.status) : false;
+    const openRequestIntent = hasOpenPreflightRequest ? classifyOpenRequestGuestMessage(input.message) : null;
     const nonRequestReply = !hasOpenPreflightRequest
       ? this.nonRequestReply(input.message, venue?.name || servicePoint.label)
       : null;
@@ -782,10 +798,51 @@ export class ServicePointsService {
       return result;
     }
 
+    if (hasOpenPreflightRequest && openRequestIntent === "courtesy") {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const conversation = existingConversation;
+
+        await tx.message.create({
+          data: encryptMessageCreateData({
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            conversationId: conversation.id,
+            requestId: latestPreflightRequest.id,
+            sender: SenderType.GUEST,
+            body: input.message,
+            metadata: { source: "public_qr", qrToken: token, intent: "courtesy" }
+          })
+        });
+
+        await tx.message.create({
+          data: encryptMessageCreateData({
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            conversationId: conversation.id,
+            requestId: latestPreflightRequest.id,
+            sender: SenderType.ASSISTANT,
+            body: this.courtesyFollowupReply(),
+            metadata: { source: "public_qr", intent: "courtesy_reply" }
+          })
+        });
+
+        const messages = await tx.message.findMany({
+          where: { conversationId: conversation.id },
+          orderBy: { createdAt: "asc" }
+        });
+
+        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
+          replyPending: false,
+          request: latestPreflightRequest
+        });
+      });
+
+      return result;
+    }
+
     // --- Async path: needs AI triage — save guest message + support request, enqueue job ---
     const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
     const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
-    const hasExistingRequest = hasOpenPreflightRequest && latestPreflightRequest;
 
     const transactionResult = await this.prisma.$transaction(async (tx) => {
       const conversation =
@@ -798,37 +855,21 @@ export class ServicePointsService {
           }
         }));
 
-      // Create or update support request
-      const isUrgentFollowup = Boolean(hasExistingRequest && deterministicPriority === "urgent");
       const status = deterministicPriority === "urgent" ? RequestStatus.ESCALATED : RequestStatus.NEW;
-      
-      let supportRequest;
-      if (hasExistingRequest) {
-        supportRequest = latestPreflightRequest;
-        if (isUrgentFollowup) {
-          supportRequest = await tx.supportRequest.update({
-            where: { id: latestPreflightRequest.id },
-            data: { status: RequestStatus.ESCALATED }
-          });
-        }
-      } else {
-        supportRequest = await tx.supportRequest.create({
-          data: {
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
-            conversationId: conversation.id,
-            title: "Guest support request",
-            category: "general",
-            summary: input.message,
-            priority: prismaPriority,
-            deterministicPriority: prismaPriority,
-            status
-          }
-        });
-      }
 
-      const eventType = isUrgentFollowup ? "request.escalated" : hasExistingRequest ? "request.updated" : "request.created";
-      const realtimeEventType: DomainEventType = hasExistingRequest ? "request.updated" : "request.created";
+      const supportRequest = await tx.supportRequest.create({
+        data: {
+          venueId: servicePoint.venueId,
+          servicePointId: servicePoint.id,
+          conversationId: conversation.id,
+          title: "Guest support request",
+          category: "general",
+          summary: input.message,
+          priority: prismaPriority,
+          deterministicPriority: prismaPriority,
+          status
+        }
+      });
 
       // Save the guest message
       await tx.message.create({
@@ -843,11 +884,23 @@ export class ServicePointsService {
         })
       });
 
+      await tx.message.create({
+        data: encryptMessageCreateData({
+          venueId: servicePoint.venueId,
+          servicePointId: servicePoint.id,
+          conversationId: conversation.id,
+          requestId: supportRequest.id,
+          sender: SenderType.ASSISTANT,
+          body: this.requestAcknowledgementReply(deterministicPriority, servicePoint.label),
+          metadata: { source: "public_qr", qrToken: token, intent: "request_acknowledgement" }
+        })
+      });
+
       await tx.requestEvent.create({
         data: {
           venueId: servicePoint.venueId,
           requestId: supportRequest.id,
-          type: eventType,
+          type: "request.created",
           toStatus: supportRequest.status,
           metadata: { source: "public_qr", qrToken: token }
         }
@@ -859,13 +912,13 @@ export class ServicePointsService {
       });
 
       const response = this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
-        replyPending: true,
+        replyPending: false,
         request: supportRequest
       });
 
       return {
         messageId: this.latestMessageId(messages, SenderType.GUEST, supportRequest.id),
-        realtimeEventType,
+        realtimeEventType: "request.created" as DomainEventType,
         response
       };
     });
@@ -884,7 +937,8 @@ export class ServicePointsService {
         guestMessageBody: input.message,
         qrToken: token,
         source: "public_qr",
-        isFollowup: hasExistingRequest,
+        isFollowup: false,
+        skipAssistantReply: true,
         deterministicPriority
       } satisfies TriageReplyJobData);
     } catch {

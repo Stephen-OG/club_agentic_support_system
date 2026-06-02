@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, Bell, Clock3, MessageSquareText, RadioTower, RefreshCw, ShieldAlert, Star } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import type { CommandRequestStatus, CommandSupportRequest, CommandVenue } from "@/lib/auth/types";
-import { playDefaultRequestNotificationSound } from "@/lib/default-notification-sound";
+import { initializeDefaultRequestNotificationSound, playDefaultRequestNotificationSound } from "@/lib/default-notification-sound";
 import { calculateOperationsAnalytics } from "@/lib/operations-analytics";
 import {
   type OperationsBucket,
@@ -52,6 +52,7 @@ export function OperationsCommand() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const knownRequestIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedRequestsRef = useRef(false);
+  const hasLoadedOperationsRef = useRef(false);
   const [venues, setVenues] = useState<CommandVenue[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState("");
   const [requests, setRequests] = useState<CommandSupportRequest[]>([]);
@@ -66,6 +67,7 @@ export function OperationsCommand() {
     if (typeof window !== "undefined" && "Notification" in window) {
       setNotificationPermission(window.Notification.permission);
     }
+    initializeDefaultRequestNotificationSound();
   }, []);
 
   const loadVenues = useCallback(async () => {
@@ -184,6 +186,11 @@ export function OperationsCommand() {
   }
 
   useEffect(() => {
+    if (hasLoadedOperationsRef.current) {
+      return;
+    }
+
+    hasLoadedOperationsRef.current = true;
     void refresh();
   }, [refresh]);
 
@@ -219,6 +226,10 @@ export function OperationsCommand() {
 
     const permission = await window.Notification.requestPermission();
     setNotificationPermission(permission);
+    initializeDefaultRequestNotificationSound();
+    if (permission === "granted") {
+      void playDefaultRequestNotificationSound();
+    }
   }
 
   const bucketSummary = summarizeOperationsBuckets(requests);

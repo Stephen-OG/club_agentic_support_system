@@ -1,9 +1,59 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { playDefaultRequestNotificationSound } from "./default-notification-sound";
+import { initializeDefaultRequestNotificationSound, playDefaultRequestNotificationSound, resetDefaultRequestNotificationSoundForTests } from "./default-notification-sound";
 
 describe("default notification sound", () => {
+  it("installs one-shot unlock listeners for browser audio", async () => {
+    const events: Array<{ event: string; listener: () => void; options: unknown }> = [];
+    class FakeAudioContext {
+      currentTime = 0;
+      destination = {};
+      state = "suspended";
+
+      createOscillator() {
+        return {
+          frequency: { setValueAtTime() {} },
+          type: "",
+          connect() {},
+          start() {},
+          stop() {},
+          onended: null
+        };
+      }
+
+      createGain() {
+        return {
+          connect() {},
+          gain: {
+            exponentialRampToValueAtTime() {},
+            setValueAtTime() {}
+          }
+        };
+      }
+
+      async resume() {
+        this.state = "running";
+      }
+
+      async close() {}
+    }
+
+    resetDefaultRequestNotificationSoundForTests();
+    initializeDefaultRequestNotificationSound({
+      AudioContext: FakeAudioContext,
+      addEventListener(event: string, listener: () => void, options: unknown) {
+        events.push({ event, listener, options });
+      }
+    } as never);
+
+    assert.deepEqual(events.map((event) => event.event), ["pointerdown", "keydown", "touchstart"]);
+    events[0]?.listener();
+    assert.equal(await playDefaultRequestNotificationSound({ AudioContext: FakeAudioContext } as never), true);
+    resetDefaultRequestNotificationSoundForTests();
+  });
+
   it("returns false when browser audio is unavailable", async () => {
+    resetDefaultRequestNotificationSoundForTests();
     assert.equal(await playDefaultRequestNotificationSound({} as Window), false);
   });
 
@@ -60,6 +110,7 @@ describe("default notification sound", () => {
       }
     }
 
+    resetDefaultRequestNotificationSoundForTests();
     assert.equal(await playDefaultRequestNotificationSound({ AudioContext: FakeAudioContext } as never), true);
     assert.deepEqual(calls, [
       "frequency:880:10",
@@ -71,5 +122,6 @@ describe("default notification sound", () => {
       "start:10",
       "stop:10.24"
     ]);
+    resetDefaultRequestNotificationSoundForTests();
   });
 });

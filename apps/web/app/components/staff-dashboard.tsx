@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Clock3, LogOut, Play, RefreshCw, ShieldCheck, UserCheck } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
 import type { CommandRequestStatus, CommandSupportRequest, CommandUser } from "@/lib/auth/types";
+import { initializeDefaultRequestNotificationSound, playDefaultRequestNotificationSound } from "@/lib/default-notification-sound";
+import { getOperationsNotifications } from "@/lib/operations-workflow";
 import { connectStaffVenueEvents } from "@/lib/realtime-events";
 import {
   getStaffNextStatus,
@@ -38,6 +40,27 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
   const [loading, setLoading] = useState(Boolean(venueId));
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [activeBucket, setActiveBucket] = useState<StaffQueueBucket>("active");
+  const knownRequestIdsRef = useRef<Set<string>>(new Set());
+  const hasLoadedRequestsRef = useRef(false);
+
+  useEffect(() => {
+    initializeDefaultRequestNotificationSound();
+  }, []);
+
+  const notifyForNewRequests = useCallback((nextRequests: CommandSupportRequest[]) => {
+    if (!hasLoadedRequestsRef.current) {
+      knownRequestIdsRef.current = new Set(nextRequests.map((request) => request.id));
+      hasLoadedRequestsRef.current = true;
+      return;
+    }
+
+    const notifications = getOperationsNotifications(knownRequestIdsRef.current, nextRequests);
+    knownRequestIdsRef.current = new Set(nextRequests.map((request) => request.id));
+
+    if (notifications.length > 0) {
+      void playDefaultRequestNotificationSound();
+    }
+  }, []);
 
   async function refresh() {
     if (!supabase || !venueId) {
@@ -49,7 +72,9 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
     setError(null);
 
     try {
-      setRequests(await apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venueId}/requests`));
+      const nextRequests = await apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venueId}/requests`);
+      notifyForNewRequests(nextRequests);
+      setRequests(nextRequests);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not load your queue");
     } finally {
@@ -100,6 +125,7 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
       try {
         const nextRequests = await apiRequest<CommandSupportRequest[]>(client, `/venues/${venueId}/requests`);
         if (!cancelled) {
+          notifyForNewRequests(nextRequests);
           setRequests(nextRequests);
         }
       } catch (nextError) {
@@ -130,7 +156,7 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
       disconnectRealtime();
       window.clearInterval(intervalId);
     };
-  }, [supabase, venueId]);
+  }, [notifyForNewRequests, supabase, venueId]);
 
   const bucketSummary = summarizeStaffQueueBuckets(requests);
   const activeRequests = requests.filter((request) => getStaffQueueBucket(request.status) === "active");
