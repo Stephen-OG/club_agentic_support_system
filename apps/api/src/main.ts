@@ -4,6 +4,7 @@ import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
+import { getApiPort } from "./bootstrap-config";
 import { StructuredLogger } from "./common/logger/structured-logger.service";
 import { HttpLoggingInterceptor } from "./common/logger/http-logging.interceptor";
 import {
@@ -62,7 +63,7 @@ async function bootstrap() {
     SwaggerModule.setup("docs", app, document);
   }
 
-  const port = 4001;
+  const port = getApiPort(process.env);
   const host = getApiHost(process.env);
   logger.log(`Starting API server on ${host}:${port}`, "Bootstrap");
   await app.listen(port, host);
