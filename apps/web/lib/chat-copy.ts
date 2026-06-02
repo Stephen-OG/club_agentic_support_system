@@ -1,3 +1,5 @@
+import { createGuestStatusMessage as createSharedGuestStatusMessage } from "@guestos/shared";
+
 export type RequestPriority = "low" | "normal" | "high" | "urgent";
 export type RequestStatus =
   | "new"
@@ -59,13 +61,5 @@ export function createUpdateErrorBody() {
 }
 
 export function createGuestStatusMessage(status: RequestStatus) {
-  const messages: Partial<Record<RequestStatus, string>> = {
-    declined: "That team member could not take it, so we are sending it back for another teammate to pick up.",
-    in_progress: "The team is working on this now.",
-    completed: "The team marked this complete. How did it go?",
-    resolved: "Thank you for confirming. We have closed this request.",
-    cancelled: "No problem, this request is cancelled. Send another message if you need anything else."
-  };
-
-  return messages[status];
+  return createSharedGuestStatusMessage(status);
 }

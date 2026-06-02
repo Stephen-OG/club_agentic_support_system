@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { RequestStatus as PrismaRequestStatus, SenderType } from "@prisma/client";
 import {
   canTransitionRequest,
+  createGuestStatusMessage,
   getNextGuestActionStatus,
   normalizeSatisfactionRating,
   type RequestActor,
@@ -67,20 +68,6 @@ function recentMessages(messages: Array<{ id: string; sender: SenderType; body: 
       body: message.body,
       createdAt: message.createdAt
     }));
-}
-
-function guestVisibleStatusMessage(status: RequestStatus) {
-  const messages: Partial<Record<RequestStatus, string>> = {
-    assigned: "A team member has been assigned to your request.",
-    declined: "That team member could not take it, so we are sending it back for another teammate to pick up.",
-    in_progress: "The team is working on this now.",
-    completed: "The team marked this complete. How did it go?",
-    resolved: "Thank you for confirming. We have closed this request.",
-    cancelled: "No problem, this request is cancelled. Send another message if you need anything else.",
-    escalated: "We have escalated this so the right team can respond quickly."
-  };
-
-  return messages[status];
 }
 
 @Injectable()
@@ -202,7 +189,7 @@ export class RequestsService {
         }
       });
 
-      const guestMessage = guestVisibleStatusMessage(toStatus);
+      const guestMessage = createGuestStatusMessage(toStatus);
       if (guestMessage) {
         await tx.message.create({
           data: encryptMessageCreateData({

@@ -49,6 +49,9 @@ const AiTriageStructuredOutputSchema = z.object({
   title: z.string().min(1)
 });
 
+const internalIdentifierRegex =
+  /\b(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|sp_[a-z0-9_]+_[a-f0-9]{16,})\b/i;
+
 type TriageInput = {
   deterministicPriority: RequestPriority;
   message: string;
@@ -192,6 +195,13 @@ export class AiTriageService {
         priority: "urgent",
         suggestedAction: "escalate",
         title: fallback.title
+      };
+    }
+
+    if (internalIdentifierRegex.test(modelTriage.assistantReply)) {
+      return {
+        ...modelTriage,
+        assistantReply: fallback.assistantReply
       };
     }
 

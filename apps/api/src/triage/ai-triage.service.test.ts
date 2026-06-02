@@ -125,6 +125,39 @@ describe("AI triage", () => {
     assert.equal(triage.assistantReply, "I have alerted the team for Main bar.");
   });
 
+  it("replaces model replies that expose internal location identifiers", async () => {
+    const service = new AiTriageService(cacheStub() as never, replyGuard() as never, {
+      get(key: string) {
+        return key === "OPENAI_API_KEY" ? "test-key" : undefined;
+      }
+    } as never);
+
+    (service as any).openai = {
+      responses: {
+        parse: async () => ({
+          output_parsed: {
+            assistantReply: "Of course. I have notified the team for 7548ab6e-e8ac-4aeb-8867-d2ff290d9b46.",
+            category: "general",
+            confidence: 0.8,
+            needsStaff: true,
+            priority: "normal",
+            suggestedAction: "reply",
+            summary: "Guest has waited too long.",
+            title: "Guest support request"
+          }
+        })
+      }
+    };
+
+    const triage = await service.triage({
+      deterministicPriority: "normal",
+      message: "I have been waiting too long.",
+      servicePointLabel: "Table 4"
+    });
+
+    assert.equal(triage.assistantReply, "Of course. I have notified the team for Table 4.");
+  });
+
   it("classifies greetings and venue information questions as no-staff fallback intents", () => {
     const service = new AiTriageService(cacheStub() as never, replyGuard() as never);
 

@@ -5,6 +5,7 @@ import { Send, Sparkles, Star } from "lucide-react";
 import { publicApiRequest } from "@/lib/api/client";
 import type { CommandMessage, CommandSupportRequest, PublicChatAvailability, PublicQrConversationState, PublicQrIntakeState } from "@/lib/auth/types";
 import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, createWelcomeBody } from "@/lib/chat-copy";
+import { normalizeGuestChatMessages } from "@/lib/guest-chat-messages";
 import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "@/lib/guest-session";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
 import { createGuestRequestStatusLabel } from "@/lib/request-display";
@@ -66,6 +67,10 @@ function normalizeMessage(message: CommandMessage): LocalMessage {
     body: message.body,
     createdAt: message.createdAt
   };
+}
+
+function normalizeConversationMessages(messages: CommandMessage[], servicePointLabel: string) {
+  return normalizeGuestChatMessages(messages.map(normalizeMessage), servicePointLabel);
 }
 
 export function QrChat({ qrToken }: { qrToken: string }) {
@@ -226,7 +231,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
           return [...current.filter((message) => message.id !== "welcome" || current.indexOf(message) === 0), createPendingAssistantMessage()];
         });
       } else {
-        setMessages([createWelcomeMessage(label), ...result.messages.map(normalizeMessage)]);
+        setMessages([createWelcomeMessage(label), ...normalizeConversationMessages(result.messages, label)]);
       }
       setRequest(result.request);
     }
@@ -270,7 +275,10 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         return;
       }
 
-      setMessages([createWelcomeMessage(result.servicePoint.label), ...result.messages.map(normalizeMessage)]);
+      setMessages([
+        createWelcomeMessage(result.servicePoint.label),
+        ...normalizeConversationMessages(result.messages, result.servicePoint.label)
+      ]);
       setConversationId(result.conversationId);
       setRequest(result.request);
     } catch {
@@ -311,7 +319,10 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       }
 
       if (result.message) {
-        setMessages((current) => [...current, normalizeMessage(result.message as CommandMessage)]);
+        setMessages((current) => [
+          ...current,
+          ...normalizeConversationMessages([result.message as CommandMessage], servicePointLabel)
+        ]);
       }
     } catch {
       setMessages((current) => [
