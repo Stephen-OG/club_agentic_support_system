@@ -1,5 +1,6 @@
 import { Module, Global } from "@nestjs/common";
 import { BullModule } from "@nestjs/bullmq";
+import { RealtimeModule } from "../realtime/realtime.module";
 import { TriageModule } from "../triage/triage.module";
 import { TriageReplyProcessor } from "./triage-reply.processor";
 
@@ -33,6 +34,7 @@ export function createRedisConnectionOptions(url: string | undefined) {
     BullModule.registerQueue({
       name: "triage-reply"
     }),
+    RealtimeModule,
     TriageModule
   ],
   providers: [TriageReplyProcessor],

@@ -16,6 +16,7 @@ import {
   summarizeOperationsBuckets
 } from "@/lib/operations-workflow";
 import { calculateRatingAnalytics } from "@/lib/rating-analytics";
+import { connectStaffVenueEvents } from "@/lib/realtime-events";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 function statusLabel(status: string) {
@@ -189,11 +190,21 @@ export function OperationsCommand() {
     const intervalId = window.setInterval(() => {
       void loadRequests(selectedVenueId);
     }, operationsPollIntervalMs);
+    const disconnectRealtime = supabase
+      ? connectStaffVenueEvents({
+          supabase,
+          venueId: selectedVenueId,
+          onEvent: () => {
+            void loadRequests(selectedVenueId);
+          }
+        })
+      : () => undefined;
 
     return () => {
+      disconnectRealtime();
       window.clearInterval(intervalId);
     };
-  }, [loadRequests, selectedVenueId]);
+  }, [loadRequests, selectedVenueId, supabase]);
 
   async function enableNotifications() {
     if (typeof window === "undefined" || !("Notification" in window)) {

@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from "@nestjs/bullmq";
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import type { Job } from "bullmq";
 import { SenderType } from "@prisma/client";
 import type { RequestPriority } from "@guestos/shared";
@@ -7,6 +7,7 @@ import { PrismaService } from "../database/prisma.service";
 import { AiTriageService } from "../triage/ai-triage.service";
 import { PriorityClassifierService } from "../triage/priority-classifier.service";
 import { encryptMessageCreateData } from "../security/message-crypto";
+import { DomainEventsService } from "../realtime/domain-events.service";
 
 export type TriageReplyJobData = {
   conversationId: string;
@@ -31,7 +32,8 @@ export class TriageReplyProcessor extends WorkerHost {
   constructor(
     private readonly aiTriage: AiTriageService,
     private readonly prisma: PrismaService,
-    private readonly priorityClassifier: PriorityClassifierService
+    private readonly priorityClassifier: PriorityClassifierService,
+    @Optional() private readonly events?: DomainEventsService
   ) {
     super();
   }
@@ -86,10 +88,11 @@ export class TriageReplyProcessor extends WorkerHost {
             agentPolicyVersion: "v1-semi-autonomous"
           }
         });
+        this.publishRequestUpdated(venueId, conversationId, request.id);
       }
 
       // 3. Persist the assistant reply message
-      await this.prisma.message.create({
+      const message = await this.prisma.message.create({
         data: encryptMessageCreateData({
           venueId,
           servicePointId,
@@ -114,6 +117,7 @@ export class TriageReplyProcessor extends WorkerHost {
           }
         })
       });
+      this.publishMessageCreated(venueId, conversationId, request?.id ?? null, message.id);
     } catch (error) {
       this.logger.error(
         `Failed to generate triage reply for conversation ${conversationId}: ${error instanceof Error ? error.message : "Unknown error"}`
@@ -121,7 +125,7 @@ export class TriageReplyProcessor extends WorkerHost {
 
       // Write a fallback message so the guest doesn't wait indefinitely
       try {
-        await this.prisma.message.create({
+        const message = await this.prisma.message.create({
           data: encryptMessageCreateData({
             venueId,
             servicePointId,
@@ -137,6 +141,7 @@ export class TriageReplyProcessor extends WorkerHost {
             }
           })
         });
+        this.publishMessageCreated(venueId, conversationId, null, message.id);
       } catch {
         this.logger.error(`Failed to write fallback reply for conversation ${conversationId}`);
       }
@@ -153,5 +158,26 @@ export class TriageReplyProcessor extends WorkerHost {
     });
 
     return request !== null;
+  }
+
+  private publishRequestUpdated(venueId: string, conversationId: string, requestId: string) {
+    this.events?.publish({
+      type: "request.updated",
+      venueId,
+      conversationId,
+      requestId,
+      occurredAt: new Date().toISOString()
+    });
+  }
+
+  private publishMessageCreated(venueId: string, conversationId: string, requestId: string | null, messageId: string) {
+    this.events?.publish({
+      type: "message.created",
+      venueId,
+      conversationId,
+      ...(requestId ? { requestId } : {}),
+      messageId,
+      occurredAt: new Date().toISOString()
+    });
   }
 }

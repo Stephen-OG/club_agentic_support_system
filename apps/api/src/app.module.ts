@@ -14,6 +14,7 @@ import { IntegrationsModule } from "./integrations/integrations.module";
 import { JobsModule } from "./jobs/jobs.module";
 import { LoggerModule } from "./common/logger/logger.module";
 import { NotificationsModule } from "./notifications/notifications.module";
+import { RealtimeModule } from "./realtime/realtime.module";
 import { RequestsModule } from "./requests/requests.module";
 import { getRateLimitConfig } from "./security/security-config";
 import { ServicePointsModule } from "./service-points/service-points.module";
@@ -39,6 +40,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     ServicePointsModule,
     StaffModule,
     ConversationsModule,
+    RealtimeModule,
     RequestsModule,
     TriageModule,
     NotificationsModule,

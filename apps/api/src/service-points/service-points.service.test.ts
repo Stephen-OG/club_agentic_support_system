@@ -12,7 +12,8 @@ function createService(
   aiTriage: ConstructorParameters<typeof ServicePointsService>[0],
   priorityClassifier: ConstructorParameters<typeof ServicePointsService>[3],
   prisma: ConstructorParameters<typeof ServicePointsService>[4],
-  venueAccess: ConstructorParameters<typeof ServicePointsService>[5]
+  venueAccess: ConstructorParameters<typeof ServicePointsService>[5],
+  events?: ConstructorParameters<typeof ServicePointsService>[6]
 ) {
   const triageService =
     aiTriage && typeof (aiTriage as { triage?: unknown }).triage === "function"
@@ -28,7 +29,7 @@ function createService(
 
   const queue = { add: async () => ({ id: "mock-job-id" }) } as never;
 
-  return new ServicePointsService(triageService, cache, queue, priorityClassifier, prisma, venueAccess);
+  return new ServicePointsService(triageService, cache, queue, priorityClassifier, prisma, venueAccess, events);
 }
 
 type PublicGuestMessageResult = {
@@ -84,6 +85,7 @@ describe("ServicePointsService public QR workflow", () => {
     ];
 
     const calls: Array<{ model: string; args: unknown }> = [];
+    const published: unknown[] = [];
     const tx = {
       conversation: {
         create: async (args: unknown) => {
@@ -148,7 +150,12 @@ describe("ServicePointsService public QR workflow", () => {
         classifyOrDefault: () => "high"
       } as never,
       prisma as never,
-      {} as never
+      {} as never,
+      {
+        publish: (event: unknown) => {
+          published.push(event);
+        }
+      } as never
     );
 
     const result = (await service.createGuestMessage("qr_public_123", {
@@ -160,6 +167,26 @@ describe("ServicePointsService public QR workflow", () => {
     assert.deepEqual(result.messages, storedMessages);
     assert.deepEqual(result.request, supportRequest);
     assert.deepEqual(result.servicePoint, servicePoint);
+    assert.deepEqual(
+      published.map((event) => ({ ...(event as any), occurredAt: "Any<Date>" })),
+      [
+        {
+          type: "request.created",
+          venueId: supportRequest.venueId,
+          requestId: supportRequest.id,
+          conversationId: supportRequest.conversationId,
+          occurredAt: "Any<Date>"
+        },
+        {
+          type: "message.created",
+          venueId: servicePoint.venueId,
+          requestId: supportRequest.id,
+          conversationId: conversation.id,
+          messageId: "message_guest_1",
+          occurredAt: "Any<Date>"
+        }
+      ]
+    );
     assert.deepEqual(calls, [
       {
         model: "servicePoint.findFirst",

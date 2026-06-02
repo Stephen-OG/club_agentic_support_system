@@ -5,6 +5,7 @@ import { CheckCircle2, Clock3, LogOut, Play, RefreshCw, ShieldCheck, UserCheck }
 import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
 import type { CommandRequestStatus, CommandSupportRequest, CommandUser } from "@/lib/auth/types";
+import { connectStaffVenueEvents } from "@/lib/realtime-events";
 import {
   getStaffNextStatus,
   getStaffQueueBucket,
@@ -116,9 +117,17 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
     const intervalId = window.setInterval(() => {
       void loadQueue({ showLoading: false });
     }, staffQueuePollIntervalMs);
+    const disconnectRealtime = connectStaffVenueEvents({
+      supabase: client,
+      venueId,
+      onEvent: () => {
+        void loadQueue({ showLoading: false });
+      }
+    });
 
     return () => {
       cancelled = true;
+      disconnectRealtime();
       window.clearInterval(intervalId);
     };
   }, [supabase, venueId]);

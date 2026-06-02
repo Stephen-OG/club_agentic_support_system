@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { InjectQueue } from "@nestjs/bullmq";
 import type { Queue } from "bullmq";
 import { RequestPriority as PrismaRequestPriority, RequestStatus, SenderType } from "@prisma/client";
@@ -12,6 +12,7 @@ import { PriorityClassifierService } from "../triage/priority-classifier.service
 import { VenueAccessService } from "../venues/access.service";
 import { decryptMessageBody, decryptMessageRecords, encryptMessageCreateData } from "../security/message-crypto";
 import type { TriageReplyJobData } from "../jobs/triage-reply.processor";
+import { DomainEventsService, type DomainEventType } from "../realtime/domain-events.service";
 import { CreateServicePointDto } from "./dto/create-service-point.dto";
 import type { CreateVenueLocationDto } from "./dto/create-venue-location.dto";
 import { CreateVenueDto } from "./dto/create-venue.dto";
@@ -65,7 +66,8 @@ export class ServicePointsService {
     @InjectQueue("triage-reply") private readonly triageReplyQueue: Queue<TriageReplyJobData>,
     private readonly priorityClassifier: PriorityClassifierService,
     private readonly prisma: PrismaService,
-    private readonly venueAccess: VenueAccessService
+    private readonly venueAccess: VenueAccessService,
+    @Optional() private readonly events?: DomainEventsService
   ) {}
 
   createQrToken(label: string) {
@@ -785,7 +787,7 @@ export class ServicePointsService {
     const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
     const hasExistingRequest = hasOpenPreflightRequest && latestPreflightRequest;
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const transactionResult = await this.prisma.$transaction(async (tx) => {
       const conversation =
         existingConversation ??
         (await tx.conversation.create({
@@ -826,6 +828,7 @@ export class ServicePointsService {
       }
 
       const eventType = isUrgentFollowup ? "request.escalated" : hasExistingRequest ? "request.updated" : "request.created";
+      const realtimeEventType: DomainEventType = hasExistingRequest ? "request.updated" : "request.created";
 
       // Save the guest message
       await tx.message.create({
@@ -855,11 +858,22 @@ export class ServicePointsService {
         orderBy: { createdAt: "asc" }
       });
 
-      return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
+      const response = this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
         replyPending: true,
         request: supportRequest
       });
+
+      return {
+        messageId: this.latestMessageId(messages, SenderType.GUEST, supportRequest.id),
+        realtimeEventType,
+        response
+      };
     });
+
+    this.publishRequestEvent(transactionResult.realtimeEventType, transactionResult.response.request as any);
+    this.publishMessageEvent(transactionResult.response.request as any, transactionResult.messageId);
+
+    const result = transactionResult.response;
 
     try {
       await this.triageReplyQueue.add("triage-reply", {
@@ -1319,5 +1333,41 @@ export class ServicePointsService {
       chatAvailability: this.publicChatAvailability(venue),
       venue: this.publicVenueSummary(venue)
     };
+  }
+
+  private latestMessageId(messages: Array<{ id?: string; sender?: unknown; requestId?: string | null }>, sender: SenderType, requestId?: string | null) {
+    return [...messages].reverse().find((message) => message.sender === sender && (!requestId || message.requestId === requestId))?.id;
+  }
+
+  private publishRequestEvent(type: DomainEventType, request: { id: string; venueId: string; conversationId: string } | null | undefined) {
+    if (!request) {
+      return;
+    }
+
+    this.events?.publish({
+      type,
+      venueId: request.venueId,
+      requestId: request.id,
+      conversationId: request.conversationId,
+      occurredAt: new Date().toISOString()
+    });
+  }
+
+  private publishMessageEvent(
+    request: { id: string; venueId: string; conversationId: string } | null | undefined,
+    messageId?: string
+  ) {
+    if (!request || !messageId) {
+      return;
+    }
+
+    this.events?.publish({
+      type: "message.created",
+      venueId: request.venueId,
+      requestId: request.id,
+      conversationId: request.conversationId,
+      messageId,
+      occurredAt: new Date().toISOString()
+    });
   }
 }

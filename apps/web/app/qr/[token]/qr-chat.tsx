@@ -7,6 +7,7 @@ import type { CommandMessage, CommandSupportRequest, PublicChatAvailability, Pub
 import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, createWelcomeBody } from "@/lib/chat-copy";
 import { normalizeGuestChatMessages } from "@/lib/guest-chat-messages";
 import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "@/lib/guest-session";
+import { connectGuestConversationEvents } from "@/lib/realtime-events";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
 import { createGuestRequestStatusLabel } from "@/lib/request-display";
 import { supportQuickActions } from "@/lib/support-intake";
@@ -238,9 +239,18 @@ export function QrChat({ qrToken }: { qrToken: string }) {
 
     void loadConversation();
     const interval = window.setInterval(() => void loadConversation(), 3000);
+    const disconnectRealtime = connectGuestConversationEvents({
+      conversationId: activeConversationId,
+      guestSessionId,
+      qrToken,
+      onEvent: () => {
+        void loadConversation();
+      }
+    });
 
     return () => {
       cancelled = true;
+      disconnectRealtime();
       window.clearInterval(interval);
     };
   }, [applyClosedState, applyEndedState, conversationId, guestSessionId, qrToken, servicePointLabel]);

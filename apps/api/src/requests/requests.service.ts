@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { RequestStatus as PrismaRequestStatus, SenderType } from "@prisma/client";
 import {
   canTransitionRequest,
@@ -14,6 +14,7 @@ import { VenueAccessService } from "../venues/access.service";
 import type { GuestRequestActionDto } from "./dto/guest-request-action.dto";
 import type { UpdateRequestStatusDto } from "./dto/update-request-status.dto";
 import { decryptMessageRecord, encryptMessageCreateData } from "../security/message-crypto";
+import { DomainEventsService } from "../realtime/domain-events.service";
 
 const prismaStatusBySharedStatus: Record<RequestStatus, PrismaRequestStatus> = {
   new: PrismaRequestStatus.NEW,
@@ -74,7 +75,8 @@ function recentMessages(messages: Array<{ id: string; sender: SenderType; body: 
 export class RequestsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly venueAccess: VenueAccessService
+    private readonly venueAccess: VenueAccessService,
+    @Optional() private readonly events?: DomainEventsService
   ) {}
 
   async listForVenue(auth: AuthContext, venueId: string) {
@@ -165,7 +167,7 @@ export class RequestsService {
       ...(toStatus === "in_progress" ? { resolvedAt: null } : {})
     };
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const updatedRequest = await tx.supportRequest.update({
         where: { id: requestId },
         data: updateData,
@@ -190,8 +192,9 @@ export class RequestsService {
       });
 
       const guestMessage = createGuestStatusMessage(toStatus);
+      let createdMessage: { id: string } | null = null;
       if (guestMessage) {
-        await tx.message.create({
+        createdMessage = await tx.message.create({
           data: encryptMessageCreateData({
             venueId: request.venueId,
             servicePointId: request.servicePointId,
@@ -207,8 +210,13 @@ export class RequestsService {
         });
       }
 
-      return updatedRequest;
+      return { message: createdMessage, request: updatedRequest };
     });
+
+    this.publishRequestUpdated(result.request);
+    this.publishMessageCreated(result.request, result.message);
+
+    return result.request;
   }
 
   async applyGuestAction(input: GuestActionInput) {
@@ -242,7 +250,7 @@ export class RequestsService {
     const prismaToStatus = prismaStatusBySharedStatus[nextStatus];
     const metadata = this.isValidRating(input.rating) ? { satisfactionRating: input.rating } : {};
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const updatedRequest = await tx.supportRequest.update({
         where: { id: input.requestId },
         data: {
@@ -282,6 +290,11 @@ export class RequestsService {
         message: decryptMessageRecord(message)
       };
     });
+
+    this.publishRequestUpdated(result.request);
+    this.publishMessageCreated(result.request, result.message);
+
+    return result;
   }
 
   private actorFromAuth(auth: AuthContext): RequestActor {
@@ -340,5 +353,33 @@ export class RequestsService {
     }
 
     return "request.cancelled_by_guest";
+  }
+
+  private publishRequestUpdated(request: { venueId: string; id: string; conversationId: string }) {
+    this.events?.publish({
+      type: "request.updated",
+      venueId: request.venueId,
+      requestId: request.id,
+      conversationId: request.conversationId,
+      occurredAt: new Date().toISOString()
+    });
+  }
+
+  private publishMessageCreated(
+    request: { venueId: string; id: string; conversationId: string },
+    message: { id: string } | null | undefined
+  ) {
+    if (!message) {
+      return;
+    }
+
+    this.events?.publish({
+      type: "message.created",
+      venueId: request.venueId,
+      requestId: request.id,
+      conversationId: request.conversationId,
+      messageId: message.id,
+      occurredAt: new Date().toISOString()
+    });
   }
 }

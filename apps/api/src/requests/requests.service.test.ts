@@ -569,6 +569,78 @@ describe("RequestsService lifecycle", () => {
     );
   });
 
+  it("publishes realtime events after staff status updates commit", async () => {
+    const request = {
+      id: "request_realtime_1",
+      venueId: "venue_1",
+      servicePointId: "sp_1",
+      conversationId: "conversation_1",
+      status: RequestStatus.ACKNOWLEDGED,
+      venue: { workspaceId: auth.workspaceId }
+    };
+    const updatedRequest = {
+      ...request,
+      status: RequestStatus.IN_PROGRESS,
+      assignedTo: null,
+      servicePoint: null
+    };
+    const message = {
+      id: "message_realtime_1",
+      venueId: request.venueId,
+      conversationId: request.conversationId,
+      requestId: request.id
+    };
+    const prisma = {
+      supportRequest: {
+        findUnique: async () => request
+      },
+      $transaction: async (callback: (tx: any) => Promise<unknown>) =>
+        callback({
+          supportRequest: {
+            update: async () => updatedRequest
+          },
+          conversation: {
+            update: async () => ({})
+          },
+          requestEvent: {
+            create: async () => ({})
+          },
+          message: {
+            create: async () => message
+          }
+        })
+    };
+    const published: unknown[] = [];
+    const service = new RequestsService(prisma as never, createVenueAccess() as never, {
+      publish: (event: unknown) => {
+        published.push(event);
+      }
+    } as never);
+
+    await service.updateStatus(auth, request.id, { status: "in_progress" });
+
+    assert.deepEqual(
+      published.map((event) => ({ ...(event as any), occurredAt: "Any<Date>" })),
+      [
+        {
+          type: "request.updated",
+          venueId: request.venueId,
+          requestId: request.id,
+          conversationId: request.conversationId,
+          occurredAt: "Any<Date>"
+        },
+        {
+          type: "message.created",
+          venueId: request.venueId,
+          requestId: request.id,
+          conversationId: request.conversationId,
+          messageId: message.id,
+          occurredAt: "Any<Date>"
+        }
+      ]
+    );
+  });
+
   it("requires a rating before guests confirm a completed request is resolved", async () => {
     const request = {
       id: "request_1",
@@ -733,6 +805,84 @@ describe("RequestsService lifecycle", () => {
         }
       }
     ]);
+  });
+
+  it("publishes realtime events after guest request actions commit", async () => {
+    const request = {
+      id: "request_guest_realtime_1",
+      venueId: "venue_1",
+      servicePointId: "sp_1",
+      conversationId: "conversation_1",
+      status: RequestStatus.COMPLETED,
+      conversation: { guestSessionId: "guest_session_1" }
+    };
+    const updatedRequest = {
+      ...request,
+      status: RequestStatus.IN_PROGRESS
+    };
+    const message = {
+      id: "message_guest_realtime_1",
+      venueId: request.venueId,
+      conversationId: request.conversationId,
+      requestId: request.id,
+      sender: SenderType.SYSTEM,
+      body: "Thanks for letting us know. The team will keep working on this.",
+      createdAt: new Date("2026-06-02T06:20:00.000Z"),
+      metadata: {}
+    };
+    const prisma = {
+      supportRequest: {
+        findUnique: async () => request
+      },
+      $transaction: async (callback: (tx: any) => Promise<unknown>) =>
+        callback({
+          supportRequest: {
+            update: async () => updatedRequest
+          },
+          conversation: {
+            update: async () => ({})
+          },
+          message: {
+            create: async () => message
+          },
+          requestEvent: {
+            create: async () => ({})
+          }
+        })
+    };
+    const published: unknown[] = [];
+    const service = new RequestsService(prisma as never, createVenueAccess() as never, {
+      publish: (event: unknown) => {
+        published.push(event);
+      }
+    } as never);
+
+    await service.applyGuestAction({
+      requestId: request.id,
+      action: "not_satisfied",
+      sessionId: "guest_session_1"
+    });
+
+    assert.deepEqual(
+      published.map((event) => ({ ...(event as any), occurredAt: "Any<Date>" })),
+      [
+        {
+          type: "request.updated",
+          venueId: request.venueId,
+          requestId: request.id,
+          conversationId: request.conversationId,
+          occurredAt: "Any<Date>"
+        },
+        {
+          type: "message.created",
+          venueId: request.venueId,
+          requestId: request.id,
+          conversationId: request.conversationId,
+          messageId: message.id,
+          occurredAt: "Any<Date>"
+        }
+      ]
+    );
   });
 
   it("closes the guest conversation when guests cancel a request", async () => {
