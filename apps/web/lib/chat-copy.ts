@@ -60,7 +60,6 @@ export function createUpdateErrorBody() {
 
 export function createGuestStatusMessage(status: RequestStatus) {
   const messages: Partial<Record<RequestStatus, string>> = {
-    acknowledged: "The team has picked this up and will help from here.",
     declined: "That team member could not take it, so we are sending it back for another teammate to pick up.",
     in_progress: "The team is working on this now.",
     completed: "The team marked this complete. How did it go?",

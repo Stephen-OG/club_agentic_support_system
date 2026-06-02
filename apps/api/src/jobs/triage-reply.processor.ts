@@ -15,6 +15,7 @@ export type TriageReplyJobData = {
   guestMessageBody: string;
   qrToken: string;
   source: string; // "public_qr" | "public_venue_qr"
+  servicePointLabel?: string;
   venueSlug?: string;
   quickAction?: string | null;
   locationLabel?: string | null;
@@ -43,6 +44,7 @@ export class TriageReplyProcessor extends WorkerHost {
       guestMessageBody,
       qrToken,
       source,
+      servicePointLabel,
       venueSlug,
       quickAction,
       locationLabel,
@@ -60,7 +62,7 @@ export class TriageReplyProcessor extends WorkerHost {
         message: quickAction
           ? `Quick action: ${quickAction}\n${guestMessageBody}`
           : guestMessageBody,
-        servicePointLabel: locationLabel ?? servicePointId,
+        servicePointLabel: locationLabel ?? servicePointLabel ?? "your location",
         isFollowup: hasActiveRequest
       });
 

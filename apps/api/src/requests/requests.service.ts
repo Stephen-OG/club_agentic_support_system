@@ -71,7 +71,6 @@ function recentMessages(messages: Array<{ id: string; sender: SenderType; body: 
 
 function guestVisibleStatusMessage(status: RequestStatus) {
   const messages: Partial<Record<RequestStatus, string>> = {
-    acknowledged: "The team has acknowledged your request and will help from here.",
     assigned: "A team member has been assigned to your request.",
     declined: "That team member could not take it, so we are sending it back for another teammate to pick up.",
     in_progress: "The team is working on this now.",

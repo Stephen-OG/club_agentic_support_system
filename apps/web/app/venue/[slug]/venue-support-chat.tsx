@@ -13,6 +13,7 @@ import type {
 import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, createVenueWelcomeBody } from "@/lib/chat-copy";
 import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "@/lib/guest-session";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
+import { createGuestRequestStatusLabel } from "@/lib/request-display";
 import { supportLocationOptions, supportQuickActions } from "@/lib/support-intake";
 
 const satisfactionRatings: SatisfactionRating[] = [1, 2, 3, 4, 5];
@@ -50,18 +51,6 @@ function createWelcomeMessage(venueName: string) {
   return createLocalMessage(createVenueWelcomeBody(venueName), "ASSISTANT");
 }
 
-function statusLabel(request: CommandSupportRequest | null) {
-  if (!request) {
-    return "Ready";
-  }
-
-  if (request.status === "RESOLVED") {
-    return "complete";
-  }
-
-  return request.status.toLowerCase().replace("_", " ");
-}
-
 export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -78,7 +67,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
   const isSendingRef = useRef(false);
   const conversationStorageKey = `venue-support:${venueSlug}:conversationId`;
   const sessionStorageKey = `venue-support:${venueSlug}:sessionId`;
-  const statusText = useMemo(() => statusLabel(request), [request]);
+  const statusText = useMemo(() => createGuestRequestStatusLabel(request?.status), [request]);
   const statusClassName = request
     ? `pill status-${request.status.toLowerCase()} priority-${request.priority.toLowerCase()}`
     : "pill";

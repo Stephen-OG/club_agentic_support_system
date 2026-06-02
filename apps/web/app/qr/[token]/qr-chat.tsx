@@ -7,6 +7,7 @@ import type { CommandMessage, CommandSupportRequest, PublicChatAvailability, Pub
 import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, createWelcomeBody } from "@/lib/chat-copy";
 import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "@/lib/guest-session";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
+import { createGuestRequestStatusLabel } from "@/lib/request-display";
 import { supportQuickActions } from "@/lib/support-intake";
 
 type LocalMessage = {
@@ -67,18 +68,6 @@ function normalizeMessage(message: CommandMessage): LocalMessage {
   };
 }
 
-function statusLabel(request: CommandSupportRequest | null) {
-  if (!request) {
-    return "Ready";
-  }
-
-  if (request.status === "RESOLVED") {
-    return "complete";
-  }
-
-  return request.status.toLowerCase().replace("_", " ");
-}
-
 export function QrChat({ qrToken }: { qrToken: string }) {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -95,7 +84,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   const conversationStorageKey = `qr-chat:${qrToken}:conversationId`;
   const sessionStorageKey = `qr-chat:${qrToken}:sessionId`;
 
-  const statusText = useMemo(() => statusLabel(request), [request]);
+  const statusText = useMemo(() => createGuestRequestStatusLabel(request?.status), [request]);
   const statusClassName = request
     ? `pill status-${request.status.toLowerCase()} priority-${request.priority.toLowerCase()}`
     : "pill";

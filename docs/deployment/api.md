@@ -56,6 +56,18 @@ npx prisma migrate deploy --schema packages/database/prisma/schema.prisma
 
 For managed production databases, prefer the provider's migration job or release phase instead of running migrations from every API instance. Do not use `prisma migrate dev` against production.
 
+## Supabase/Postgres Pooling
+
+Render can run more than one API process during deploys or scaling, and Prisma opens a pool per process. If Supabase reports `EMAXCONNSESSION` or `max clients reached in session mode`, cap the Prisma pool in `DATABASE_URL`.
+
+For a small MVP deployment, start with:
+
+```bash
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/postgres?connection_limit=3&pool_timeout=30"
+```
+
+If you run multiple API instances, multiply `connection_limit` by the instance count and keep it below the Supabase pool size. If the database is already at its limit, lower the instance count first, then increase the Supabase pool size only after confirming the app is stable.
+
 ## Health And Rollback
 
 - Health checks should call `GET /health`.

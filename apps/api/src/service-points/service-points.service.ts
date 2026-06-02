@@ -618,7 +618,7 @@ export class ServicePointsService {
    */
   private async retrySynchronousTriage(
     conversationId: string,
-    servicePoint: { id: string; venueId: string },
+    servicePoint: { id: string; label?: string | null; venueId: string },
     deterministicPriority: RequestPriority,
     guestMessageBody: string,
     tokenOrSlug: string,
@@ -628,7 +628,7 @@ export class ServicePointsService {
       const triage = await this.triageGuestMessage({
         deterministicPriority,
         message: guestMessageBody,
-        servicePointLabel: servicePoint.id,
+        servicePointLabel: servicePoint.label || "your location",
         isFollowup: false
       });
 
@@ -866,6 +866,7 @@ export class ServicePointsService {
         conversationId: result.conversationId,
         venueId: servicePoint.venueId,
         servicePointId: servicePoint.id,
+        servicePointLabel: servicePoint.label,
         guestMessageBody: input.message,
         qrToken: token,
         source: "public_qr",
@@ -1155,6 +1156,7 @@ export class ServicePointsService {
         conversationId: result.conversationId,
         venueId: venue.id,
         servicePointId: servicePoint.id,
+        servicePointLabel: servicePoint.label,
         guestMessageBody: input.message,
         qrToken: "",
         source: "public_venue_qr",

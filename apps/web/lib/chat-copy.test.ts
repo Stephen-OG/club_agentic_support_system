@@ -45,7 +45,7 @@ describe("chat copy", () => {
   });
 
   it("turns staff status updates into guest-friendly chat messages", () => {
-    assert.equal(createGuestStatusMessage("acknowledged"), "The team has picked this up and will help from here.");
+    assert.equal(createGuestStatusMessage("acknowledged"), undefined);
     assert.equal(createGuestStatusMessage("completed"), "The team marked this complete. How did it go?");
   });
 

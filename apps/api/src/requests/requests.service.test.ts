@@ -435,7 +435,7 @@ describe("RequestsService lifecycle", () => {
     ]);
   });
 
-  it("creates a guest-visible conversation message when staff updates request status", async () => {
+  it("does not create a guest-visible acknowledged message", async () => {
     const request = {
       id: "request_status_message_1",
       venueId: "venue_1",
@@ -489,6 +489,64 @@ describe("RequestsService lifecycle", () => {
 
     await service.updateStatus({ ...auth, role: "admin" }, request.id, { status: "acknowledged" });
 
+    assert.equal(calls.some((call) => call.model === "message.create"), false);
+    assert.equal(calls.some((call) => call.model === "requestEvent.create"), true);
+  });
+
+  it("creates a guest-visible in-progress message when staff starts work", async () => {
+    const request = {
+      id: "request_in_progress_message_1",
+      venueId: "venue_1",
+      servicePointId: "service_point_1",
+      conversationId: "conversation_in_progress_message_1",
+      status: RequestStatus.ACKNOWLEDGED,
+      assignedToId: null,
+      venue: {
+        id: "venue_1",
+        workspaceId: "workspace_1"
+      }
+    };
+    const updatedRequest = {
+      ...request,
+      status: RequestStatus.IN_PROGRESS
+    };
+    const calls: Array<{ model: string; args: unknown }> = [];
+    const tx = {
+      supportRequest: {
+        update: async (args: unknown) => {
+          calls.push({ model: "supportRequest.update", args });
+          return updatedRequest;
+        }
+      },
+      message: {
+        create: async (args: unknown) => {
+          calls.push({ model: "message.create", args });
+          return args;
+        }
+      },
+      requestEvent: {
+        create: async (args: unknown) => {
+          calls.push({ model: "requestEvent.create", args });
+          return args;
+        }
+      }
+    };
+    const prisma = {
+      supportRequest: {
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "supportRequest.findUnique", args });
+          return request;
+        }
+      },
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => {
+        calls.push({ model: "$transaction", args: "callback" });
+        return callback(tx);
+      }
+    };
+    const service = new RequestsService(prisma as never, createVenueAccess() as never);
+
+    await service.updateStatus({ ...auth, role: "admin" }, request.id, { status: "in_progress" });
+
     assert.deepEqual(
       calls.find((call) => call.model === "message.create"),
       {
@@ -500,10 +558,10 @@ describe("RequestsService lifecycle", () => {
             conversationId: request.conversationId,
             requestId: request.id,
             sender: SenderType.SYSTEM,
-            body: "The team has acknowledged your request and will help from here.",
+            body: "The team is working on this now.",
             metadata: {
               source: "request_status",
-              status: "acknowledged"
+              status: "in_progress"
             }
           }
         }
