@@ -5,6 +5,14 @@ import { tap } from "rxjs/operators";
 import { StructuredLogger } from "./structured-logger.service";
 import type { Request, Response } from "express";
 
+export function sanitizeRequestPath(path: string | undefined) {
+  if (!path) {
+    return "/";
+  }
+
+  return path.split("?")[0] || "/";
+}
+
 @Injectable()
 export class HttpLoggingInterceptor implements NestInterceptor {
   constructor(private readonly logger: StructuredLogger) {}
@@ -26,7 +34,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
           this.logger.logHttpRequest({
             durationMs,
             method: request.method,
-            path: request.originalUrl || request.url,
+            path: sanitizeRequestPath(request.originalUrl || request.url),
             requestId,
             statusCode: response.statusCode,
             userId: request.auth?.staffProfileId,
@@ -57,7 +65,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
             durationMs,
             error,
             method: request.method,
-            path: request.originalUrl || request.url,
+            path: sanitizeRequestPath(request.originalUrl || request.url),
             requestId,
             statusCode,
             userId: request.auth?.staffProfileId,
@@ -70,4 +78,3 @@ export class HttpLoggingInterceptor implements NestInterceptor {
     );
   }
 }
-

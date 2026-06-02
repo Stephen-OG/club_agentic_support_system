@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Param, Post } from "@nestjs/common";
 import { SkipThrottle, Throttle } from "@nestjs/throttler";
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { PublicGuestMessageDto } from "./dto/public-guest-message.dto";
@@ -31,7 +31,7 @@ export class PublicQrController {
   getGuestConversation(
     @Param("token") token: string,
     @Param("conversationId") conversationId: string,
-    @Query("sessionId") sessionId?: string
+    @Headers("x-guest-session") sessionId?: string
   ) {
     return this.servicePoints.getGuestConversation(token, conversationId, sessionId);
   }
@@ -49,7 +49,7 @@ export class PublicQrController {
   getVenueGuestConversation(
     @Param("venueSlug") venueSlug: string,
     @Param("conversationId") conversationId: string,
-    @Query("sessionId") sessionId?: string
+    @Headers("x-guest-session") sessionId?: string
   ) {
     return this.servicePoints.getVenueGuestConversation(venueSlug, conversationId, sessionId);
   }
@@ -61,4 +61,3 @@ export class PublicQrController {
     return this.servicePoints.createVenueGuestMessage(venueSlug, input);
   }
 }
-

@@ -5,7 +5,7 @@ import { Send, Sparkles, Star } from "lucide-react";
 import { publicApiRequest } from "@/lib/api/client";
 import type { CommandMessage, CommandSupportRequest, PublicChatAvailability, PublicQrConversationState, PublicQrIntakeState } from "@/lib/auth/types";
 import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, createWelcomeBody } from "@/lib/chat-copy";
-import { appendSessionId, getOrCreateGuestSessionId } from "@/lib/guest-session";
+import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "@/lib/guest-session";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
 import { supportQuickActions } from "@/lib/support-intake";
 
@@ -201,8 +201,11 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       }
 
       const result = await publicApiRequest<PublicQrConversationState>(
-        appendSessionId(`/public/qr/${encodeURIComponent(qrToken)}/conversations/${encodeURIComponent(activeConversationId)}`, guestSessionId),
-        { cache: "no-store" }
+        `/public/qr/${encodeURIComponent(qrToken)}/conversations/${encodeURIComponent(activeConversationId)}`,
+        {
+          cache: "no-store",
+          headers: createGuestSessionHeaders(guestSessionId)
+        }
       ).catch(() => null);
 
       if (!result || cancelled) {

@@ -11,7 +11,7 @@ import type {
   PublicVenueSummary
 } from "@/lib/auth/types";
 import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, createVenueWelcomeBody } from "@/lib/chat-copy";
-import { appendSessionId, getOrCreateGuestSessionId } from "@/lib/guest-session";
+import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "@/lib/guest-session";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
 import { supportLocationOptions, supportQuickActions } from "@/lib/support-intake";
 
@@ -176,11 +176,11 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
       }
 
       const result = await publicApiRequest<PublicQrConversationState>(
-        appendSessionId(
-          `/public/qr/venues/${encodeURIComponent(venueSlug)}/conversations/${encodeURIComponent(activeConversationId)}`,
-          guestSessionId
-        ),
-        { cache: "no-store" }
+        `/public/qr/venues/${encodeURIComponent(venueSlug)}/conversations/${encodeURIComponent(activeConversationId)}`,
+        {
+          cache: "no-store",
+          headers: createGuestSessionHeaders(guestSessionId)
+        }
       ).catch(() => null);
 
       if (!result || cancelled) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { appendSessionId, getOrCreateGuestSessionId } from "./guest-session";
+import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "./guest-session";
 
 function memoryStorage(seed: Record<string, string> = {}) {
   const values = new Map(Object.entries(seed));
@@ -24,8 +24,8 @@ describe("guest session", () => {
     assert.equal(second, "guest_abc_123");
   });
 
-  it("adds session id query parameters to public conversation URLs", () => {
-    assert.equal(appendSessionId("/public/qr/token/conversations/abc", "guest_123"), "/public/qr/token/conversations/abc?sessionId=guest_123");
-    assert.equal(appendSessionId("/public/qr/token/conversations/abc?cache=false", "guest_123"), "/public/qr/token/conversations/abc?cache=false&sessionId=guest_123");
+  it("sends guest session ids in headers instead of URL query parameters", () => {
+    assert.deepEqual(createGuestSessionHeaders("guest_123"), { "X-Guest-Session": "guest_123" });
+    assert.deepEqual(createGuestSessionHeaders(""), {});
   });
 });

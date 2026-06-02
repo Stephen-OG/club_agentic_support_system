@@ -41,7 +41,6 @@ export function getOrCreateGuestSessionId(
   return next;
 }
 
-export function appendSessionId(path: string, sessionId: string) {
-  const separator = path.includes("?") ? "&" : "?";
-  return `${path}${separator}sessionId=${encodeURIComponent(sessionId)}`;
+export function createGuestSessionHeaders(sessionId: string): Record<string, string> {
+  return sessionId ? { "X-Guest-Session": sessionId } : {};
 }

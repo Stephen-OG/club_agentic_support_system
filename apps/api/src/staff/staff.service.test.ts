@@ -125,6 +125,44 @@ describe("StaffService", () => {
     );
   });
 
+  it("allows workspace owners without a venue membership to manage venue-scoped staff", async () => {
+    const workspaceOwnerAuth = { staffProfileId: "owner-workspace", workspaceId: "workspace-1", role: "owner" as const };
+    const createdMemberships: any[] = [];
+    const service = new StaffService(
+      {
+        staffProfile: {
+          findUnique: async () => null
+        },
+        $transaction: async (operation: any) =>
+          operation({
+            staffProfile: {
+              create: async ({ data }: any) => ({ id: `profile-${createdMemberships.length + 1}`, ...data })
+            },
+            staffMembership: {
+              create: async ({ data }: any) => {
+                createdMemberships.push(data);
+                return { id: `membership-${createdMemberships.length}`, ...data };
+              }
+            }
+          })
+      } as any,
+      {
+        createTemporaryPasswordUser: async ({ email }: any) => ({ id: `auth-${email}`, email })
+      } as any
+    );
+
+    await service.createStaffUser(workspaceOwnerAuth, {
+      email: "workspace-owner-created@example.com",
+      displayName: "Workspace Owner Created",
+      role: "staff",
+      venueId: "venue-1"
+    });
+
+    assert.deepEqual(createdMemberships.map((membership) => ({ role: membership.role, venueId: membership.venueId })), [
+      { role: "STAFF", venueId: "venue-1" }
+    ]);
+  });
+
   it("rejects venue managers creating users for a different venue or platform role", async () => {
     const service = new StaffService(
       {

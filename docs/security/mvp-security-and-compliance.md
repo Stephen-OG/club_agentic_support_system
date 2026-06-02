@@ -14,6 +14,8 @@ Sources:
 - Encrypted message bodies use a versioned envelope: `enc:v1:<iv>:<tag>:<ciphertext>`.
 - Legacy plaintext messages remain readable so production can migrate without breaking active conversations.
 - Production API startup requires `MESSAGE_ENCRYPTION_KEY`.
+- Public conversation polling uses the `X-Guest-Session` header instead of URL query parameters.
+- HTTP request logs strip query strings before writing structured request events.
 
 Deployment requirement:
 
@@ -45,6 +47,7 @@ Keep this key in the hosting provider secret manager. Do not commit it to Git or
 ### Security Misconfiguration
 
 - Production startup fails if message encryption is not configured.
+- Production startup fails if `REDIS_URL` is missing, because distributed cache, rate limits, and jobs need shared state.
 - CORS is allow-list based via `CORS_ORIGINS`.
 - API security headers include no-sniff, frame denial, strict referrer policy, and restricted permissions policy.
 - Swagger docs are disabled by default in production.
@@ -58,6 +61,7 @@ Keep this key in the hosting provider secret manager. Do not commit it to Git or
 ### Security Logging And Monitoring Failures
 
 - Request lifecycle events are written as `requestEvent` records.
+- HTTP access logs redact query strings so guest session IDs and other URL secrets are not persisted.
 - Next step: add security audit events for failed guest session checks, forbidden venue access, login failures, and rate-limit denials.
 
 ### Server-Side Request Forgery
@@ -70,12 +74,13 @@ Keep this key in the hosting provider secret manager. Do not commit it to Git or
 - Set `NODE_ENV=production`.
 - Set `MESSAGE_ENCRYPTION_KEY` with a 32-byte random key.
 - Set `CORS_ORIGINS` to the production web URL only.
-- Set `REDIS_URL` when running more than one API instance so rate limits are shared.
+- Set `REDIS_URL`; production startup intentionally fails without it.
 - Keep `ENABLE_API_DOCS` unset unless temporarily debugging a private environment.
 - Verify Supabase RLS/auth policies for any direct client-side Supabase access.
 - Run database migrations before switching traffic.
 - Confirm backups are enabled for Supabase Postgres.
 - Confirm logs do not include raw guest messages, Supabase service keys, OpenAI keys, or encryption keys.
+- Confirm public conversation URLs do not include `sessionId` query parameters.
 
 ## Recommended Next Controls
 

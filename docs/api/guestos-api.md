@@ -10,7 +10,7 @@ Accepts a message from a QR code attached to a service point such as a VIP table
 
 `GET /public/qr/:token/conversations/:conversationId`
 
-Returns the latest service-point conversation state for guest polling.
+Returns the latest service-point conversation state for guest polling. Send the guest session in the `X-Guest-Session` header; do not put it in the URL.
 
 Public venue QR pages live at `/venue/:slug`.
 
@@ -24,7 +24,7 @@ Accepts a venue QR guest message.
 
 `GET /public/qr/venues/:venueSlug/conversations/:conversationId`
 
-Returns the latest venue QR conversation state for guest polling.
+Returns the latest venue QR conversation state for guest polling. Send the guest session in the `X-Guest-Session` header; do not put it in the URL.
 
 Request body:
 

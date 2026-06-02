@@ -264,7 +264,7 @@ export class ServicePointsService {
       }
     }
 
-    return this.prisma.servicePoint.create({
+    const servicePoint = await this.prisma.servicePoint.create({
       data: {
         venueId,
         locationId: input.locationId || null,
@@ -272,6 +272,9 @@ export class ServicePointsService {
         qrToken: this.createQrToken(label)
       }
     });
+
+    await this.invalidatePublicIntakeCaches(venue, servicePoint);
+    return servicePoint;
   }
 
   async createVenueLocation(auth: AuthContext, venueId: string, input: CreateVenueLocationDto) {
@@ -288,13 +291,16 @@ export class ServicePointsService {
 
     this.venueAccess.assertCanManageVenue(auth, { workspaceId: venue.workspaceId, venueId });
 
-    return this.prisma.venueLocation.create({
+    const location = await this.prisma.venueLocation.create({
       data: {
         venueId,
         name: input.name.trim(),
         zone: input.zone?.trim() || null
       }
     });
+
+    await this.invalidatePublicIntakeCaches(venue);
+    return location;
   }
 
   async updateServicePoint(auth: AuthContext, venueId: string, servicePointId: string, input: UpdateServicePointDto) {
@@ -343,10 +349,14 @@ export class ServicePointsService {
       data.locationId = input.locationId || null;
     }
 
-    return this.prisma.servicePoint.update({
+    const updatedServicePoint = await this.prisma.servicePoint.update({
       where: { id: servicePointId },
       data
     });
+
+    await this.invalidatePublicIntakeCaches(venue, servicePoint);
+    await this.invalidatePublicIntakeCaches(venue, updatedServicePoint);
+    return updatedServicePoint;
   }
 
   async deleteServicePoint(auth: AuthContext, venueId: string, servicePointId: string) {
@@ -374,10 +384,13 @@ export class ServicePointsService {
       throw new NotFoundException("QR point not found");
     }
 
-    return this.prisma.servicePoint.update({
+    const archivedServicePoint = await this.prisma.servicePoint.update({
       where: { id: servicePointId },
       data: { isActive: false }
     });
+
+    await this.invalidatePublicIntakeCaches(venue, servicePoint);
+    return archivedServicePoint;
   }
 
   async updateVenueOpeningHours(auth: AuthContext, venueId: string, input: UpdateVenueOpeningHoursDto) {
@@ -420,6 +433,8 @@ export class ServicePointsService {
       });
     });
 
+    await this.invalidatePublicIntakeCaches(venue);
+
     return this.prisma.venue.findFirstOrThrow({
       where: {
         id: venueId
@@ -445,6 +460,18 @@ export class ServicePointsService {
         }
       }
     });
+  }
+
+  private async invalidatePublicIntakeCaches(venue?: { slug?: string | null }, servicePoint?: { qrToken?: string | null }) {
+    if (venue?.slug) {
+      await this.cache.del(`venue:intake:${venue.slug}`);
+    }
+
+    if (servicePoint?.qrToken) {
+      await this.cache.del(`sp:intake:${servicePoint.qrToken}`);
+    } else {
+      await this.cache.delPattern("sp:intake:*");
+    }
   }
 
   private isGreetingMessage(message: string) {

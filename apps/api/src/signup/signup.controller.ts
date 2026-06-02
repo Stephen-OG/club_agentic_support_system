@@ -1,4 +1,5 @@
 import { Body, Controller, Headers, Post, UnauthorizedException } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { ApiCreatedResponse, ApiTags } from "@nestjs/swagger";
 import { SupabaseAdminService } from "../auth/supabase-admin.service";
 import { SetupRequestDto } from "./dto/signup-request.dto";
@@ -14,6 +15,7 @@ export class SetupController {
   ) {}
 
   @Post()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiCreatedResponse({ description: "Creates workspace, owner profile, and first venue" })
   async initialize(
     @Body() input: SetupRequestDto,
@@ -28,6 +30,10 @@ export class SetupController {
     const { data: { user }, error } = await this.supabaseAdmin.getClient().auth.getUser(token);
     if (error || !user) {
       throw new UnauthorizedException("Invalid session");
+    }
+
+    if (!user.email_confirmed_at && !user.confirmed_at) {
+      throw new UnauthorizedException("Email must be verified before workspace setup");
     }
 
     // Ensure the email matches the authenticated user

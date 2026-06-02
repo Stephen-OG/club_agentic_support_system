@@ -51,3 +51,11 @@ The backend uses Prisma models for workspaces, venues, service points, conversat
 Think of this project as a hospitality support queue powered by QR chat:
 
 `Venue/service-point QR -> guest chat -> AI triage -> support request -> staff dashboard -> guest-visible status updates -> resolution`
+
+## Deployment And Operations
+
+- Environment template: `.env.example`
+- API deployment guide: `docs/deployment/api.md`
+- Web deployment guide: `docs/deployment/web.md`
+- Security checklist: `docs/security/mvp-security-and-compliance.md`
+- Runbooks: `docs/runbooks/`

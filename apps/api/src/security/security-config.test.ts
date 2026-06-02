@@ -70,10 +70,15 @@ describe("security config", () => {
   it("requires message encryption configuration in production", () => {
     assert.doesNotThrow(() => assertProductionSecurityConfig({ NODE_ENV: "development" }));
     assert.throws(() => assertProductionSecurityConfig({ NODE_ENV: "production" }), /MESSAGE_ENCRYPTION_KEY/);
+    assert.throws(
+      () => assertProductionSecurityConfig({ NODE_ENV: "production", MESSAGE_ENCRYPTION_KEY: "01234567890123456789012345678901" }),
+      /REDIS_URL/
+    );
     assert.doesNotThrow(() =>
       assertProductionSecurityConfig({
         NODE_ENV: "production",
-        MESSAGE_ENCRYPTION_KEY: "01234567890123456789012345678901"
+        MESSAGE_ENCRYPTION_KEY: "01234567890123456789012345678901",
+        REDIS_URL: "redis://localhost:6379"
       })
     );
   });

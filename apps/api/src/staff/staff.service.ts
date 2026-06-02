@@ -61,7 +61,7 @@ export class StaffService {
   async listTeam(auth: AuthContext) {
     this.assertCanManageTeam(auth);
     const membershipWhere =
-      auth.role === "admin"
+      auth.role === "admin" || (auth.role === "owner" && !auth.venueId)
         ? {
             workspaceId: auth.workspaceId,
             isActive: true
@@ -147,7 +147,11 @@ export class StaffService {
       return;
     }
 
-    if ((auth.role === "owner" || auth.role === "manager") && auth.venueId) {
+    if (auth.role === "owner") {
+      return;
+    }
+
+    if (auth.role === "manager" && auth.venueId) {
       return;
     }
 
@@ -159,6 +163,18 @@ export class StaffService {
 
     if (auth.role === "admin") {
       return input.role === "admin" ? null : input.venueId;
+    }
+
+    if (auth.role === "owner" && !auth.venueId) {
+      if (!venueManagerCreatableRoles.has(input.role)) {
+        throw new ForbiddenException("Workspace owners cannot create platform admin or owner accounts here");
+      }
+
+      if (!input.venueId) {
+        throw new ForbiddenException("Workspace owners must choose a venue for venue-scoped staff");
+      }
+
+      return input.venueId;
     }
 
     if (!venueManagerCreatableRoles.has(input.role)) {

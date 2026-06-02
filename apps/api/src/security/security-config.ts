@@ -76,6 +76,10 @@ export function assertProductionSecurityConfig(env: EnvMap = process.env) {
   if (!env.MESSAGE_ENCRYPTION_KEY?.trim()) {
     throw new Error("MESSAGE_ENCRYPTION_KEY is required in production");
   }
+
+  if (!env.REDIS_URL?.trim()) {
+    throw new Error("REDIS_URL is required in production for shared rate limits, cache, and background jobs");
+  }
 }
 
 export function applySecurityHeaders(app: INestApplication) {

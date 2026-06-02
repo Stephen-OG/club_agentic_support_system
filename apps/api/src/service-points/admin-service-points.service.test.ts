@@ -14,11 +14,15 @@ function createService(
   aiTriage: ConstructorParameters<typeof ServicePointsService>[0],
   priorityClassifier: ConstructorParameters<typeof ServicePointsService>[3],
   prisma: ConstructorParameters<typeof ServicePointsService>[4],
-  venueAccess: ConstructorParameters<typeof ServicePointsService>[5]
+  venueAccess: ConstructorParameters<typeof ServicePointsService>[5],
+  cacheOverride?: Partial<ConstructorParameters<typeof ServicePointsService>[1]>
 ) {
   const cache = {
     get: async () => null,
-    set: async () => undefined
+    set: async () => undefined,
+    del: async () => undefined,
+    delPattern: async () => undefined,
+    ...cacheOverride
   } as never;
   const queue = { add: async () => ({ id: "mock-job-id" }) } as never;
 
@@ -421,6 +425,47 @@ describe("updateVenueOpeningHours", () => {
         }
       }
     ]);
+  });
+
+  it("invalidates public intake caches after opening hours change", async () => {
+    const venue = { id: "venue_hours_cache", workspaceId: "workspace_1", slug: "venue-cache" };
+    const deletedPatterns: string[] = [];
+    const service = createService(
+      {} as never,
+      {} as never,
+      {
+        venue: {
+          findFirst: async () => venue,
+          findFirstOrThrow: async () => venue
+        },
+        $transaction: async (operation: any) =>
+          operation({
+            venueOpeningHour: {
+              createMany: async () => undefined,
+              deleteMany: async () => undefined
+            }
+          })
+      } as never,
+      {
+        assertCanManageVenue: () => undefined
+      } as never,
+      {
+        del: async (key: string) => {
+          deletedPatterns.push(key);
+        },
+        delPattern: async (pattern: string) => {
+          deletedPatterns.push(pattern);
+        }
+      }
+    );
+
+    await service.updateVenueOpeningHours(
+      { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+      "venue_hours_cache",
+      { openingHours: standardOpeningHours }
+    );
+
+    assert.deepEqual(deletedPatterns, ["venue:intake:venue-cache", "sp:intake:*"]);
   });
 
   it("throws BadRequestException when fewer than 7 days are provided", async () => {
