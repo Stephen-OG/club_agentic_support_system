@@ -798,7 +798,7 @@ export class ServicePointsService {
       return result;
     }
 
-    if (hasOpenPreflightRequest && openRequestIntent === "courtesy") {
+    if (hasOpenPreflightRequest && openRequestIntent === "courtesy" && existingConversation && latestPreflightRequest) {
       const result = await this.prisma.$transaction(async (tx) => {
         const conversation = existingConversation;
 

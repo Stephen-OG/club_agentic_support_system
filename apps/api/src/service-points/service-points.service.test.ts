@@ -187,101 +187,39 @@ describe("ServicePointsService public QR workflow", () => {
         }
       ]
     );
-    assert.deepEqual(calls, [
-      {
-        model: "servicePoint.findFirst",
-        args: {
-          where: {
+    assert.equal(calls.some((call) => call.model === "supportRequest.create"), true);
+    assert.deepEqual(
+      calls
+        .filter((call) => call.model === "message.create")
+        .map((call) => (call.args as { data: { sender: SenderType; body: string; requestId: string } }).data),
+      [
+        {
+          venueId: servicePoint.venueId,
+          servicePointId: servicePoint.id,
+          conversationId: conversation.id,
+          requestId: supportRequest.id,
+          sender: SenderType.GUEST,
+          body: "There is a spill by our table",
+          metadata: {
+            source: "public_qr",
+            qrToken: "qr_public_123"
+          }
+        },
+        {
+          venueId: servicePoint.venueId,
+          servicePointId: servicePoint.id,
+          conversationId: conversation.id,
+          requestId: supportRequest.id,
+          sender: SenderType.ASSISTANT,
+          body: "Of course. I have notified the team for Patio 4.",
+          metadata: {
+            source: "public_qr",
             qrToken: "qr_public_123",
-            isActive: true
-          },
-          include: {
-            venue: {
-              include: {
-                openingHours: {
-                  orderBy: {
-                    dayOfWeek: "asc"
-                  }
-                }
-              }
-            }
+            intent: "request_acknowledgement"
           }
         }
-      },
-      {
-        model: "$transaction",
-        args: "callback"
-      },
-      {
-        model: "conversation.create",
-        args: {
-          data: {
-            guestSessionId: "session_public_123",
-            servicePointId: servicePoint.id,
-            venueId: servicePoint.venueId
-          }
-        }
-      },
-      {
-        model: "supportRequest.create",
-        args: {
-          data: {
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
-            conversationId: conversation.id,
-            title: "Guest support request",
-            category: "general",
-            summary: "There is a spill by our table",
-            priority: RequestPriority.HIGH,
-            deterministicPriority: RequestPriority.HIGH,
-            status: RequestStatus.NEW
-          }
-        }
-      },
-      {
-        model: "message.create",
-        args: {
-          data: {
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
-            conversationId: conversation.id,
-            requestId: supportRequest.id,
-            sender: SenderType.GUEST,
-            body: "There is a spill by our table",
-            metadata: {
-              source: "public_qr",
-              qrToken: "qr_public_123"
-            }
-          }
-        }
-      },
-      {
-        model: "requestEvent.create",
-        args: {
-          data: {
-            venueId: servicePoint.venueId,
-            requestId: supportRequest.id,
-            type: "request.created",
-            toStatus: RequestStatus.NEW,
-            metadata: {
-              source: "public_qr",
-              qrToken: "qr_public_123"
-            }
-          }
-        }
-      },
-      {
-        model: "message.findMany",
-        args: {
-          where: {
-            conversationId: conversation.id
-          },
-          orderBy: {
-            createdAt: "asc"
-          }
-        }
-      }
-    ]);
+      ]
+    );
   });
 
   it("stores encrypted message bodies and returns decrypted conversation messages", async () => {
@@ -369,7 +307,7 @@ describe("ServicePointsService public QR workflow", () => {
       assert.equal(createdMessages.some((message) => message.body.includes("Please bring water")), false);
       assert.deepEqual(
         result.messages.map((message: any) => message.body),
-        ["Please bring water"]
+        ["Please bring water", "Of course. I have notified the team for Terrace 7."]
       );
     } finally {
       if (previousKey === undefined) {
@@ -666,112 +604,42 @@ describe("ServicePointsService public QR workflow", () => {
     assert.deepEqual(result.request, supportRequest);
     assert.deepEqual(result.servicePoint, servicePoint);
     assert.equal(calls.some((call) => call.model === "conversation.create"), false);
-    assert.deepEqual(calls, [
-      {
-        model: "servicePoint.findFirst",
-        args: {
-          where: {
+    assert.equal(calls.some((call) => call.model === "supportRequest.create"), true);
+    assert.deepEqual(
+      calls
+        .filter((call) => call.model === "message.create")
+        .map((call) => (call.args as { data: unknown }).data),
+      [
+        {
+          venueId: servicePoint.venueId,
+          servicePointId: servicePoint.id,
+          conversationId: conversation.id,
+          requestId: supportRequest.id,
+          sender: SenderType.GUEST,
+          body: "Could we get more water?",
+          metadata: {
+            source: "public_qr",
+            qrToken: "qr_resume_123"
+          }
+        },
+        {
+          venueId: servicePoint.venueId,
+          servicePointId: servicePoint.id,
+          conversationId: conversation.id,
+          requestId: supportRequest.id,
+          sender: SenderType.ASSISTANT,
+          body: "Of course. I have notified the team for Booth 12.",
+          metadata: {
+            source: "public_qr",
             qrToken: "qr_resume_123",
-            isActive: true
-          },
-          include: {
-            venue: {
-              include: {
-                openingHours: {
-                  orderBy: {
-                    dayOfWeek: "asc"
-                  }
-                }
-              }
-            }
+            intent: "request_acknowledgement"
           }
         }
-      },
-      {
-        model: "conversation.findFirst",
-        args: {
-          where: {
-            id: "conversation_resume_1",
-            servicePointId: servicePoint.id,
-            venueId: servicePoint.venueId
-          },
-          include: {
-            requests: {
-              orderBy: {
-                createdAt: "desc"
-              },
-              take: 1
-            }
-          }
-        }
-      },
-      {
-        model: "$transaction",
-        args: "callback"
-      },
-      {
-        model: "supportRequest.create",
-        args: {
-          data: {
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
-            conversationId: conversation.id,
-            title: "Guest support request",
-            category: "general",
-            summary: "Could we get more water?",
-            priority: RequestPriority.NORMAL,
-            deterministicPriority: RequestPriority.NORMAL,
-            status: RequestStatus.NEW
-          }
-        }
-      },
-      {
-        model: "message.create",
-        args: {
-          data: {
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
-            conversationId: conversation.id,
-            requestId: supportRequest.id,
-            sender: SenderType.GUEST,
-            body: "Could we get more water?",
-            metadata: {
-              source: "public_qr",
-              qrToken: "qr_resume_123"
-            }
-          }
-        }
-      },
-      {
-        model: "requestEvent.create",
-        args: {
-          data: {
-            venueId: servicePoint.venueId,
-            requestId: supportRequest.id,
-            type: "request.created",
-            toStatus: RequestStatus.NEW,
-            metadata: {
-              source: "public_qr",
-              qrToken: "qr_resume_123"
-            }
-          }
-        }
-      },
-      {
-        model: "message.findMany",
-        args: {
-          where: {
-            conversationId: conversation.id
-          },
-          orderBy: {
-            createdAt: "asc"
-          }
-        }
-      }
-    ]);
+      ]
+    );
   });
 
-  it("appends follow-up text to an existing open request instead of creating a new support request", async () => {
+  it("creates a new request for actionable follow-up text while another request is open", async () => {
     const servicePoint = {
       id: "sp_followup",
       venueId: "venue_followup",
@@ -791,6 +659,11 @@ describe("ServicePointsService public QR workflow", () => {
       deterministicPriority: RequestPriority.NORMAL,
       status: RequestStatus.NEW
     };
+    const newSupportRequest = {
+      ...supportRequest,
+      id: "request_followup_2",
+      summary: "Could we get more water?"
+    };
     const conversation = {
       id: "conversation_followup_1",
       venueId: servicePoint.venueId,
@@ -802,16 +675,16 @@ describe("ServicePointsService public QR workflow", () => {
       {
         id: "message_followup_guest_1",
         conversationId: conversation.id,
-        requestId: supportRequest.id,
+        requestId: newSupportRequest.id,
         sender: SenderType.GUEST,
         body: "Could we get more water?"
       },
       {
         id: "message_followup_assistant_1",
         conversationId: conversation.id,
-        requestId: supportRequest.id,
+        requestId: newSupportRequest.id,
         sender: SenderType.ASSISTANT,
-        body: "Thanks, I added that to your open request for Table 2."
+        body: "Of course. I have notified the team for Table 2."
       }
     ];
 
@@ -826,7 +699,7 @@ describe("ServicePointsService public QR workflow", () => {
       supportRequest: {
         create: async (args: unknown) => {
           calls.push({ model: "supportRequest.create", args });
-          throw new Error("supportRequest.create should not be called for a follow-up on an open request");
+          return newSupportRequest;
         }
       },
       message: {
@@ -888,96 +761,42 @@ describe("ServicePointsService public QR workflow", () => {
 
     assert.equal(result.conversationId, conversation.id);
     assert.deepEqual(result.messages, storedMessages);
-    assert.deepEqual(result.request, supportRequest);
+    assert.deepEqual(result.request, newSupportRequest);
     assert.deepEqual(result.servicePoint, servicePoint);
-    assert.equal(calls.some((call) => call.model === "supportRequest.create"), false);
-    assert.deepEqual(calls, [
-      {
-        model: "servicePoint.findFirst",
-        args: {
-          where: {
+    const createCall = calls.find((call) => call.model === "supportRequest.create") as { args: { data: { summary: string } } };
+    assert.equal(createCall.args.data.summary, "Could we get more water?");
+    assert.deepEqual(
+      calls
+        .filter((call) => call.model === "message.create")
+        .map((call) => (call.args as { data: unknown }).data),
+      [
+        {
+          venueId: servicePoint.venueId,
+          servicePointId: servicePoint.id,
+          conversationId: conversation.id,
+          requestId: newSupportRequest.id,
+          sender: SenderType.GUEST,
+          body: "Could we get more water?",
+          metadata: {
+            source: "public_qr",
+            qrToken: "qr_followup_123"
+          }
+        },
+        {
+          venueId: servicePoint.venueId,
+          servicePointId: servicePoint.id,
+          conversationId: conversation.id,
+          requestId: newSupportRequest.id,
+          sender: SenderType.ASSISTANT,
+          body: "Of course. I have notified the team for Table 2.",
+          metadata: {
+            source: "public_qr",
             qrToken: "qr_followup_123",
-            isActive: true
-          },
-          include: {
-            venue: {
-              include: {
-                openingHours: {
-                  orderBy: {
-                    dayOfWeek: "asc"
-                  }
-                }
-              }
-            }
+            intent: "request_acknowledgement"
           }
         }
-      },
-      {
-        model: "conversation.findFirst",
-        args: {
-          where: {
-            id: conversation.id,
-            servicePointId: servicePoint.id,
-            venueId: servicePoint.venueId
-          },
-          include: {
-            requests: {
-              orderBy: {
-                createdAt: "desc"
-              },
-              take: 1
-            }
-          }
-        }
-      },
-      {
-        model: "$transaction",
-        args: "callback"
-      },
-      {
-        model: "message.create",
-        args: {
-          data: {
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
-            conversationId: conversation.id,
-            requestId: supportRequest.id,
-            sender: SenderType.GUEST,
-            body: "Could we get more water?",
-            metadata: {
-              source: "public_qr",
-              qrToken: "qr_followup_123"
-            }
-          }
-        }
-      },
-      {
-        model: "requestEvent.create",
-        args: {
-          data: {
-            venueId: servicePoint.venueId,
-            requestId: supportRequest.id,
-            type: "request.updated",
-            toStatus: RequestStatus.NEW,
-            metadata: {
-              source: "public_qr",
-              qrToken: "qr_followup_123"
-            }
-          }
-        }
-      },
-      {
-        model: "message.findMany",
-        args: {
-          where: {
-            conversationId: conversation.id
-          },
-          orderBy: {
-            createdAt: "asc"
-          }
-        }
-      }
-    ]);
+      ]
+    );
   });
 
   it("creates a new public QR request after the previous request is resolved", async () => {
