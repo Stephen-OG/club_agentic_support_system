@@ -11,6 +11,11 @@ export const defaultSecurityHeaders = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
 } as const;
 
+const productionSecurityHeaders = {
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "Content-Security-Policy": "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+} as const;
+
 const localOrigins = [
   "http://127.0.0.1:3000",
   "http://127.0.0.1:3001",
@@ -96,14 +101,34 @@ export function assertProductionSecurityConfig(env: EnvMap = process.env) {
     throw new Error("MESSAGE_ENCRYPTION_KEY is required in production");
   }
 
+  assertValidMessageEncryptionKey(env.MESSAGE_ENCRYPTION_KEY);
+
   if (!env.REDIS_URL?.trim()) {
     throw new Error("REDIS_URL is required in production for shared rate limits, cache, and background jobs");
   }
+
+  if (!env.CORS_ORIGINS?.trim()) {
+    throw new Error("CORS_ORIGINS is required in production");
+  }
+
+  const origins = parseCorsOrigins(env.CORS_ORIGINS);
+  if (origins.some((origin) => !origin.startsWith("https://"))) {
+    throw new Error("CORS_ORIGINS must contain public HTTPS origins in production");
+  }
 }
 
-export function applySecurityHeaders(app: INestApplication) {
+export function getSecurityHeaders(env: EnvMap = process.env) {
+  return {
+    ...defaultSecurityHeaders,
+    ...(env.NODE_ENV === "production" ? productionSecurityHeaders : {})
+  };
+}
+
+export function applySecurityHeaders(app: INestApplication, env: EnvMap = process.env) {
+  const headers = getSecurityHeaders(env);
+
   app.use((_: unknown, response: { setHeader: (name: string, value: string) => void }, next: () => void) => {
-    for (const [name, value] of Object.entries(defaultSecurityHeaders)) {
+    for (const [name, value] of Object.entries(headers)) {
       response.setHeader(name, value);
     }
     next();
@@ -113,4 +138,13 @@ export function applySecurityHeaders(app: INestApplication) {
 function positiveInteger(value: string | undefined, fallback: number) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function assertValidMessageEncryptionKey(value: string) {
+  const trimmed = value.trim();
+  const decoded = /^[a-f0-9]{64}$/i.test(trimmed) ? Buffer.from(trimmed, "hex") : Buffer.from(trimmed, "base64");
+
+  if (decoded.length !== 32) {
+    throw new Error("MESSAGE_ENCRYPTION_KEY must decode to 32 bytes for AES-256-GCM");
+  }
 }

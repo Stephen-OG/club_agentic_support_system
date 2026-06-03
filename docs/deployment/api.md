@@ -51,10 +51,17 @@ npm run prisma:generate -w @guestos/database
 Run migrations against the target database before switching traffic:
 
 ```bash
-npx prisma migrate deploy --schema packages/database/prisma/schema.prisma
+supabase db push
 ```
 
-For managed production databases, prefer the provider's migration job or release phase instead of running migrations from every API instance. Do not use `prisma migrate dev` against production.
+This repo keeps production SQL migrations in `supabase/migrations`. Prisma owns the application schema and generated client, but this project does not currently use Prisma migration history for the existing Supabase database. Do not use `prisma migrate dev` against production.
+
+If the Supabase CLI is not linked locally, run:
+
+```bash
+supabase link --project-ref <project-ref>
+supabase db push
+```
 
 ## Supabase/Postgres Pooling
 

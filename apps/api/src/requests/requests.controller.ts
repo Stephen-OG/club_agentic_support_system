@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, UseGuards } from "@nestjs/common";
 import { SkipThrottle, Throttle } from "@nestjs/throttler";
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import type { AuthContext } from "../auth/auth-context";
 import { CurrentAuth } from "../auth/auth-context.decorator";
 import { SupabaseAuthGuard } from "../auth/supabase-auth.guard";
 import { GuestRequestActionDto } from "./dto/guest-request-action.dto";
+import { ListVenueRequestsDto } from "./dto/list-venue-requests.dto";
 import { UpdateRequestStatusDto } from "./dto/update-request-status.dto";
 import { RequestsService } from "./requests.service";
 
@@ -17,8 +18,12 @@ export class RequestsController {
 
   @Get("venues/:venueId/requests")
   @ApiOkResponse({ description: "Lists support requests for a venue" })
-  listForVenue(@CurrentAuth() auth: AuthContext, @Param("venueId", ParseUUIDPipe) venueId: string) {
-    return this.requests.listForVenue(auth, venueId);
+  listForVenue(
+    @CurrentAuth() auth: AuthContext,
+    @Param("venueId", ParseUUIDPipe) venueId: string,
+    @Query() query: ListVenueRequestsDto
+  ) {
+    return this.requests.listForVenue(auth, venueId, query);
   }
 
   @Patch("requests/:requestId/status")

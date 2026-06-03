@@ -162,6 +162,102 @@ describe("RequestsService lifecycle", () => {
     assert.equal((result[0] as any).recentMessages[0].sender, SenderType.GUEST);
   });
 
+  it("supports paged active request lists for larger venue workspaces", async () => {
+    const venue = { id: "venue_1", workspaceId: "workspace_1" };
+    const calls: Array<{ model: string; args: any }> = [];
+    const requests = [
+      {
+        id: "request_newer",
+        venueId: venue.id,
+        status: RequestStatus.NEW,
+        createdAt: "2026-05-20T10:00:00.000Z",
+        messages: [],
+        assignedTo: null,
+        servicePoint: null
+      },
+      {
+        id: "request_next",
+        venueId: venue.id,
+        status: RequestStatus.ACKNOWLEDGED,
+        createdAt: "2026-05-20T09:00:00.000Z",
+        messages: [],
+        assignedTo: null,
+        servicePoint: null
+      },
+      {
+        id: "request_extra",
+        venueId: venue.id,
+        status: RequestStatus.IN_PROGRESS,
+        createdAt: "2026-05-20T08:00:00.000Z",
+        messages: [],
+        assignedTo: null,
+        servicePoint: null
+      }
+    ];
+    const prisma = {
+      venue: { findFirst: async () => venue },
+      supportRequest: {
+        findMany: async (args: any) => {
+          calls.push({ model: "supportRequest.findMany", args });
+          return requests;
+        }
+      }
+    };
+    const service = new RequestsService(prisma as never, { assertCanReadVenue: () => undefined } as never);
+
+    const result = await service.listForVenue(
+      { workspaceId: "workspace_1", role: "admin", venueId: null } as never,
+      venue.id,
+      {
+        cursor: "2026-05-20T11:00:00.000Z",
+        limit: 2,
+        page: true,
+        statusGroup: "active"
+      }
+    );
+
+    assert.deepEqual((result as any).items.map((request: any) => request.id), ["request_newer", "request_next"]);
+    assert.equal((result as any).nextCursor, "2026-05-20T09:00:00.000Z");
+    assert.equal(calls[0]!.args.take, 3);
+    assert.deepEqual(calls[0]!.args.where, {
+      venueId: venue.id,
+      createdAt: {
+        lt: new Date("2026-05-20T11:00:00.000Z")
+      },
+      status: {
+        in: [
+          RequestStatus.NEW,
+          RequestStatus.ACKNOWLEDGED,
+          RequestStatus.ASSIGNED,
+          RequestStatus.IN_PROGRESS,
+          RequestStatus.ESCALATED
+        ]
+      }
+    });
+  });
+
+  it("caps paged venue request limits to protect the API", async () => {
+    const venue = { id: "venue_1", workspaceId: "workspace_1" };
+    const calls: Array<{ args: any }> = [];
+    const prisma = {
+      venue: { findFirst: async () => venue },
+      supportRequest: {
+        findMany: async (args: any) => {
+          calls.push({ args });
+          return [];
+        }
+      }
+    };
+    const service = new RequestsService(prisma as never, { assertCanReadVenue: () => undefined } as never);
+
+    await service.listForVenue({ workspaceId: "workspace_1", role: "admin", venueId: null } as never, venue.id, {
+      limit: 500,
+      page: true
+    });
+
+    assert.equal(calls[0]!.args.take, 101);
+  });
+
   it("keeps operations previews focused on guest messages after staff acknowledgements", async () => {
     const venue = { id: "venue_1", workspaceId: "workspace_1" };
     const request = {

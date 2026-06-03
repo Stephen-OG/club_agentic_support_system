@@ -13,6 +13,25 @@ export function sanitizeRequestPath(path: string | undefined) {
   return path.split("?")[0] || "/";
 }
 
+const sensitiveFieldPattern = /password|token|secret|key|authorization|access_token/i;
+
+export function redactSensitiveData(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSensitiveData(item));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, nestedValue]) => [
+      key,
+      sensitiveFieldPattern.test(key) ? "[REDACTED]" : redactSensitiveData(nestedValue)
+    ])
+  );
+}
+
 @Injectable()
 export class HttpLoggingInterceptor implements NestInterceptor {
   constructor(private readonly logger: StructuredLogger) {}
@@ -49,14 +68,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
           // Capture request body on errors (redact sensitive fields)
           let body: Record<string, unknown> | undefined;
           if (statusCode >= 400 && request.body && typeof request.body === "object") {
-            body = { ...(request.body as Record<string, unknown>) };
-            // Redact sensitive fields
-            const sensitive = ["password", "token", "secret", "key", "authorization", "access_token"];
-            for (const key of sensitive) {
-              if (body[key] !== undefined) {
-                body[key] = "[REDACTED]";
-              }
-            }
+            body = redactSensitiveData(request.body) as Record<string, unknown>;
           }
 
           const extraMetadata = body ? { requestBody: body } : undefined;

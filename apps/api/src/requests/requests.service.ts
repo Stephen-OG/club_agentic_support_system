@@ -12,6 +12,7 @@ import type { AuthContext } from "../auth/auth-context";
 import { PrismaService } from "../database/prisma.service";
 import { VenueAccessService } from "../venues/access.service";
 import type { GuestRequestActionDto } from "./dto/guest-request-action.dto";
+import type { ListVenueRequestsDto } from "./dto/list-venue-requests.dto";
 import type { UpdateRequestStatusDto } from "./dto/update-request-status.dto";
 import { decryptMessageRecord, encryptMessageCreateData } from "../security/message-crypto";
 import { DomainEventsService } from "../realtime/domain-events.service";
@@ -42,9 +43,31 @@ const sharedStatusByPrismaStatus: Record<PrismaRequestStatus, RequestStatus> = {
 
 const terminalConversationStatuses = new Set<RequestStatus>(["resolved", "cancelled"]);
 const venueRequestListLimit = 100;
+const defaultPagedVenueRequestLimit = 50;
+const maxVenueRequestListLimit = 100;
+const activeRequestStatuses = [
+  PrismaRequestStatus.NEW,
+  PrismaRequestStatus.ACKNOWLEDGED,
+  PrismaRequestStatus.ASSIGNED,
+  PrismaRequestStatus.IN_PROGRESS,
+  PrismaRequestStatus.ESCALATED
+];
+const terminalRequestStatuses = [
+  PrismaRequestStatus.DECLINED,
+  PrismaRequestStatus.COMPLETED,
+  PrismaRequestStatus.RESOLVED,
+  PrismaRequestStatus.CANCELLED
+];
 
 type GuestActionInput = GuestRequestActionDto & {
   requestId: string;
+};
+
+type VenueRequestListOptions = ListVenueRequestsDto;
+type VenueRequestListPageOptions = VenueRequestListOptions & { page: true };
+type VenueRequestListPage<T> = {
+  items: T[];
+  nextCursor: string | null;
 };
 
 function latestSatisfactionRating(messages: Array<{ metadata: unknown; createdAt: Date | string }>) {
@@ -80,7 +103,10 @@ export class RequestsService {
     @Optional() private readonly events?: DomainEventsService
   ) {}
 
-  async listForVenue(auth: AuthContext, venueId: string) {
+  async listForVenue(auth: AuthContext, venueId: string): Promise<any[]>;
+  async listForVenue(auth: AuthContext, venueId: string, options: VenueRequestListPageOptions): Promise<VenueRequestListPage<any>>;
+  async listForVenue(auth: AuthContext, venueId: string, options?: VenueRequestListOptions): Promise<any[] | VenueRequestListPage<any>>;
+  async listForVenue(auth: AuthContext, venueId: string, options: VenueRequestListOptions = {}) {
     const venue = await this.prisma.venue.findFirst({
       where: {
         id: venueId,
@@ -94,10 +120,9 @@ export class RequestsService {
 
     this.venueAccess.assertCanReadVenue(auth, { workspaceId: venue.workspaceId, venueId });
 
+    const limit = this.resolveVenueRequestLimit(options);
     const requests = await this.prisma.supportRequest.findMany({
-      where: {
-        venueId
-      },
+      where: this.venueRequestWhere(venueId, options),
       include: {
         assignedTo: {
           select: {
@@ -129,14 +154,64 @@ export class RequestsService {
       orderBy: {
         createdAt: "desc"
       },
-      take: venueRequestListLimit
+      take: options.page ? limit + 1 : limit
     });
 
-    return requests.map((request) => ({
+    const hasNextPage = options.page && requests.length > limit;
+    const visibleRequests = hasNextPage ? requests.slice(0, limit) : requests;
+    const items = visibleRequests.map((request) => ({
       ...request,
       satisfactionRating: latestSatisfactionRating(request.messages),
       recentMessages: recentMessages(request.messages)
     }));
+
+    if (!options.page) {
+      return items;
+    }
+
+    return {
+      items,
+      nextCursor: hasNextPage ? this.requestCursor(items.at(-1)?.createdAt) : null
+    };
+  }
+
+  private resolveVenueRequestLimit(options: VenueRequestListOptions) {
+    const fallback = options.page ? defaultPagedVenueRequestLimit : venueRequestListLimit;
+    const limit = Number.isInteger(options.limit) && options.limit ? options.limit : fallback;
+
+    return Math.min(Math.max(limit, 1), maxVenueRequestListLimit);
+  }
+
+  private venueRequestWhere(venueId: string, options: VenueRequestListOptions) {
+    const where: {
+      venueId: string;
+      createdAt?: { lt: Date };
+      status?: PrismaRequestStatus | { in: PrismaRequestStatus[] };
+    } = { venueId };
+
+    if (options.cursor) {
+      where.createdAt = { lt: new Date(options.cursor) };
+    }
+
+    if (options.status) {
+      where.status = prismaStatusBySharedStatus[options.status];
+      return where;
+    }
+
+    if (options.statusGroup === "active") {
+      where.status = { in: activeRequestStatuses };
+    }
+
+    if (options.statusGroup === "terminal") {
+      where.status = { in: terminalRequestStatuses };
+    }
+
+    return where;
+  }
+
+  private requestCursor(value: Date | string | undefined) {
+    if (!value) return null;
+    return value instanceof Date ? value.toISOString() : value;
   }
 
   async updateStatus(auth: AuthContext, requestId: string, input: UpdateRequestStatusDto) {

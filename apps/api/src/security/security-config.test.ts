@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   assertProductionSecurityConfig,
   defaultSecurityHeaders,
+  getSecurityHeaders,
   getApiHost,
   getRateLimitConfig,
   isCorsOriginAllowed,
@@ -70,6 +71,23 @@ describe("security config", () => {
     assert.match(defaultSecurityHeaders["Permissions-Policy"], /camera=\(\)/);
   });
 
+  it("adds strict browser security headers in production", () => {
+    const headers = getSecurityHeaders({ NODE_ENV: "production" });
+
+    assert.equal(headers["Strict-Transport-Security"], "max-age=31536000; includeSubDomains");
+    const csp = headers["Content-Security-Policy"];
+    assert.equal(typeof csp, "string");
+    assert.match(csp || "", /default-src 'none'/);
+    assert.match(csp || "", /frame-ancestors 'none'/);
+  });
+
+  it("keeps API docs usable outside production by not applying production CSP", () => {
+    const headers = getSecurityHeaders({ NODE_ENV: "development" });
+
+    assert.equal(headers["Content-Security-Policy"], undefined);
+    assert.equal(headers["Strict-Transport-Security"], undefined);
+  });
+
   it("hides API docs in production unless explicitly enabled", () => {
     assert.equal(shouldExposeApiDocs({ NODE_ENV: "production" }), false);
     assert.equal(shouldExposeApiDocs({ NODE_ENV: "production", ENABLE_API_DOCS: "true" }), true);
@@ -86,14 +104,42 @@ describe("security config", () => {
     assert.doesNotThrow(() => assertProductionSecurityConfig({ NODE_ENV: "development" }));
     assert.throws(() => assertProductionSecurityConfig({ NODE_ENV: "production" }), /MESSAGE_ENCRYPTION_KEY/);
     assert.throws(
-      () => assertProductionSecurityConfig({ NODE_ENV: "production", MESSAGE_ENCRYPTION_KEY: "01234567890123456789012345678901" }),
+      () => assertProductionSecurityConfig({ NODE_ENV: "production", MESSAGE_ENCRYPTION_KEY: "not-a-32-byte-key" }),
+      /32 bytes/
+    );
+    assert.throws(
+      () =>
+        assertProductionSecurityConfig({
+          NODE_ENV: "production",
+          MESSAGE_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+        }),
       /REDIS_URL/
+    );
+    assert.throws(
+      () =>
+        assertProductionSecurityConfig({
+          NODE_ENV: "production",
+          MESSAGE_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000",
+          REDIS_URL: "redis://localhost:6379"
+        }),
+      /CORS_ORIGINS/
+    );
+    assert.throws(
+      () =>
+        assertProductionSecurityConfig({
+          NODE_ENV: "production",
+          MESSAGE_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000",
+          REDIS_URL: "redis://localhost:6379",
+          CORS_ORIGINS: "http://localhost:3001"
+        }),
+      /public HTTPS/
     );
     assert.doesNotThrow(() =>
       assertProductionSecurityConfig({
         NODE_ENV: "production",
-        MESSAGE_ENCRYPTION_KEY: "01234567890123456789012345678901",
-        REDIS_URL: "redis://localhost:6379"
+        MESSAGE_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000",
+        REDIS_URL: "redis://localhost:6379",
+        CORS_ORIGINS: "https://app.example.com"
       })
     );
   });

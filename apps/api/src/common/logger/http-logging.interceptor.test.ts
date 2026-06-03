@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { of, throwError } from "rxjs";
-import { HttpLoggingInterceptor, sanitizeRequestPath } from "./http-logging.interceptor";
+import { HttpLoggingInterceptor, redactSensitiveData, sanitizeRequestPath } from "./http-logging.interceptor";
 
 describe("HttpLoggingInterceptor", () => {
   it("removes query strings before writing request paths to logs", () => {
@@ -34,6 +34,38 @@ describe("HttpLoggingInterceptor", () => {
       "/public/qr/token/conversations/id",
       "/public/qr/token/conversations/id"
     ]);
+  });
+
+  it("redacts nested sensitive fields before writing failed request bodies", () => {
+    const redacted = redactSensitiveData({
+      email: "guest@example.com",
+      password: "plaintext",
+      profile: {
+        access_token: "token",
+        safe: "visible"
+      },
+      venues: [
+        {
+          apiKey: "secret-key",
+          label: "Lobby"
+        }
+      ]
+    });
+
+    assert.deepEqual(redacted, {
+      email: "guest@example.com",
+      password: "[REDACTED]",
+      profile: {
+        access_token: "[REDACTED]",
+        safe: "visible"
+      },
+      venues: [
+        {
+          apiKey: "[REDACTED]",
+          label: "Lobby"
+        }
+      ]
+    });
   });
 });
 

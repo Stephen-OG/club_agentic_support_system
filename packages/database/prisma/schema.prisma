@@ -263,6 +263,7 @@ model SupportRequest {
   resolvedAt            DateTime?
 
   @@index([venueId, status, priority, createdAt])
+  @@index([venueId, createdAt])
   @@index([assignedToId, status])
   @@index([conversationId, createdAt])
   @@index([servicePointId, createdAt])

@@ -37,7 +37,7 @@ async function bootstrap() {
     app.getHttpAdapter().getInstance().set("trust proxy", 1);
   }
 
-  applySecurityHeaders(app);
+  applySecurityHeaders(app, process.env);
   app.enableCors({
     credentials: true,
     origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
