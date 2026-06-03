@@ -22,12 +22,14 @@ import {
 import { calculateOperationsAnalytics } from "@/lib/operations-analytics";
 import {
   type OperationsBucket,
+  formatOperationsElapsedLabel,
   getOperationsNotifications,
   getOperationsBucket,
   getOperationsStatusTone,
   getRequestOperationAction,
   mergeOperationRequestUpdate,
   operationsPollIntervalMs,
+  paginateOperationsRequests,
   summarizeOperationsBuckets
 } from "@/lib/operations-workflow";
 import { getPriorityClassName, getPriorityLabel } from "@/lib/priority-display";
@@ -53,27 +55,6 @@ function ratingLabel(request: CommandSupportRequest) {
 
 function latestPreview(request: CommandSupportRequest) {
   return request.recentMessages?.at(-1)?.body || request.summary || "No conversation preview yet.";
-}
-
-function formatRequestAge(createdAt: string) {
-  const created = new Date(createdAt);
-  const elapsedMinutes = Math.max(0, Math.round((Date.now() - created.getTime()) / 60000));
-
-  if (Number.isNaN(created.getTime())) {
-    return "Time unavailable";
-  }
-
-  if (elapsedMinutes < 1) {
-    return "Just now";
-  }
-
-  if (elapsedMinutes < 60) {
-    return `${elapsedMinutes}m waiting`;
-  }
-
-  const hours = Math.floor(elapsedMinutes / 60);
-  const minutes = elapsedMinutes % 60;
-  return minutes ? `${hours}h ${minutes}m waiting` : `${hours}h waiting`;
 }
 
 function titleCase(value: string) {
@@ -110,6 +91,8 @@ const sortDirectionOptions: Array<{ label: string; value: OperationsSortDirectio
   { label: "Descending", value: "desc" }
 ];
 
+const operationsPageSize = 8;
+
 function toggleValue<TValue extends string>(values: TValue[], value: TValue) {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
@@ -136,6 +119,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
   const [filters, setFilters] = useState<OperationsFilters>(defaultOperationsFilters);
   const [draftFilters, setDraftFilters] = useState<OperationsFilters>(defaultOperationsFilters);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
@@ -310,6 +294,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
     knownRequestIdsRef.current = new Set();
     hasLoadedRequestsRef.current = false;
     setRequests([]);
+    setCurrentPage(1);
     setSelectedVenueId(venueId);
     void loadRequests(venueId);
   }
@@ -332,11 +317,18 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
     setFilters(defaultOperationsFilters);
     setDraftFilters(defaultOperationsFilters);
     setIsFilterModalOpen(false);
+    setCurrentPage(1);
   }
 
   function applyFilters() {
     setFilters(draftFilters);
     setIsFilterModalOpen(false);
+    setCurrentPage(1);
+  }
+
+  function changeBucket(bucket: OperationsBucket) {
+    setActiveBucket(bucket);
+    setCurrentPage(1);
   }
 
   const operationsNow = new Date();
@@ -348,6 +340,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
     operationsNow,
     activeBucket
   );
+  const paginatedRequests = paginateOperationsRequests(selectedRequests, { page: currentPage, pageSize: operationsPageSize });
   const selectedVenueName = venues.find((venue) => venue.id === selectedVenueId)?.name || primaryVenueName || "Assigned venue";
   const filterOptions = getOperationsFilterOptions(requests);
   const activeFilterChips = getOperationsFilterChips(filters);
@@ -428,7 +421,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
               <button
                 aria-selected={activeBucket === "active"}
                 className={`ops-tab ${activeBucket === "active" ? "active" : ""}`}
-                onClick={() => setActiveBucket("active")}
+                onClick={() => changeBucket("active")}
                 role="tab"
                 type="button"
               >
@@ -437,7 +430,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
               <button
                 aria-selected={activeBucket === "completed"}
                 className={`ops-tab ${activeBucket === "completed" ? "active" : ""}`}
-                onClick={() => setActiveBucket("completed")}
+                onClick={() => changeBucket("completed")}
                 role="tab"
                 type="button"
               >
@@ -471,7 +464,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
             </div>
           ) : null}
           <div className="queue-list">
-            {selectedRequests.map((request) => {
+            {paginatedRequests.items.map((request) => {
               const action = getRequestOperationAction(request.status);
               const statusTone = getOperationsStatusTone(request.status);
               return (
@@ -484,7 +477,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
                     </div>
                     <div className="request-meta-line">
                       <span>{request.servicePoint?.label || request.guestLocationLabel || "Service point"}</span>
-                      <span>{formatRequestAge(request.createdAt)}</span>
+                      <span>{formatOperationsElapsedLabel(request, operationsNow)}</span>
                       <span>{request.title}</span>
                       {activeBucket === "completed" ? <span>{ratingLabel(request)}</span> : null}
                     </div>
@@ -508,6 +501,34 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
               </div>
             ) : null}
           </div>
+          {selectedRequests.length > operationsPageSize ? (
+            <nav className="operations-pagination" aria-label="Operations pagination">
+              <span>
+                Showing {paginatedRequests.startItem}-{paginatedRequests.endItem} of {paginatedRequests.totalItems}
+              </span>
+              <div>
+                <button
+                  className="command-button ghost-action"
+                  disabled={paginatedRequests.currentPage === 1}
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  type="button"
+                >
+                  Previous
+                </button>
+                <span className="data-chip">
+                  Page {paginatedRequests.currentPage} of {paginatedRequests.totalPages}
+                </span>
+                <button
+                  className="command-button ghost-action"
+                  disabled={paginatedRequests.currentPage === paginatedRequests.totalPages}
+                  onClick={() => setCurrentPage((page) => Math.min(paginatedRequests.totalPages, page + 1))}
+                  type="button"
+                >
+                  Next
+                </button>
+              </div>
+            </nav>
+          ) : null}
         </section>
       </div>
       {isFilterModalOpen ? (

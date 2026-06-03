@@ -11,6 +11,7 @@ import type {
   PublicVenueSummary
 } from "@/lib/auth/types";
 import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, createVenueWelcomeBody } from "@/lib/chat-copy";
+import { formatClientChatTimestamp } from "@/lib/chat-time";
 import { normalizeGuestChatMessages } from "@/lib/guest-chat-messages";
 import { reconcileGuestConversationMessages } from "@/lib/guest-chat-state";
 import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "@/lib/guest-session";
@@ -360,6 +361,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
                   message.body
                 )}
               </div>
+              {!message.isPending ? <time className="message-timestamp" dateTime={message.createdAt}>{formatClientChatTimestamp(message.createdAt)}</time> : null}
               {index === 0 && !awaitingSatisfaction && !chatClosed ? (
                 <div className="quick-actions intro-actions" aria-label="Common requests">
                   {supportQuickActions.map((action) => (

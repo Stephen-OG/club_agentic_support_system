@@ -355,6 +355,23 @@ button {
   width: 100%;
 }
 
+.message-timestamp {
+  align-self: flex-start;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  margin-top: -6px;
+  padding: 0 4px;
+}
+
+.bubble.guest + .message-timestamp {
+  align-self: flex-end;
+}
+
+.bubble.system + .message-timestamp {
+  align-self: center;
+}
+
 .composer {
   background: rgba(255, 253, 248, 0.98);
   border-top: 1px solid var(--line);
@@ -1794,6 +1811,98 @@ body {
   border-color: rgba(84, 216, 167, 0.32);
 }
 
+.launch-checklist {
+  background:
+    linear-gradient(135deg, rgba(164, 255, 122, 0.09), transparent 40%),
+    linear-gradient(90deg, rgba(89, 221, 255, 0.07), transparent 62%),
+    var(--surface);
+}
+
+.launch-checklist-header {
+  align-items: start;
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+}
+
+.launch-checklist-header h2 {
+  margin-bottom: 4px;
+}
+
+.launch-progress {
+  align-items: center;
+  background: rgba(10, 16, 14, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--success);
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.launch-progress strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.launch-progress-track {
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  height: 8px;
+  margin: var(--space-4) 0;
+  overflow: hidden;
+}
+
+.launch-progress-track i {
+  background: linear-gradient(90deg, var(--success), var(--accent));
+  display: block;
+  height: 100%;
+}
+
+.launch-step-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.launch-step {
+  align-items: center;
+  background: #0a100e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 84px;
+  padding: 12px;
+}
+
+.launch-step > svg {
+  color: var(--muted);
+}
+
+.launch-step.complete {
+  border-color: rgba(84, 216, 167, 0.34);
+}
+
+.launch-step.complete > svg {
+  color: var(--success);
+}
+
+.launch-step strong,
+.launch-step span {
+  display: block;
+}
+
+.launch-step span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 3px;
+}
+
 .dashboard-range-controls {
   align-items: center;
   background: rgba(10, 16, 14, 0.72);
@@ -2307,6 +2416,25 @@ body {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.operations-pagination {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.operations-pagination > div {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .ops-ok {
   border-color: rgba(84, 216, 167, 0.35);
 }
@@ -2774,8 +2902,24 @@ body {
 
   .donut-row,
   .satisfaction-layout,
-  .workload-grid {
+  .workload-grid,
+  .launch-step-grid {
     grid-template-columns: 1fr;
+  }
+
+  .launch-checklist-header,
+  .launch-step {
+    align-items: stretch;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .launch-checklist-header {
+    display: grid;
+  }
+
+  .launch-step .command-button {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .horizontal-chart-row {

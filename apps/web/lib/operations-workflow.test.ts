@@ -7,6 +7,8 @@ import {
   mergeOperationRequestUpdate,
   getRequestOperationAction,
   operationsPollIntervalMs,
+  formatOperationsElapsedLabel,
+  paginateOperationsRequests,
   sortCompletedOperationsQueue,
   sortOperationsQueue,
   summarizeOperationsBuckets
@@ -159,5 +161,57 @@ describe("operations workflow", () => {
       sorted.map((request) => request.id),
       ["request-3", "request-2", "request-1"]
     );
+  });
+
+  it("formats active waits and completed durations for request badges", () => {
+    const now = new Date("2026-06-03T12:20:00.000Z");
+
+    assert.equal(
+      formatOperationsElapsedLabel(
+        {
+          status: "NEW",
+          createdAt: "2026-06-03T12:05:00.000Z",
+          completedAt: null,
+          resolvedAt: null,
+          updatedAt: "2026-06-03T12:05:00.000Z"
+        },
+        now
+      ),
+      "15m waiting"
+    );
+    assert.equal(
+      formatOperationsElapsedLabel(
+        {
+          status: "COMPLETED",
+          createdAt: "2026-06-03T12:05:00.000Z",
+          completedAt: "2026-06-03T12:09:00.000Z",
+          resolvedAt: null,
+          updatedAt: "2026-06-03T12:10:00.000Z"
+        },
+        now
+      ),
+      "Completed in 4m"
+    );
+  });
+
+  it("paginates operations requests and clamps invalid pages", () => {
+    const result = paginateOperationsRequests(
+      Array.from({ length: 12 }, (_, index) => ({ id: `request-${index + 1}` })),
+      {
+        page: 3,
+        pageSize: 5
+      }
+    );
+
+    assert.deepEqual(
+      result.items.map((request) => request.id),
+      ["request-11", "request-12"]
+    );
+    assert.equal(result.currentPage, 3);
+    assert.equal(result.totalPages, 3);
+
+    const clamped = paginateOperationsRequests([{ id: "request-1" }], { page: 4, pageSize: 5 });
+    assert.equal(clamped.currentPage, 1);
+    assert.equal(clamped.totalPages, 1);
   });
 });

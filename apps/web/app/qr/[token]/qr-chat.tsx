@@ -5,6 +5,7 @@ import { Send, Sparkles, Star } from "lucide-react";
 import { publicApiRequest } from "@/lib/api/client";
 import type { CommandMessage, CommandSupportRequest, PublicChatAvailability, PublicQrConversationState, PublicQrIntakeState } from "@/lib/auth/types";
 import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, createWelcomeBody } from "@/lib/chat-copy";
+import { formatClientChatTimestamp } from "@/lib/chat-time";
 import { reconcileGuestConversationMessages } from "@/lib/guest-chat-state";
 import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "@/lib/guest-session";
 import { connectGuestConversationEvents } from "@/lib/realtime-events";
@@ -396,6 +397,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
                   message.body
                 )}
               </div>
+              {!message.isPending ? <time className="message-timestamp" dateTime={message.createdAt}>{formatClientChatTimestamp(message.createdAt)}</time> : null}
               {index === 0 && !awaitingSatisfaction && !chatClosed ? (
                 <div className="quick-actions intro-actions" aria-label="Common requests">
                   {supportQuickActions.map((action) => (

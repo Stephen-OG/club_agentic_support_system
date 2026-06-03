@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, BrainCircuit, Clock3, Flame, Gauge, MapPin, PieChart, RefreshCw, ShieldAlert, Star, Users } from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, BrainCircuit, CheckCircle2, Circle, Clock3, Flame, Gauge, MapPin, PieChart, RefreshCw, Rocket, ShieldAlert, Star, Users } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
-import type { CommandSupportRequest, CommandUser, CommandVenue } from "@/lib/auth/types";
+import type { CommandSupportRequest, CommandUser, CommandVenue, OnboardingStatus } from "@/lib/auth/types";
 import { type DashboardVolumeWindow, calculateDashboardAnalytics, getRequestVolumeSeries } from "@/lib/dashboard-analytics";
 import { getDashboardExperience } from "@/lib/dashboard-experience";
+import { getPrimaryRole } from "@/lib/auth/role-policy";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 function formatMinutes(value: number | null) {
@@ -45,8 +46,10 @@ function riskLabel(risk: "breached" | "soon", minutesUntilBreach: number) {
 export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUser }) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const experience = useMemo(() => getDashboardExperience(currentUser), [currentUser]);
+  const canViewOnboarding = useMemo(() => ["owner", "admin"].includes(getPrimaryRole(currentUser)), [currentUser]);
   const [venues, setVenues] = useState<CommandVenue[]>([]);
   const [requests, setRequests] = useState<CommandSupportRequest[]>([]);
+  const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
@@ -68,16 +71,18 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
       const requestGroups = await Promise.all(
         visibleVenues.map((venue) => apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venue.id}/requests`).catch(() => []))
       );
+      const nextOnboarding = canViewOnboarding ? await apiRequest<OnboardingStatus>(supabase, "/onboarding/status").catch(() => null) : null;
       const scopedRequests = experience.scopeVenueIds ? requestGroups.flat().filter((request) => experience.scopeVenueIds?.includes(request.venueId)) : requestGroups.flat();
       setVenues(visibleVenues);
       setRequests(scopedRequests);
+      setOnboarding(nextOnboarding);
       setLastUpdatedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not load dashboard analytics");
     } finally {
       setLoading(false);
     }
-  }, [experience.scopeVenueIds, supabase]);
+  }, [canViewOnboarding, experience.scopeVenueIds, supabase]);
 
   useEffect(() => {
     void refresh();
@@ -158,6 +163,8 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
       </div>
 
       {error ? <div className="form-error wide">{error}</div> : null}
+
+      {onboarding && !onboarding.isComplete ? <LaunchChecklist status={onboarding} /> : null}
 
       <div className="metric-strip dashboard-summary-grid">
         {kpis.map((metric) => {
@@ -404,6 +411,49 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
           </div>
         </section>
       ) : null}
+    </section>
+  );
+}
+
+function LaunchChecklist({ status }: { status: OnboardingStatus }) {
+  const percent = Math.round((status.completedCount / status.totalCount) * 100);
+
+  return (
+    <section className="command-panel launch-checklist wide" aria-label="Workspace launch checklist">
+      <div className="launch-checklist-header">
+        <div>
+          <div className="eyebrow">Launch checklist</div>
+          <h2>Get this workspace ready for live guests</h2>
+          <span className="panel-subtle">
+            {status.completedCount} of {status.totalCount} setup steps complete
+          </span>
+        </div>
+        <div className="launch-progress" aria-label={`${percent}% complete`}>
+          <Rocket size={18} />
+          <strong>{percent}%</strong>
+        </div>
+      </div>
+      <div className="launch-progress-track">
+        <i style={{ width: `${percent}%` }} />
+      </div>
+      <div className="launch-step-grid">
+        {status.steps.map((step) => {
+          const Icon = step.complete ? CheckCircle2 : Circle;
+          return (
+            <article className={step.complete ? "launch-step complete" : "launch-step"} key={step.id}>
+              <Icon size={18} />
+              <div>
+                <strong>{step.label}</strong>
+                <span>{step.detail}</span>
+              </div>
+              <a className="command-button" href={`?view=${step.actionView}`}>
+                {step.actionLabel}
+                <ArrowRight size={14} />
+              </a>
+            </article>
+          );
+        })}
+      </div>
     </section>
   );
 }

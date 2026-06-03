@@ -17,6 +17,20 @@ export type CommandUser = {
   memberships: CommandMembership[];
 };
 
+export type OnboardingStatus = {
+  isComplete: boolean;
+  completedCount: number;
+  totalCount: number;
+  steps: Array<{
+    id: "workspace" | "venue" | "opening_hours" | "qr_points" | "team" | "test_request";
+    label: string;
+    detail: string;
+    complete: boolean;
+    actionLabel: string;
+    actionView: "account" | "venues" | "team" | "operations";
+  }>;
+};
+
 export type CreatedStaffCredential = {
   staff: {
     id: string;
