@@ -339,9 +339,15 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
     setIsFilterModalOpen(false);
   }
 
-  const filteredRequests = runOperationsFilterPipeline(requests, filters);
+  const operationsNow = new Date();
+  const filteredRequests = runOperationsFilterPipeline(requests, filters, operationsNow);
   const bucketSummary = summarizeOperationsBuckets(filteredRequests);
-  const selectedRequests = filteredRequests.filter((request) => getOperationsBucket(request.status) === activeBucket);
+  const selectedRequests = runOperationsFilterPipeline(
+    requests.filter((request) => getOperationsBucket(request.status) === activeBucket),
+    filters,
+    operationsNow,
+    activeBucket
+  );
   const selectedVenueName = venues.find((venue) => venue.id === selectedVenueId)?.name || primaryVenueName || "Assigned venue";
   const filterOptions = getOperationsFilterOptions(requests);
   const activeFilterChips = getOperationsFilterChips(filters);

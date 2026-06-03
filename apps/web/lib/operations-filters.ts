@@ -1,5 +1,5 @@
 import type { CommandRequestPriority } from "./auth/types";
-import { sortOperationsQueue } from "./operations-workflow";
+import { type OperationsBucket, sortCompletedOperationsQueue, sortOperationsQueue } from "./operations-workflow";
 import { getPriorityLabel, getVisibleRequestPriority, type VisibleRequestPriority } from "./priority-display";
 
 export type OperationsVisiblePriority = VisibleRequestPriority;
@@ -21,10 +21,13 @@ export type OperationsFilters = {
 
 type FilterableRequest = {
   category: string;
+  completedAt?: string | null;
   createdAt: string;
   priority: CommandRequestPriority | string;
+  resolvedAt?: string | null;
   satisfactionRating?: number | null;
   servicePoint?: { label?: string | null } | null;
+  updatedAt?: string | null;
 };
 
 export const defaultOperationsFilters: OperationsFilters = {
@@ -50,11 +53,13 @@ export function normalizeOperationsPriority(priority: string): OperationsVisible
 export function runOperationsFilterPipeline<T extends FilterableRequest>(
   requests: readonly T[],
   filters: OperationsFilters,
-  now = new Date()
+  now = new Date(),
+  bucket?: OperationsBucket
 ) {
   return sortFilteredRequests(
     requests.filter((request) => matchesOperationsFilters(request, filters, now)),
-    filters
+    filters,
+    bucket
   );
 }
 
@@ -160,8 +165,12 @@ function matchesDateRange(createdAt: string, filters: OperationsFilters, now: Da
   return created >= addDays(today, -days) && created < tomorrow;
 }
 
-function sortFilteredRequests<T extends FilterableRequest>(requests: T[], filters: OperationsFilters) {
+function sortFilteredRequests<T extends FilterableRequest>(requests: T[], filters: OperationsFilters, bucket?: OperationsBucket) {
   if (filters.sortBy === "queue") {
+    if (bucket === "completed") {
+      return sortCompletedOperationsQueue(requests);
+    }
+
     return sortOperationsQueue(requests);
   }
 

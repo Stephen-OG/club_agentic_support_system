@@ -46,7 +46,14 @@ export function getRequestOperationAction(status: CommandRequestStatus): Request
     };
   }
 
-  if (status === "ACKNOWLEDGED" || status === "ASSIGNED" || status === "ESCALATED") {
+  if (status === "ESCALATED") {
+    return {
+      label: "Acknowledge",
+      targetStatus: "IN_PROGRESS"
+    };
+  }
+
+  if (status === "ACKNOWLEDGED" || status === "ASSIGNED") {
     return {
       label: "Complete",
       targetStatus: "COMPLETED",
@@ -121,4 +128,22 @@ export function sortOperationsQueue<T extends { priority: string }>(requests: T[
       return left.index - right.index;
     })
     .map((item) => item.request);
+}
+
+export function sortCompletedOperationsQueue<T extends { completedAt?: string | null; resolvedAt?: string | null; updatedAt?: string | null }>(
+  requests: T[]
+) {
+  return requests
+    .map((request, index) => ({ index, request }))
+    .sort((left, right) => {
+      const diff = completionTimestamp(right.request) - completionTimestamp(left.request);
+      return diff || left.index - right.index;
+    })
+    .map((item) => item.request);
+}
+
+function completionTimestamp(request: { completedAt?: string | null; resolvedAt?: string | null; updatedAt?: string | null }) {
+  const value = request.completedAt || request.resolvedAt || request.updatedAt || "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }

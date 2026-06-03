@@ -1,4 +1,4 @@
-export type OpenRequestGuestMessageIntent = "courtesy" | "new_request";
+export type OpenRequestGuestMessageIntent = "courtesy" | "conversation" | "new_request";
 
 const courtesyOnlyMessages = new Set([
   "alright",
@@ -16,6 +16,22 @@ const courtesyOnlyMessages = new Set([
   "thanks so much",
   "thank you so much",
   "ty"
+]);
+
+const greetingOnlyMessages = new Set([
+  "good afternoon",
+  "good evening",
+  "good morning",
+  "greetings",
+  "hello",
+  "hey",
+  "hi",
+  "hiya",
+  "how are you",
+  "how are you doing",
+  "how's it going",
+  "howdy",
+  "yo"
 ]);
 
 function normalizeGuestText(message: string) {
@@ -41,6 +57,19 @@ export function classifyOpenRequestGuestMessage(message: string): OpenRequestGue
 
   if (/^(thank you|thanks|cheers)\s+(again|lily|so much|very much)$/.test(normalized)) {
     return "courtesy";
+  }
+
+  if (greetingOnlyMessages.has(normalized)) {
+    return "conversation";
+  }
+
+  const asksForStaffAction =
+    /\b(need|needs|bring|send|help|assist|please|can i get|can we get|could i get|could we get|would like|order|drink|water|ice|food|bill|check|pay|missing|wrong|spill|broken|dirty|clean|waiting|lost|allerg|medical|injur|hurt|fight|security|harass|fire|smoke|emergency)\b/i.test(
+      normalized
+    );
+
+  if (!asksForStaffAction) {
+    return "conversation";
   }
 
   return "new_request";

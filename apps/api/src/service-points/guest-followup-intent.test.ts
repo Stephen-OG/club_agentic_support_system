@@ -13,4 +13,10 @@ describe("guest follow-up intent", () => {
     assert.equal(classifyOpenRequestGuestMessage("Can we also get water?"), "new_request");
     assert.equal(classifyOpenRequestGuestMessage("My friend needs help too"), "new_request");
   });
+
+  it("keeps greetings and conversational follow-ups out of the operations queue", () => {
+    assert.equal(classifyOpenRequestGuestMessage("Hello"), "conversation");
+    assert.equal(classifyOpenRequestGuestMessage("How are you?"), "conversation");
+    assert.equal(classifyOpenRequestGuestMessage("Wait why is your name Lily?"), "conversation");
+  });
 });

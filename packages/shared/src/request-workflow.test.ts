@@ -9,6 +9,10 @@ describe("request workflow", () => {
     assert.equal(canTransitionRequest("in_progress", "completed", "staff"), true);
   });
 
+  it("allows staff to acknowledge escalated work by moving it into progress", () => {
+    assert.equal(canTransitionRequest("escalated", "in_progress", "staff"), true);
+  });
+
   it("prevents staff from resolving without guest confirmation", () => {
     assert.equal(canTransitionRequest("completed", "resolved", "staff"), false);
   });

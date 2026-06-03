@@ -95,6 +95,75 @@ describe("operations filters", () => {
     );
   });
 
+  it("uses completion time for the default completed tab order", () => {
+    const filtered = runOperationsFilterPipeline(
+      [
+        {
+          id: "request-1",
+          title: "Urgent old completion",
+          category: "safety",
+          priority: "URGENT",
+          createdAt: "2026-06-02T09:00:00.000Z",
+          completedAt: "2026-06-02T10:00:00.000Z",
+          satisfactionRating: 5,
+          servicePoint: { label: "Table 1" }
+        },
+        {
+          id: "request-2",
+          title: "Normal newer completion",
+          category: "drink",
+          priority: "NORMAL",
+          createdAt: "2026-06-02T09:05:00.000Z",
+          completedAt: "2026-06-02T10:20:00.000Z",
+          satisfactionRating: 4,
+          servicePoint: { label: "Table 2" }
+        }
+      ],
+      defaultOperationsFilters,
+      new Date("2026-06-03T12:00:00.000Z"),
+      "completed"
+    );
+
+    assert.deepEqual(
+      filtered.map((request) => request.id),
+      ["request-2", "request-1"]
+    );
+  });
+
+  it("keeps urgent priority pinned only for the default active tab order", () => {
+    const filtered = runOperationsFilterPipeline(
+      [
+        {
+          id: "request-1",
+          title: "Normal first",
+          category: "drink",
+          priority: "NORMAL",
+          createdAt: "2026-06-02T09:00:00.000Z",
+          satisfactionRating: null,
+          servicePoint: { label: "Table 1" }
+        },
+        {
+          id: "request-2",
+          title: "Urgent second",
+          category: "safety",
+          priority: "URGENT",
+          createdAt: "2026-06-02T09:05:00.000Z",
+          satisfactionRating: null,
+          servicePoint: { label: "Table 2" }
+        }
+      ],
+      defaultOperationsFilters,
+      new Date("2026-06-03T12:00:00.000Z"),
+      "active"
+    );
+
+    assert.deepEqual(
+      filtered.map((request) => request.id),
+      ["request-2", "request-1"]
+    );
+  });
+
+
   it("derives category and table options from current requests", () => {
     assert.deepEqual(getOperationsFilterOptions(requests), {
       categories: ["drink", "long_wait", "payment", "safety"],

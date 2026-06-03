@@ -7,6 +7,7 @@ import {
   mergeOperationRequestUpdate,
   getRequestOperationAction,
   operationsPollIntervalMs,
+  sortCompletedOperationsQueue,
   sortOperationsQueue,
   summarizeOperationsBuckets
 } from "./operations-workflow";
@@ -46,6 +47,13 @@ describe("operations workflow", () => {
     assert.deepEqual(getRequestOperationAction("IN_PROGRESS"), {
       label: "Complete",
       targetStatus: "COMPLETED"
+    });
+  });
+
+  it("requires escalated urgent work to be acknowledged before completion", () => {
+    assert.deepEqual(getRequestOperationAction("ESCALATED"), {
+      label: "Acknowledge",
+      targetStatus: "IN_PROGRESS"
     });
   });
 
@@ -121,6 +129,35 @@ describe("operations workflow", () => {
     assert.deepEqual(
       sorted.map((request) => request.id),
       ["request-3", "request-5", "request-1", "request-2", "request-4"]
+    );
+  });
+
+  it("sorts completed work by latest completion time without priority pinning", () => {
+    const sorted = sortCompletedOperationsQueue([
+      {
+        id: "request-1",
+        priority: "URGENT",
+        completedAt: "2026-06-02T10:00:00.000Z",
+        updatedAt: "2026-06-02T10:05:00.000Z"
+      },
+      {
+        id: "request-2",
+        priority: "NORMAL",
+        completedAt: "2026-06-02T10:10:00.000Z",
+        updatedAt: "2026-06-02T10:10:00.000Z"
+      },
+      {
+        id: "request-3",
+        priority: "HIGH",
+        completedAt: null,
+        resolvedAt: "2026-06-02T10:12:00.000Z",
+        updatedAt: "2026-06-02T10:13:00.000Z"
+      }
+    ]);
+
+    assert.deepEqual(
+      sorted.map((request) => request.id),
+      ["request-3", "request-2", "request-1"]
     );
   });
 });

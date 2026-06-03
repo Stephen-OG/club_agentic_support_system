@@ -1,15 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Clock3, Info, PieChart, RefreshCw, ShieldAlert } from "lucide-react";
+import { Activity, AlertTriangle, BrainCircuit, Clock3, Flame, Gauge, MapPin, PieChart, RefreshCw, ShieldAlert, Star, Users } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
-import type { CommandSupportRequest, CommandVenue } from "@/lib/auth/types";
+import type { CommandSupportRequest, CommandUser, CommandVenue } from "@/lib/auth/types";
 import { type DashboardVolumeWindow, calculateDashboardAnalytics, getRequestVolumeSeries } from "@/lib/dashboard-analytics";
+import { getDashboardExperience } from "@/lib/dashboard-experience";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-
-function plural(value: number, singular: string, pluralLabel = `${singular}s`) {
-  return `${value} ${value === 1 ? singular : pluralLabel}`;
-}
 
 function formatMinutes(value: number | null) {
   if (value === null) {
@@ -41,8 +38,13 @@ function chartPercent(count: number, max: number) {
   return `${Math.max(7, Math.round((count / max) * 100))}%`;
 }
 
-export function CommandCenterDashboard() {
+function riskLabel(risk: "breached" | "soon", minutesUntilBreach: number) {
+  return risk === "breached" ? "Breached" : `${minutesUntilBreach}m left`;
+}
+
+export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUser }) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const experience = useMemo(() => getDashboardExperience(currentUser), [currentUser]);
   const [venues, setVenues] = useState<CommandVenue[]>([]);
   const [requests, setRequests] = useState<CommandSupportRequest[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -62,18 +64,20 @@ export function CommandCenterDashboard() {
 
     try {
       const nextVenues = await apiRequest<CommandVenue[]>(supabase, "/admin/venues");
+      const visibleVenues = experience.scopeVenueIds ? nextVenues.filter((venue) => experience.scopeVenueIds?.includes(venue.id)) : nextVenues;
       const requestGroups = await Promise.all(
-        nextVenues.map((venue) => apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venue.id}/requests`).catch(() => []))
+        visibleVenues.map((venue) => apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venue.id}/requests`).catch(() => []))
       );
-      setVenues(nextVenues);
-      setRequests(requestGroups.flat());
+      const scopedRequests = experience.scopeVenueIds ? requestGroups.flat().filter((request) => experience.scopeVenueIds?.includes(request.venueId)) : requestGroups.flat();
+      setVenues(visibleVenues);
+      setRequests(scopedRequests);
       setLastUpdatedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not load dashboard analytics");
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [experience.scopeVenueIds, supabase]);
 
   useEffect(() => {
     void refresh();
@@ -83,6 +87,9 @@ export function CommandCenterDashboard() {
   const volume = useMemo(() => getRequestVolumeSeries(requests, volumeWindow), [requests, volumeWindow]);
   const maxVolumeCount = Math.max(1, ...volume.series.map((item) => item.count));
   const maxRatingCount = Math.max(1, ...analytics.satisfactionRecovery.ratingDistribution.map((item) => item.count));
+  const maxHotspotCount = Math.max(1, ...analytics.servicePointHotspots.map((item) => item.count));
+  const maxStaffLoad = Math.max(1, ...analytics.staffWorkload.map((item) => item.openAssigned));
+  const venueNameById = useMemo(() => new Map(venues.map((venue) => [venue.id, venue.name])), [venues]);
   const categoryGradient = analytics.categoryBreakdown.length
     ? analytics.categoryBreakdown.reduce(
         (segments, item, index) => {
@@ -104,32 +111,32 @@ export function CommandCenterDashboard() {
   ];
   const kpis = [
     {
-      detail: `${analytics.liveHealth.urgentOrHighPriority} urgent/high`,
+      detail: analytics.operationalHealth.drivers[0] || "No active risk drivers",
+      icon: Gauge,
+      label: `${experience.kpiLabels.health} · ${analytics.operationalHealth.label}`,
+      tone: analytics.operationalHealth.score < 75 ? "warn" : "ok",
+      value: `${analytics.operationalHealth.score}`
+    },
+    {
+      detail: `${analytics.liveHealth.openRequests} open · ${analytics.liveHealth.urgentOrHighPriority} urgent/high`,
       icon: AlertTriangle,
-      label: "Open requests",
-      tone: analytics.liveHealth.urgentOrHighPriority ? "warn" : "ok",
-      value: analytics.liveHealth.openRequests.toString()
+      label: experience.kpiLabels.risk,
+      tone: analytics.slaRiskForecast.length ? "warn" : "ok",
+      value: analytics.slaRiskForecast.length.toString()
     },
     {
-      detail: "longest active wait",
+      detail: `${analytics.responseSpeed.overResponseThreshold} over threshold`,
       icon: Clock3,
-      label: "Longest wait",
-      tone: analytics.liveHealth.longestWaitingMinutes >= 10 ? "warn" : "idle",
-      value: formatMinutes(analytics.liveHealth.longestWaitingMinutes)
+      label: experience.kpiLabels.speed,
+      tone: analytics.responseSpeed.overResponseThreshold ? "warn" : "idle",
+      value: formatMinutes(analytics.responseSpeed.averageAcknowledgementMinutes)
     },
     {
-      detail: `${plural(requests.length, "total request")} · ${plural(venues.length, "venue")}`,
-      icon: Info,
-      label: "Request Information",
-      tone: requests.length ? "idle" : "ok",
+      detail: `${analytics.satisfactionRecovery.lowRatingCount} low-rating recoveries`,
+      icon: Star,
+      label: experience.kpiLabels.satisfaction,
+      tone: analytics.satisfactionRecovery.lowRatingCount ? "warn" : "ok",
       value: analytics.satisfactionRecovery.averageRating === null ? "No rating" : `${analytics.satisfactionRecovery.averageRating.toFixed(1)}/5`
-    },
-    {
-      detail: "open requests over 10 minutes",
-      icon: ShieldAlert,
-      label: "SLA Breaches",
-      tone: analytics.liveHealth.slaBreaches ? "warn" : "ok",
-      value: analytics.liveHealth.slaBreaches.toString()
     }
   ];
 
@@ -137,8 +144,9 @@ export function CommandCenterDashboard() {
     <section className="command-grid dashboard-analytics">
       <div className="command-heading">
         <div>
-          <div className="eyebrow">Owner analytics</div>
-          <h1>Dashboard</h1>
+          <div className="eyebrow">{experience.eyebrow}</div>
+          <h1>{experience.title}</h1>
+          <span className="panel-subtle">{experience.scopeLabel}</span>
         </div>
         <div className="command-actions">
           <span className="data-chip">{lastUpdatedAt ? `Updated ${lastUpdatedAt}` : loading ? "Syncing" : "Live"}</span>
@@ -167,10 +175,35 @@ export function CommandCenterDashboard() {
         })}
       </div>
 
+      <section className="command-panel action-panel wide">
+        <div className="panel-title-row">
+          <div>
+            <h2>{experience.actionHeading}</h2>
+            <span className="panel-subtle">
+              {analytics.anomalies.length ? `${analytics.anomalies.length} operational signal${analytics.anomalies.length === 1 ? "" : "s"} need review` : "No urgent admin actions"}
+            </span>
+          </div>
+          <a className="command-button" href="?view=operations">
+            <Activity size={16} />
+            Open operations
+          </a>
+        </div>
+        <div className="action-grid">
+          {analytics.anomalies.map((item) => (
+            <article className={`action-card severity-${item.severity}`} key={`${item.label}-${item.detail}`}>
+              <span>{item.severity}</span>
+              <strong>{item.label}</strong>
+              <small>{item.detail}</small>
+            </article>
+          ))}
+          {!analytics.anomalies.length ? <div className="empty-state">{experience.actionEmptyCopy}</div> : null}
+        </div>
+      </section>
+
       <section className="command-panel chart-panel chart-panel-large">
         <div className="panel-title-row">
           <div>
-            <h2>Request Volume</h2>
+            <h2>{experience.volumeTitle}</h2>
             <span className="panel-subtle">
               {volume.busiest ? `${volume.label}: ${volume.busiest.label} (${volume.busiest.count})` : "No request volume yet"}
             </span>
@@ -203,7 +236,27 @@ export function CommandCenterDashboard() {
 
       <section className="command-panel chart-panel">
         <div className="panel-title-row">
-          <h2>Request Types</h2>
+          <div>
+            <h2>SLA Risk Forecast</h2>
+            <span className="panel-subtle">Requests most likely to breach next</span>
+          </div>
+          <ShieldAlert size={17} />
+        </div>
+        <div className="risk-list">
+          {analytics.slaRiskForecast.map((request) => (
+            <div className={`risk-row risk-${request.risk}`} key={request.id}>
+              <span>{riskLabel(request.risk, request.minutesUntilBreach)}</span>
+              <strong>{request.title}</strong>
+              <small>{request.priority.toLowerCase()} · waiting {formatMinutes(request.waitMinutes)}</small>
+            </div>
+          ))}
+          {!analytics.slaRiskForecast.length ? <div className="empty-state">No requests are approaching SLA breach.</div> : null}
+        </div>
+      </section>
+
+      <section className="command-panel chart-panel">
+        <div className="panel-title-row">
+          <h2>Category Trend Mix</h2>
           <PieChart size={17} />
         </div>
         <div className="donut-row">
@@ -224,29 +277,30 @@ export function CommandCenterDashboard() {
         </div>
       </section>
 
-      <section className="command-panel chart-panel">
-        <div className="panel-title-row">
-          <h2>Response Speed</h2>
-          <span className="data-chip">Team pace</span>
-        </div>
-        <div className="response-bars">
-          <div>
-            <span>Acknowledge</span>
-            <strong>{formatMinutes(analytics.responseSpeed.averageAcknowledgementMinutes)}</strong>
-            <i style={{ width: chartPercent(analytics.responseSpeed.averageAcknowledgementMinutes ?? 0, 30) }} />
+      {experience.panels.servicePointHotspots ? (
+        <section className="command-panel chart-panel">
+          <div className="panel-title-row">
+            <div>
+              <h2>Service-Point Hotspots</h2>
+              <span className="panel-subtle">Where repeated demand is clustering</span>
+            </div>
+            <MapPin size={17} />
           </div>
-          <div>
-            <span>Complete</span>
-            <strong>{formatMinutes(analytics.responseSpeed.averageCompletionMinutes)}</strong>
-            <i style={{ width: chartPercent(analytics.responseSpeed.averageCompletionMinutes ?? 0, 60) }} />
+          <div className="horizontal-chart">
+            {analytics.servicePointHotspots.map((item) => (
+              <div className="horizontal-chart-row hotspot-row" key={item.servicePointId}>
+                <span>{item.label}</span>
+                <div>
+                  <i style={{ width: chartPercent(item.count, maxHotspotCount) }} />
+                </div>
+                <strong>{item.count}</strong>
+                <small>{item.zone || "No zone"} · {item.urgentOrHigh} urgent/high</small>
+              </div>
+            ))}
+            {!analytics.servicePointHotspots.length ? <div className="empty-state">No service-point hotspots yet.</div> : null}
           </div>
-          <div>
-            <span>Over threshold</span>
-            <strong>{analytics.responseSpeed.overResponseThreshold}</strong>
-            <i style={{ width: chartPercent(analytics.responseSpeed.overResponseThreshold, Math.max(1, requests.length)) }} />
-          </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       <section className="command-panel chart-panel chart-panel-large">
         <div className="panel-title-row">
@@ -276,6 +330,80 @@ export function CommandCenterDashboard() {
           </div>
         </div>
       </section>
+
+      {experience.panels.staffWorkload ? (
+        <section className="command-panel chart-panel chart-panel-large">
+          <div className="panel-title-row">
+            <div>
+              <h2>Staff Workload Matrix</h2>
+              <span className="panel-subtle">Open load, high-priority pressure, completion pace, and recovery signals</span>
+            </div>
+            <Users size={17} />
+          </div>
+          <div className="workload-grid">
+            {analytics.staffWorkload.map((staff) => (
+              <article className="workload-card" key={staff.staffId}>
+                <div>
+                  <strong>{staff.label}</strong>
+                  <span>{staff.openAssigned} open · {staff.urgentOrHigh} urgent/high</span>
+                </div>
+                <i style={{ width: chartPercent(staff.openAssigned, maxStaffLoad) }} />
+                <small>{staff.completed} completed · avg {formatMinutes(staff.averageCompletionMinutes)} · {staff.lowRatings} low ratings</small>
+              </article>
+            ))}
+            {!analytics.staffWorkload.length ? <div className="empty-state">No assigned staff workload yet.</div> : null}
+          </div>
+        </section>
+      ) : null}
+
+      {experience.panels.venuePerformance ? (
+        <section className="command-panel chart-panel">
+          <div className="panel-title-row">
+            <div>
+              <h2>Venue Performance</h2>
+              <span className="panel-subtle">Compare operational pressure across venues</span>
+            </div>
+            <Flame size={17} />
+          </div>
+          <div className="venue-performance-list">
+            {analytics.venuePerformance.map((venue) => (
+              <div key={venue.venueId}>
+                <strong>{venueNameById.get(venue.venueId) || venue.venueId}</strong>
+                <span>{venue.openRequests} open · {venue.urgentOrHigh} urgent/high</span>
+                <small>Avg complete {formatMinutes(venue.averageCompletionMinutes)} · rating {venue.averageRating === null ? "No rating" : venue.averageRating.toFixed(1)}</small>
+              </div>
+            ))}
+            {!analytics.venuePerformance.length ? <div className="empty-state">No venue comparison data yet.</div> : null}
+          </div>
+        </section>
+      ) : null}
+
+      {experience.panels.aiTriageQuality ? (
+        <section className="command-panel chart-panel">
+          <div className="panel-title-row">
+            <div>
+              <h2>AI Triage Quality</h2>
+              <span className="panel-subtle">Low-confidence agent decisions to review</span>
+            </div>
+            <BrainCircuit size={17} />
+          </div>
+          <div className="ai-quality-panel">
+            <div className="ai-score">
+              <strong>{analytics.aiTriageQuality.averageConfidence === null ? "No data" : `${Math.round(analytics.aiTriageQuality.averageConfidence * 100)}%`}</strong>
+              <span>average confidence</span>
+            </div>
+            <div className="recovery-table">
+              {analytics.aiTriageQuality.lowConfidenceRequests.map((request) => (
+                <div key={request.id}>
+                  <span>{Math.round(request.confidence * 100)}%</span>
+                  <strong>{request.title}</strong>
+                </div>
+              ))}
+              {!analytics.aiTriageQuality.lowConfidenceRequests.length ? <div className="empty-state">No low-confidence triage decisions.</div> : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
     </section>
   );
 }

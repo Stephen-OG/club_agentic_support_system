@@ -110,7 +110,7 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
       <section className="command-main">
         {visitedViews.includes("dashboard") ? (
           <div {...panelProps("dashboard")}>
-            <CommandCenterDashboard />
+            <CommandCenterDashboard currentUser={currentUser} />
           </div>
         ) : null}
         {visitedViews.includes("operations") ? (

@@ -40,7 +40,8 @@ const allowedTransitions: Record<RequestActor, Partial<Record<RequestStatus, Req
     new: ["acknowledged"],
     acknowledged: ["in_progress", "declined"],
     assigned: ["in_progress", "declined"],
-    in_progress: ["completed"]
+    in_progress: ["completed"],
+    escalated: ["in_progress"]
   },
   guest: {
     new: ["cancelled"],
