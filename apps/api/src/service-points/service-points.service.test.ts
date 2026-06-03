@@ -188,6 +188,15 @@ describe("ServicePointsService public QR workflow", () => {
       ]
     );
     assert.equal(calls.some((call) => call.model === "supportRequest.create"), true);
+    const createRequestCall = calls.find((call) => call.model === "supportRequest.create") as { args: { data: Record<string, unknown> } };
+    assert.equal(createRequestCall.args.data.assignedToId, undefined);
+    assert.equal(createRequestCall.args.data.agentSuggestedAction, "Route to operations queue: venue facilities support.");
+    const createEventCall = calls.find((call) => call.model === "requestEvent.create") as { args: { data: { metadata: unknown } } };
+    assert.deepEqual((createEventCall.args.data.metadata as Record<string, unknown>).assignmentRouting, {
+      queue: "operations",
+      reason: "venue facilities support",
+      requiresHumanAssignment: true
+    });
     assert.deepEqual(
       calls
         .filter((call) => call.model === "message.create")
@@ -1493,7 +1502,9 @@ describe("ServicePointsService public QR workflow", () => {
             summary: "Could we get more water?",
             priority: RequestPriority.NORMAL,
             deterministicPriority: RequestPriority.NORMAL,
-            status: RequestStatus.NEW
+            status: RequestStatus.NEW,
+            agentSuggestedAction: "Route to operations queue: venue facilities support.",
+            agentPolicyVersion: "v1-backend-routing"
           }
         }
       }

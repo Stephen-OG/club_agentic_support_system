@@ -13,6 +13,7 @@ import { VenueAccessService } from "../venues/access.service";
 import { decryptMessageBody, decryptMessageRecords, encryptMessageCreateData } from "../security/message-crypto";
 import type { TriageReplyJobData } from "../jobs/triage-reply.processor";
 import { DomainEventsService, type DomainEventType } from "../realtime/domain-events.service";
+import { determineAssignmentRoute, type AssignmentRoute } from "../requests/assignment-routing.service";
 import { CreateServicePointDto } from "./dto/create-service-point.dto";
 import type { CreateVenueLocationDto } from "./dto/create-venue-location.dto";
 import { CreateVenueDto } from "./dto/create-venue.dto";
@@ -57,6 +58,10 @@ function defaultVenueOpeningHours() {
     isClosed: false,
     opensAt: "09:00"
   }));
+}
+
+function assignmentSuggestedAction(route: AssignmentRoute) {
+  return `Route to ${route.queue} queue: ${route.reason}.`;
 }
 
 @Injectable()
@@ -843,6 +848,11 @@ export class ServicePointsService {
     // --- Async path: needs AI triage — save guest message + support request, enqueue job ---
     const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
     const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
+    const assignmentRoute = determineAssignmentRoute({
+      category: "general",
+      message: input.message,
+      priority: deterministicPriority
+    });
 
     const transactionResult = await this.prisma.$transaction(async (tx) => {
       const conversation =
@@ -867,7 +877,9 @@ export class ServicePointsService {
           summary: input.message,
           priority: prismaPriority,
           deterministicPriority: prismaPriority,
-          status
+          status,
+          agentSuggestedAction: assignmentSuggestedAction(assignmentRoute),
+          agentPolicyVersion: "v1-backend-routing"
         }
       });
 
@@ -902,7 +914,7 @@ export class ServicePointsService {
           requestId: supportRequest.id,
           type: "request.created",
           toStatus: supportRequest.status,
-          metadata: { source: "public_qr", qrToken: token }
+          metadata: { source: "public_qr", qrToken: token, assignmentRouting: assignmentRoute }
         }
       });
 
@@ -1130,6 +1142,11 @@ export class ServicePointsService {
     // --- Async path: save guest message + support request, enqueue AI job ---
     const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
     const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
+    const assignmentRoute = determineAssignmentRoute({
+      category: "general",
+      message: input.message,
+      priority: deterministicPriority
+    });
 
     const transactionResult = await this.prisma.$transaction(async (tx) => {
       const conversation =
@@ -1169,7 +1186,9 @@ export class ServicePointsService {
             summary: input.message,
             priority: prismaPriority,
             deterministicPriority: prismaPriority,
-            status
+            status,
+            agentSuggestedAction: assignmentSuggestedAction(assignmentRoute),
+            agentPolicyVersion: "v1-backend-routing"
           }
         });
       }
@@ -1183,6 +1202,7 @@ export class ServicePointsService {
           metadata: {
             locationLabel,
             quickAction: input.quickAction || null,
+            assignmentRouting: assignmentRoute,
             source: "public_venue_qr",
             venueSlug
           },

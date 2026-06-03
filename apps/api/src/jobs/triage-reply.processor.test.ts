@@ -8,7 +8,9 @@ describe("TriageReplyProcessor realtime events", () => {
     const request = {
       id: "request_1",
       title: "Guest support request",
-      category: "general"
+      category: "general",
+      agentPolicyVersion: "v1-backend-routing",
+      agentSuggestedAction: "Route to floor queue: general guest support."
     };
     const message = {
       id: "message_assistant_1"
@@ -31,7 +33,11 @@ describe("TriageReplyProcessor realtime events", () => {
       {
         supportRequest: {
           findFirst: async () => request,
-          update: async () => ({ ...request, title: "Guest waiting", category: "service" })
+          update: async (args: any) => {
+            assert.equal(args.data.agentSuggestedAction, undefined);
+            assert.equal(args.data.agentPolicyVersion, undefined);
+            return { ...request, title: "Guest waiting", category: "service" };
+          }
         },
         message: {
           create: async (args: any) => {

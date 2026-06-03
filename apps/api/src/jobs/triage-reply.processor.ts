@@ -74,7 +74,7 @@ export class TriageReplyProcessor extends WorkerHost {
       const request = await this.prisma.supportRequest.findFirst({
         where: { conversationId },
         orderBy: { createdAt: "desc" },
-        select: { id: true, title: true, category: true }
+        select: { id: true, title: true, category: true, agentPolicyVersion: true }
       });
 
       if (request) {
@@ -86,8 +86,8 @@ export class TriageReplyProcessor extends WorkerHost {
             category: request.category === "general" ? triage.category : undefined,
             summary: triage.summary,
             agentConfidence: (triage as any).confidence,
-            agentSuggestedAction: (triage as any).suggestedAction,
-            agentPolicyVersion: "v1-semi-autonomous"
+            agentSuggestedAction: request.agentPolicyVersion === "v1-backend-routing" ? undefined : (triage as any).suggestedAction,
+            agentPolicyVersion: request.agentPolicyVersion === "v1-backend-routing" ? undefined : "v1-semi-autonomous"
           }
         });
         this.publishRequestUpdated(venueId, conversationId, request.id);
