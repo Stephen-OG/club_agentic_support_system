@@ -13,10 +13,10 @@ export class ReplyGuardService {
     }
 
     if (isFollowup) {
-      return "Thanks, I added that to your open request.";
+      return "Got it, I added that to your open request so the team has the full picture.";
     }
 
-    return location ? `Of course. I have notified the team for ${location}.` : "Of course. I have notified the team.";
+    return location ? `Of course, I have let the team know for ${location}.` : "Of course, I have let the team know.";
   }
 
   private guestMeaningfulLocation(label: string) {

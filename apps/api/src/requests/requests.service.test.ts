@@ -827,7 +827,7 @@ describe("RequestsService lifecycle", () => {
       conversationId: request.conversationId,
       requestId: request.id,
       sender: SenderType.SYSTEM,
-      body: "Thanks for letting us know. The team will keep working on this.",
+      body: "Thanks for letting us know. I have reopened this for the team, and they will keep working on it.",
       createdAt: new Date("2026-06-02T06:20:00.000Z"),
       metadata: {}
     };
@@ -1013,7 +1013,7 @@ describe("RequestsService lifecycle", () => {
             conversationId: request.conversationId,
             requestId: request.id,
             sender: SenderType.SYSTEM,
-            body: "Thanks for letting us know. The team will keep working on this.",
+            body: "Thanks for letting us know. I have reopened this for the team, and they will keep working on it.",
             metadata: {}
           }
         }

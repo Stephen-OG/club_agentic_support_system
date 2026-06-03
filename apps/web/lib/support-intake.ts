@@ -6,7 +6,7 @@ export const supportQuickActions = [
   { id: "lost_property", label: "Lost property", prompt: "I need help with lost property." },
   { id: "payment", label: "Payment issue", prompt: "I need help with my bill or payment." },
   { id: "restroom", label: "Toilet issue", prompt: "There is a toilet or restroom issue." },
-  { id: "safety", label: "Safety", prompt: "I need help with a safety or security concern." }
+  { id: "safety", label: "Safety or security", prompt: "I need help with a safety or security concern." }
 ] as const;
 
 export const supportLocationOptions = [

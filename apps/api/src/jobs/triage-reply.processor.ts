@@ -138,7 +138,7 @@ export class TriageReplyProcessor extends WorkerHost {
             conversationId,
             requestId: null,
             sender: SenderType.ASSISTANT,
-            body: "The team has been notified of your message.",
+            body: "I have let the team know about your message.",
             metadata: {
               source,
               venueSlug: venueSlug || null,

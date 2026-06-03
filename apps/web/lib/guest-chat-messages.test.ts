@@ -9,7 +9,7 @@ describe("guest chat message normalization", () => {
         "Of course. I have notified the team for 7548ab6e-e8ac-4aeb-8867-d2ff290d9b46.",
         "Table 4"
       ),
-      "Of course. I have notified the team for Table 4."
+      "Of course, I have let the team know for Table 4."
     );
   });
 
@@ -19,7 +19,7 @@ describe("guest chat message normalization", () => {
         "Thanks, I added that to your open request for 7548ab6e-e8ac-4aeb-8867-d2ff290d9b46.",
         "Table 4"
       ),
-      "Thanks, I added that to your open request."
+      "Got it, I added that to your open request so the team has the full picture."
     );
   });
 

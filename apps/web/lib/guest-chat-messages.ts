@@ -23,15 +23,17 @@ function meaningfulLocation(label: string) {
 
 export function sanitizeGuestChatBody(body: string, servicePointLabel: string) {
   const location = meaningfulLocation(servicePointLabel);
-  const notifiedBase = "Of course. I have notified the team";
+  const notifiedBase = "Of course, I have let the team know";
   const notifiedWithoutLocation = `${notifiedBase}.`;
-  const followupWithoutLocation = "Thanks, I added that to your open request.";
+  const followupWithoutLocation = "Got it, I added that to your open request so the team has the full picture.";
   let nextBody = body.trim();
 
   nextBody = nextBody.replace(new RegExp(`Of course\\. I have notified the team for ${uuidPattern}\\.`, "gi"), () =>
     location ? `${notifiedBase} for ${location}.` : notifiedWithoutLocation
   );
   nextBody = nextBody.replace(new RegExp(`Thanks, I added that to your open request for ${uuidPattern}\\.`, "gi"), followupWithoutLocation);
+  nextBody = nextBody.replace(/^Of course\. I have notified the team\.$/i, notifiedWithoutLocation);
+  nextBody = nextBody.replace(/^Thanks, I added that to your open request\.$/i, followupWithoutLocation);
   nextBody = nextBody.replace(internalIdentifierRegex, location || "your location");
 
   return nextBody;

@@ -363,7 +363,13 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
               {index === 0 && !awaitingSatisfaction && !chatClosed ? (
                 <div className="quick-actions intro-actions" aria-label="Common requests">
                   {supportQuickActions.map((action) => (
-                    <button disabled={isSending} key={`intro-${action.id}`} onClick={() => void sendMessage(action.prompt, action.id)} type="button">
+                    <button
+                      className={action.id === "safety" ? "urgent-action" : undefined}
+                      disabled={isSending}
+                      key={`intro-${action.id}`}
+                      onClick={() => void sendMessage(action.prompt, action.id)}
+                      type="button"
+                    >
                       <span className="quick-action-icon">
                         <Sparkles size={14} />
                       </span>
@@ -405,7 +411,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
           </div>
         ) : canCancel ? (
           <div className="guest-actions">
-            <button className="button ghost" disabled={isSending} onClick={() => void updateRequest("cancel")} type="button">
+            <button className="button ghost cancel-request-button" disabled={isSending} onClick={() => void updateRequest("cancel")} type="button">
               Cancel request
             </button>
           </div>
@@ -420,7 +426,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
                 formRef.current?.requestSubmit();
               }
             }}
-            placeholder="Tell us what would help..."
+            placeholder="Tell us what you need..."
             disabled={chatClosed}
             value={input}
           />

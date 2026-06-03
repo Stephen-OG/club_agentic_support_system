@@ -522,7 +522,7 @@ export class ServicePointsService {
         : "I have alerted the team that you need urgent support. Please stay where you are if it is safe to do so.";
     }
 
-    return locationLabel ? `Of course. I have notified the team for ${locationLabel}.` : "Of course. I have notified the team.";
+    return locationLabel ? `Of course, I have let the team know for ${locationLabel}.` : "Of course, I have let the team know.";
   }
 
   private locationPrompt(venueName: string) {
@@ -685,7 +685,7 @@ export class ServicePointsService {
           conversationId,
           requestId: null,
           sender: SenderType.ASSISTANT,
-          body: "The team has been notified of your message.",
+          body: "I have let the team know about your message.",
           metadata: { source, fallback: true }
         })
       });

@@ -28,10 +28,10 @@ function replyGuard() {
       }
 
       if (isFollowup) {
-        return `Thanks, I added that to your open request for ${servicePointLabel}.`;
+        return "Got it, I added that to your open request so the team has the full picture.";
       }
 
-      return `Of course. I have notified the team for ${servicePointLabel}.`;
+      return `Of course, I have let the team know for ${servicePointLabel}.`;
     }
   };
 }
@@ -155,7 +155,7 @@ describe("AI triage", () => {
       servicePointLabel: "Table 4"
     });
 
-    assert.equal(triage.assistantReply, "Of course. I have notified the team for Table 4.");
+    assert.equal(triage.assistantReply, "Of course, I have let the team know for Table 4.");
   });
 
   it("classifies greetings and venue information questions as no-staff fallback intents", () => {

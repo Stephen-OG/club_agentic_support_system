@@ -17,7 +17,7 @@ describe("TriageReplyProcessor realtime events", () => {
     const processor = new TriageReplyProcessor(
       {
         triage: async () => ({
-          assistantReply: "Of course. I have notified the team for Table 4.",
+          assistantReply: "Of course, I have let the team know for Table 4.",
           category: "service",
           confidence: 0.8,
           guestLocationLabel: null,

@@ -80,7 +80,7 @@ describe("ServicePointsService public QR workflow", () => {
         conversationId: conversation.id,
         requestId: supportRequest.id,
         sender: SenderType.ASSISTANT,
-        body: "Thanks, the team has been notified."
+        body: "I have let the team know about your message."
       }
     ];
 
@@ -137,7 +137,7 @@ describe("ServicePointsService public QR workflow", () => {
         createFallback: (args: unknown) => {
           calls.push({ model: "aiTriage.createFallback", args });
           return {
-            assistantReply: "Thanks, the team has been notified.",
+            assistantReply: "I have let the team know about your message.",
             category: "facilities",
             needsStaff: true,
             priority: "high",
@@ -211,7 +211,7 @@ describe("ServicePointsService public QR workflow", () => {
           conversationId: conversation.id,
           requestId: supportRequest.id,
           sender: SenderType.ASSISTANT,
-          body: "Of course. I have notified the team for Patio 4.",
+          body: "Of course, I have let the team know for Patio 4.",
           metadata: {
             source: "public_qr",
             qrToken: "qr_public_123",
@@ -283,7 +283,7 @@ describe("ServicePointsService public QR workflow", () => {
       const service = createService(
         {
           createFallback: () => ({
-            assistantReply: "Thanks, the team has been notified.",
+            assistantReply: "I have let the team know about your message.",
             category: "service",
             needsStaff: true,
             priority: "normal",
@@ -307,7 +307,7 @@ describe("ServicePointsService public QR workflow", () => {
       assert.equal(createdMessages.some((message) => message.body.includes("Please bring water")), false);
       assert.deepEqual(
         result.messages.map((message: any) => message.body),
-        ["Please bring water", "Of course. I have notified the team for Terrace 7."]
+        ["Please bring water", "Of course, I have let the team know for Terrace 7."]
       );
     } finally {
       if (previousKey === undefined) {
@@ -628,7 +628,7 @@ describe("ServicePointsService public QR workflow", () => {
           conversationId: conversation.id,
           requestId: supportRequest.id,
           sender: SenderType.ASSISTANT,
-          body: "Of course. I have notified the team for Booth 12.",
+          body: "Of course, I have let the team know for Booth 12.",
           metadata: {
             source: "public_qr",
             qrToken: "qr_resume_123",
@@ -684,7 +684,7 @@ describe("ServicePointsService public QR workflow", () => {
         conversationId: conversation.id,
         requestId: newSupportRequest.id,
         sender: SenderType.ASSISTANT,
-        body: "Of course. I have notified the team for Table 2."
+        body: "Of course, I have let the team know for Table 2."
       }
     ];
 
@@ -738,7 +738,7 @@ describe("ServicePointsService public QR workflow", () => {
     const service = createService(
       {
         createFallback: () => ({
-          assistantReply: "Thanks, I added that to your open request for Table 2.",
+          assistantReply: "Got it, I added that to your open request so the team has the full picture.",
           category: "general",
           needsStaff: true,
           priority: "normal",
@@ -788,7 +788,7 @@ describe("ServicePointsService public QR workflow", () => {
           conversationId: conversation.id,
           requestId: newSupportRequest.id,
           sender: SenderType.ASSISTANT,
-          body: "Of course. I have notified the team for Table 2.",
+          body: "Of course, I have let the team know for Table 2.",
           metadata: {
             source: "public_qr",
             qrToken: "qr_followup_123",
@@ -854,7 +854,7 @@ describe("ServicePointsService public QR workflow", () => {
     const service = createService(
       {
         createFallback: () => ({
-          assistantReply: "Of course. I have notified the team.",
+          assistantReply: "Of course, I have let the team know.",
           category: "general",
           needsStaff: true,
           priority: "normal",
@@ -1740,7 +1740,7 @@ describe("ServicePointsService public QR workflow", () => {
     const service = createService(
       {
         createFallback: () => ({
-          assistantReply: "I have notified the team.",
+          assistantReply: "I have let the team know.",
           category: "general",
           needsStaff: true,
           priority: "normal",

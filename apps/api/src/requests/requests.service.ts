@@ -339,7 +339,7 @@ export class RequestsService {
     }
 
     if (action === "not_satisfied") {
-      return "Thanks for letting us know. The team will keep working on this.";
+      return "Thanks for letting us know. I have reopened this for the team, and they will keep working on it.";
     }
 
     return "The guest cancelled this request.";
