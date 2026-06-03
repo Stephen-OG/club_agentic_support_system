@@ -48,8 +48,8 @@ export default function SetupPage() {
     })
       .then((res) => {
         if (res.ok) {
-          // Already has a profile, redirect to admin
-          safeReplace(router, "/admin");
+          // Already has a profile, redirect to the command workspace.
+          safeReplace(router, "/command");
         }
         // If 401/403, proceed with setup
       })
@@ -131,8 +131,7 @@ export default function SetupPage() {
         throw new Error(body?.message || body?.error || "Setup failed");
       }
 
-      // Redirect to admin page
-      safeReplace(router, "/admin");
+      safeReplace(router, "/command");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Setup failed. Please try again.");
       setStep("venue");

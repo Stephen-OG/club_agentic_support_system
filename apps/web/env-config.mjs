@@ -36,9 +36,11 @@ export function loadWorkspaceEnv({ appDir, repoRoot, existingEnv = process.env }
   };
 
   const apiUrl =
-    existingEnv.NEXT_PUBLIC_API_URL ||
-    appEnv.NEXT_PUBLIC_API_URL ||
-    rootEnv.NEXT_PUBLIC_API_URL ||
+    resolveExplicitApiUrl({
+      existingEnv,
+      appEnv,
+      rootEnv
+    }) ||
     buildLocalApiUrl({
       host:
         existingEnv.NEXT_PUBLIC_API_HOST ||
@@ -70,6 +72,40 @@ function buildLocalApiUrl({ host, port }) {
   }
 
   return `http://${host}:${port}`;
+}
+
+function resolveExplicitApiUrl({ existingEnv, appEnv, rootEnv }) {
+  const explicitApiUrl = existingEnv.NEXT_PUBLIC_API_URL || appEnv.NEXT_PUBLIC_API_URL || rootEnv.NEXT_PUBLIC_API_URL;
+
+  if (!explicitApiUrl) {
+    return undefined;
+  }
+
+  const appOrigin =
+    existingEnv.NEXT_PUBLIC_APP_URL ||
+    existingEnv.NEXT_PUBLIC_WEB_URL ||
+    appEnv.NEXT_PUBLIC_APP_URL ||
+    appEnv.NEXT_PUBLIC_WEB_URL ||
+    rootEnv.NEXT_PUBLIC_APP_URL ||
+    rootEnv.NEXT_PUBLIC_WEB_URL;
+
+  if (sameOrigin(explicitApiUrl, appOrigin)) {
+    return undefined;
+  }
+
+  return explicitApiUrl;
+}
+
+function sameOrigin(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+
+  try {
+    return new URL(left).origin === new URL(right).origin;
+  } catch {
+    return left.replace(/\/+$/, "") === right.replace(/\/+$/, "");
+  }
 }
 
 function compactEnv(env) {

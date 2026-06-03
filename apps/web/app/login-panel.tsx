@@ -6,6 +6,7 @@ import { LockKeyhole, Mail, Radar, UserPlus } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { apiRequest } from "@/lib/api/client";
 import { getSignedInRouteAction, mustChangePassword } from "@/lib/auth/session-route-policy";
+import { getSignupCompletionAction } from "@/lib/auth/signup-flow";
 import type { CommandUser } from "@/lib/auth/types";
 
 export function LoginPanel() {
@@ -16,6 +17,7 @@ export function LoginPanel() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -42,7 +44,7 @@ export function LoginPanel() {
         return;
       }
 
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -57,20 +59,13 @@ export function LoginPanel() {
         return;
       }
 
-      // Sign up succeeded — now sign in
-      const signInResult = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (signInResult.error || !signInResult.data.session) {
-        setError("Account created but could not sign in. Please sign in manually.");
-        setMode("signin");
+      const action = getSignupCompletionAction({ hasSession: Boolean(signUpData.session) });
+      if (action.kind === "setup") {
+        router.replace("/signup");
         return;
       }
 
-      // Redirect to setup wizard
-      router.replace("/signup");
+      setVerificationEmail(email);
       return;
     }
 
@@ -129,13 +124,32 @@ export function LoginPanel() {
         <div>
           <div className="eyebrow">Secure access</div>
           <h2>{mode === "signin" ? "Sign in" : "Create account"}</h2>
-          <p className="muted">
-            {mode === "signin"
-              ? "Sign in with your email and password."
-              : "First time? Create an account and set up your workspace."}
-          </p>
+          {verificationEmail ? (
+            <p className="muted">Check {verificationEmail} to confirm your account, then sign in to finish workspace setup.</p>
+          ) : (
+            <p className="muted">
+              {mode === "signin"
+                ? "Sign in with your email and password."
+                : "First time? Create an account and set up your workspace."}
+            </p>
+          )}
         </div>
 
+        {verificationEmail ? (
+          <div className="auth-form">
+            <button
+              className="command-button primary"
+              onClick={() => {
+                setMode("signin");
+                setVerificationEmail(null);
+                setError(null);
+              }}
+              type="button"
+            >
+              Sign in after confirming
+            </button>
+          </div>
+        ) : (
         <form className="auth-form" onSubmit={submit}>
           <label>
             <span>Email</span>
@@ -181,12 +195,13 @@ export function LoginPanel() {
               : "Create account"}
           </button>
         </form>
+        )}
 
-        <div className="auth-switch">
+        {!verificationEmail ? <div className="auth-switch">
           {mode === "signin" ? (
             <p>
               Don&apos;t have an account?{" "}
-              <button className="link-button" onClick={() => { setMode("signup"); setError(null); }} type="button">
+              <button className="link-button" onClick={() => { setMode("signup"); setError(null); setVerificationEmail(null); }} type="button">
                 <UserPlus size={14} />
                 Create one
               </button>
@@ -194,12 +209,12 @@ export function LoginPanel() {
           ) : (
             <p>
               Already have an account?{" "}
-              <button className="link-button" onClick={() => { setMode("signin"); setError(null); }} type="button">
+              <button className="link-button" onClick={() => { setMode("signin"); setError(null); setVerificationEmail(null); }} type="button">
                 Sign in
               </button>
             </p>
           )}
-        </div>
+        </div> : null}
       </section>
     </main>
   );

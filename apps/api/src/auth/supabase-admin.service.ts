@@ -56,6 +56,14 @@ export class SupabaseAdminService {
     return result.data.user;
   }
 
+  async deleteUser(authUserId: string) {
+    const result = await this.supabase.auth.admin.deleteUser(authUserId);
+
+    if (result.error) {
+      throw new InternalServerErrorException(result.error.message);
+    }
+  }
+
   async clearPasswordChangeRequired(authUserId: string) {
     const result = await this.supabase.auth.admin.updateUserById(authUserId, {
       user_metadata: {
@@ -70,4 +78,3 @@ export class SupabaseAdminService {
     return result.data.user;
   }
 }
-

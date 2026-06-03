@@ -15,6 +15,9 @@ describe("StaffService", () => {
         staffProfile: {
           findUnique: async () => null
         },
+        venue: {
+          findFirst: async () => ({ id: "venue-1", workspaceId: "workspace-1" })
+        },
         $transaction: async (operation: any) =>
           operation({
             staffProfile: {
@@ -49,6 +52,9 @@ describe("StaffService", () => {
       {
         staffProfile: {
           findUnique: async () => null
+        },
+        venue: {
+          findFirst: async () => ({ id: "venue-1", workspaceId: "workspace-1" })
         },
         $transaction: async (operation: any) =>
           operation({
@@ -85,6 +91,9 @@ describe("StaffService", () => {
       {
         staffProfile: {
           findUnique: async () => null
+        },
+        venue: {
+          findFirst: async () => ({ id: "venue-1", workspaceId: "workspace-1" })
         },
         $transaction: async (operation: any) =>
           operation({
@@ -132,6 +141,9 @@ describe("StaffService", () => {
       {
         staffProfile: {
           findUnique: async () => null
+        },
+        venue: {
+          findFirst: async () => ({ id: "venue-1", workspaceId: "workspace-1" })
         },
         $transaction: async (operation: any) =>
           operation({
@@ -192,6 +204,73 @@ describe("StaffService", () => {
         }),
       ForbiddenException
     );
+  });
+
+  it("rejects admin venue-scoped user creation when the venue is outside the workspace", async () => {
+    let createdAuthUser = false;
+    const service = new StaffService(
+      {
+        staffProfile: {
+          findUnique: async () => null
+        },
+        venue: {
+          findFirst: async () => null
+        }
+      } as any,
+      {
+        createTemporaryPasswordUser: async () => {
+          createdAuthUser = true;
+          return { id: "auth-cross-workspace" };
+        }
+      } as any
+    );
+
+    await assert.rejects(
+      () =>
+        service.createStaffUser(adminAuth, {
+          email: "cross-workspace@example.com",
+          displayName: "Cross Workspace",
+          role: "staff",
+          venueId: "venue-outside-workspace"
+        }),
+      ForbiddenException
+    );
+    assert.equal(createdAuthUser, false);
+  });
+
+  it("deletes the temporary Supabase auth user when staff profile persistence fails", async () => {
+    const deletedAuthUserIds: string[] = [];
+    const service = new StaffService(
+      {
+        staffProfile: {
+          findUnique: async () => null
+        },
+        venue: {
+          findFirst: async () => ({ id: "venue-1", workspaceId: "workspace-1" })
+        },
+        $transaction: async () => {
+          throw new Error("database write failed");
+        }
+      } as any,
+      {
+        createTemporaryPasswordUser: async () => ({ id: "auth-to-clean-up" }),
+        deleteUser: async (authUserId: string) => {
+          deletedAuthUserIds.push(authUserId);
+        }
+      } as any
+    );
+
+    await assert.rejects(
+      () =>
+        service.createStaffUser(adminAuth, {
+          email: "rollback@example.com",
+          displayName: "Rollback User",
+          role: "staff",
+          venueId: "venue-1"
+        }),
+      /database write failed/
+    );
+    assert.deepEqual(deletedAuthUserIds, ["auth-to-clean-up"]);
   });
 
   it("rejects non-admin user creation", async () => {

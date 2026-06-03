@@ -32,10 +32,10 @@ describe("session route policy", () => {
     );
   });
 
-  it("routes command roles to admin and venue roles to staff", () => {
+  it("routes command roles to command and venue roles to staff", () => {
     assert.deepEqual(getSignedInRouteAction({ user: userWithRole("admin"), userMetadata: {} }), {
       kind: "redirect",
-      path: "/admin"
+      path: "/command"
     });
     assert.deepEqual(getSignedInRouteAction({ user: userWithRole("staff"), userMetadata: {} }), {
       kind: "redirect",

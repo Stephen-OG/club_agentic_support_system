@@ -18,6 +18,7 @@ describe("security config", () => {
       "https://admin.example.com"
     ]);
     assert.equal(parseCorsOrigins(undefined).includes("http://127.0.0.1:3001"), true);
+    assert.equal(parseCorsOrigins(undefined).includes("http://127.0.0.1:3002"), true);
   });
 
   it("allows same-origin server calls and rejects origins outside the allow-list", () => {

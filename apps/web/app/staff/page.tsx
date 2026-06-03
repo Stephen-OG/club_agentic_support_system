@@ -56,7 +56,7 @@ export default function StaffPage() {
     }
 
     if (hasCommandDashboardAccess(currentUser)) {
-      safeReplace(router, "/admin");
+      safeReplace(router, "/command");
     }
   }, [session, currentUser, router]);
 

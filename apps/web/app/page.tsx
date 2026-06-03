@@ -66,7 +66,7 @@ export default function HomePage() {
     }
 
     if (hasCommandDashboardAccess(currentUser)) {
-      safeReplace(router, "/admin");
+      safeReplace(router, "/command");
     } else {
       safeReplace(router, "/staff");
     }

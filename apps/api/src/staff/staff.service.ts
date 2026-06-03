@@ -99,6 +99,7 @@ export class StaffService {
 
   async createStaffUser(auth: AuthContext, input: CreateStaffUserDto) {
     const venueId = this.resolveCreatableVenueId(auth, input);
+    await this.assertVenueInWorkspace(auth, venueId);
 
     const email = input.email.trim().toLowerCase();
     const existing = await this.prisma.staffProfile.findUnique({ where: { email } });
@@ -114,30 +115,40 @@ export class StaffService {
       displayName: input.displayName.trim()
     });
 
-    const { staff, membership } = await this.prisma.$transaction(async (tx) => {
-      const staff = await tx.staffProfile.create({
-        data: {
-          authUserId: authUser.id,
-          email,
-          displayName: input.displayName.trim()
-        }
-      });
+    let result: {
+      staff: { id: string; authUserId: string | null; email: string | null; displayName: string };
+      membership: { id: string; role: StaffRole; venueId: string | null };
+    };
 
-      const membership = await tx.staffMembership.create({
-        data: {
-          workspaceId: auth.workspaceId,
-          venueId,
-          staffProfileId: staff.id,
-          role: prismaRoleBySharedRole[input.role]
-        }
-      });
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
+        const staff = await tx.staffProfile.create({
+          data: {
+            authUserId: authUser.id,
+            email,
+            displayName: input.displayName.trim()
+          }
+        });
 
-      return { staff, membership };
-    });
+        const membership = await tx.staffMembership.create({
+          data: {
+            workspaceId: auth.workspaceId,
+            venueId,
+            staffProfileId: staff.id,
+            role: prismaRoleBySharedRole[input.role]
+          }
+        });
+
+        return { staff, membership };
+      });
+    } catch (error) {
+      await this.supabaseAdmin.deleteUser(authUser.id);
+      throw error;
+    }
 
     return {
-      staff,
-      membership,
+      staff: result.staff,
+      membership: result.membership,
       temporaryPassword
     };
   }
@@ -186,6 +197,26 @@ export class StaffService {
     }
 
     return auth.venueId;
+  }
+
+  private async assertVenueInWorkspace(auth: AuthContext, venueId: string | null | undefined) {
+    if (!venueId) {
+      return;
+    }
+
+    const venue = await this.prisma.venue.findFirst({
+      where: {
+        id: venueId,
+        workspaceId: auth.workspaceId
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (!venue) {
+      throw new ForbiddenException("Venue does not belong to this workspace");
+    }
   }
 
   private generateTemporaryPassword() {

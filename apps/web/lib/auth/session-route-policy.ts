@@ -3,7 +3,7 @@ import type { CommandUser } from "./types";
 
 export type SignedInRouteAction =
   | { kind: "password-change" }
-  | { kind: "redirect"; path: "/admin" | "/staff" };
+  | { kind: "redirect"; path: "/command" | "/staff" };
 
 type UserMetadataSource = {
   user_metadata?: {
@@ -24,7 +24,7 @@ export function getSignedInRouteAction(input: {
   }
 
   if (hasCommandDashboardAccess(input.user)) {
-    return { kind: "redirect", path: "/admin" };
+    return { kind: "redirect", path: "/command" };
   }
 
   return { kind: "redirect", path: "/staff" };

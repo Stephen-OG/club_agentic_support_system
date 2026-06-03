@@ -36,6 +36,44 @@ describe("loadWorkspaceEnv", () => {
     assert.equal(result.publicEnv.NEXT_PUBLIC_API_URL, "https://api.example");
   });
 
+  it("ignores a public API URL that points at the configured web app origin", () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "guestos-env-"));
+    const appDir = path.join(workspace, "apps", "web");
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(workspace, ".env"),
+      [
+        "NEXT_PUBLIC_APP_URL=https://app.example.com",
+        "NEXT_PUBLIC_API_URL=https://app.example.com",
+        "NEXT_PUBLIC_API_HOST=127.0.0.1",
+        "NEXT_PUBLIC_API_PORT=4000"
+      ].join("\n")
+    );
+
+    const result = loadWorkspaceEnv({ appDir, repoRoot: workspace, existingEnv: {} });
+
+    assert.equal(result.publicEnv.NEXT_PUBLIC_API_URL, "http://127.0.0.1:4000");
+  });
+
+  it("uses explicit API host and port ahead of generic deployment host and port", () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "guestos-env-"));
+    const appDir = path.join(workspace, "apps", "web");
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(workspace, ".env"),
+      [
+        "HOST=0.0.0.0",
+        "PORT=3001",
+        "NEXT_PUBLIC_API_HOST=127.0.0.1",
+        "NEXT_PUBLIC_API_PORT=4000"
+      ].join("\n")
+    );
+
+    const result = loadWorkspaceEnv({ appDir, repoRoot: workspace, existingEnv: {} });
+
+    assert.equal(result.publicEnv.NEXT_PUBLIC_API_URL, "http://127.0.0.1:4000");
+  });
+
   it("does not let generic shell host and port override workspace env API settings", () => {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "guestos-env-"));
     const appDir = path.join(workspace, "apps", "web");
