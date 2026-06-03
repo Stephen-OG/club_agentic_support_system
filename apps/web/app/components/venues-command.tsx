@@ -2,20 +2,17 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { Check, Clock3, Copy, Download, Edit3, MapPinned, Plus, QrCode, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Check, Copy, Download, Edit3, MapPinned, Plus, QrCode, RefreshCw, Trash2, X } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
-import type { CommandServicePoint, CommandVenue, CommandVenueLocation, CommandVenueOpeningHour } from "@/lib/auth/types";
+import type { CommandServicePoint, CommandVenue, CommandVenueLocation } from "@/lib/auth/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { generateQrCodeDataUrl } from "@/lib/qr";
 import {
   createLocationPayload,
-  createOpeningHoursPayload,
   createServicePointPayload,
   createServicePointUpdatePayload,
-  normalizeOpeningHours,
   servicePointGuestUrl,
-  venueWideGuestUrl,
-  weekdayLabels
+  venueWideGuestUrl
 } from "@/lib/venue-controls";
 
 type QrPreview = {
@@ -40,8 +37,6 @@ export function VenuesCommand() {
   const [loading, setLoading] = useState(true);
   const [qrPreview, setQrPreview] = useState<QrPreview | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
-  const [hourDrafts, setHourDrafts] = useState<Record<string, CommandVenueOpeningHour[]>>({});
-  const [updatingHoursId, setUpdatingHoursId] = useState<string | null>(null);
   const [servicePointDrafts, setServicePointDrafts] = useState<Record<string, ServicePointDraft>>({});
   const [editingPointDrafts, setEditingPointDrafts] = useState<Record<string, ServicePointDraft>>({});
   const [locationDrafts, setLocationDrafts] = useState<Record<string, LocationDraft>>({});
@@ -86,16 +81,6 @@ export function VenuesCommand() {
     anchor.download = `${label.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "qr"}.png`;
     anchor.click();
   }, []);
-
-  function updateHourDraft(venue: CommandVenue, dayOfWeek: number, patch: Partial<CommandVenueOpeningHour>) {
-    setHourDrafts((current) => {
-      const draft = current[venue.id] ?? normalizeOpeningHours(venue.openingHours);
-      return {
-        ...current,
-        [venue.id]: draft.map((hours) => (hours.dayOfWeek === dayOfWeek ? { ...hours, ...patch } : hours))
-      };
-    });
-  }
 
   function updateServicePointDraft(venueId: string, patch: Partial<ServicePointDraft>) {
     setServicePointDrafts((current) => ({
@@ -292,30 +277,6 @@ export function VenuesCommand() {
     });
   }
 
-  async function saveOpeningHours(venue: CommandVenue) {
-    if (!supabase) {
-      setError("Supabase is not configured.");
-      return;
-    }
-
-    setUpdatingHoursId(venue.id);
-    setError(null);
-
-    try {
-      const openingHours = hourDrafts[venue.id] ?? normalizeOpeningHours(venue.openingHours);
-      const updated = await apiRequest<CommandVenue>(supabase, `/admin/venues/${venue.id}/opening-hours`, {
-        method: "PATCH",
-        body: JSON.stringify(createOpeningHoursPayload(openingHours))
-      });
-      setVenues((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      setHourDrafts((current) => ({ ...current, [venue.id]: normalizeOpeningHours(updated.openingHours) }));
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Could not update opening hours");
-    } finally {
-      setUpdatingHoursId(null);
-    }
-  }
-
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -380,56 +341,6 @@ export function VenuesCommand() {
                 >
                   <Copy size={15} />
                 </button>
-              </div>
-            </div>
-            <div className="opening-hours-editor">
-              <div className="hours-editor-heading">
-                <span>
-                  <Clock3 size={15} />
-                  Opening schedule
-                </span>
-                <button
-                  className="icon-button"
-                  disabled={updatingHoursId === venue.id}
-                  onClick={() => void saveOpeningHours(venue)}
-                  type="button"
-                  aria-label={`Save opening hours for ${venue.name}`}
-                >
-                  <Save size={15} />
-                </button>
-              </div>
-              <div className="opening-hours-grid">
-                {(hourDrafts[venue.id] ?? normalizeOpeningHours(venue.openingHours)).map((hours) => (
-                  <div className="opening-hours-row" key={hours.dayOfWeek}>
-                    <strong>{weekdayLabels[hours.dayOfWeek]}</strong>
-                    <label>
-                      <span>Open</span>
-                      <input
-                        disabled={hours.isClosed}
-                        onChange={(event) => updateHourDraft(venue, hours.dayOfWeek, { opensAt: event.target.value })}
-                        type="time"
-                        value={hours.opensAt}
-                      />
-                    </label>
-                    <label>
-                      <span>Close</span>
-                      <input
-                        disabled={hours.isClosed}
-                        onChange={(event) => updateHourDraft(venue, hours.dayOfWeek, { closesAt: event.target.value })}
-                        type="time"
-                        value={hours.closesAt}
-                      />
-                    </label>
-                    <label className="closed-toggle">
-                      <input
-                        checked={hours.isClosed}
-                        onChange={(event) => updateHourDraft(venue, hours.dayOfWeek, { isClosed: event.target.checked })}
-                        type="checkbox"
-                      />
-                      Closed
-                    </label>
-                  </div>
-                ))}
               </div>
             </div>
             <form className="zone-create-form" onSubmit={(event) => void createVenueLocation(event, venue)}>

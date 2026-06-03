@@ -1,10 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Bell, Clock3, MessageSquareText, RadioTower, RefreshCw, ShieldAlert, Star } from "lucide-react";
+import { Bell, Clock3, MapPin, MessageSquareText, RadioTower, RefreshCw, ShieldAlert, SlidersHorizontal, Star, X } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
-import type { CommandRequestStatus, CommandSupportRequest, CommandVenue } from "@/lib/auth/types";
+import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
+import type { CommandRequestStatus, CommandSupportRequest, CommandUser, CommandVenue } from "@/lib/auth/types";
 import { initializeDefaultRequestNotificationSound, playDefaultRequestNotificationSound } from "@/lib/default-notification-sound";
+import {
+  type OperationsDateRange,
+  type OperationsFilters,
+  type OperationsSortBy,
+  type OperationsSortDirection,
+  type OperationsVisiblePriority,
+  defaultOperationsFilters,
+  getOperationsFilterChips,
+  getOperationsFilterOptions,
+  getOperationsPriorityLabel,
+  hasActiveOperationsFilters,
+  runOperationsFilterPipeline
+} from "@/lib/operations-filters";
 import { calculateOperationsAnalytics } from "@/lib/operations-analytics";
 import {
   type OperationsBucket,
@@ -16,17 +30,13 @@ import {
   operationsPollIntervalMs,
   summarizeOperationsBuckets
 } from "@/lib/operations-workflow";
+import { getPriorityClassName, getPriorityLabel } from "@/lib/priority-display";
 import { calculateRatingAnalytics } from "@/lib/rating-analytics";
-import { createCommandRequestStatusLabel } from "@/lib/request-display";
 import { connectStaffVenueEvents } from "@/lib/realtime-events";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 function sharedStatus(status: CommandRequestStatus) {
   return status.toLowerCase() as Lowercase<CommandRequestStatus>;
-}
-
-function priorityClass(priority: string) {
-  return priority.toLowerCase();
 }
 
 function ratingLabel(request: CommandSupportRequest) {
@@ -45,8 +55,72 @@ function latestPreview(request: CommandSupportRequest) {
   return request.recentMessages?.at(-1)?.body || request.summary || "No conversation preview yet.";
 }
 
-export function OperationsCommand() {
+function formatRequestAge(createdAt: string) {
+  const created = new Date(createdAt);
+  const elapsedMinutes = Math.max(0, Math.round((Date.now() - created.getTime()) / 60000));
+
+  if (Number.isNaN(created.getTime())) {
+    return "Time unavailable";
+  }
+
+  if (elapsedMinutes < 1) {
+    return "Just now";
+  }
+
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes}m waiting`;
+  }
+
+  const hours = Math.floor(elapsedMinutes / 60);
+  const minutes = elapsedMinutes % 60;
+  return minutes ? `${hours}h ${minutes}m waiting` : `${hours}h waiting`;
+}
+
+function titleCase(value: string) {
+  return value
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+const dateRangeOptions: Array<{ label: string; value: OperationsDateRange }> = [
+  { label: "All dates", value: "all" },
+  { label: "Today", value: "today" },
+  { label: "Yesterday", value: "yesterday" },
+  { label: "Last 7 days", value: "last_7_days" },
+  { label: "Last 30 days", value: "last_30_days" },
+  { label: "Custom date range", value: "custom" }
+];
+
+const priorityOptions: OperationsVisiblePriority[] = ["NORMAL", "HIGH", "URGENT"];
+
+const sortOptions: Array<{ label: string; value: OperationsSortBy }> = [
+  { label: "Queue order", value: "queue" },
+  { label: "Newest first", value: "newest" },
+  { label: "Oldest first", value: "oldest" },
+  { label: "Priority", value: "priority" },
+  { label: "Rating", value: "rating" },
+  { label: "Table number", value: "table" },
+  { label: "Longest wait time", value: "wait" }
+];
+
+const sortDirectionOptions: Array<{ label: string; value: OperationsSortDirection }> = [
+  { label: "Ascending", value: "asc" },
+  { label: "Descending", value: "desc" }
+];
+
+function toggleValue<TValue extends string>(values: TValue[], value: TValue) {
+  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+}
+
+export function OperationsCommand({ currentUser }: { currentUser: CommandUser }) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const primaryRole = getPrimaryRole(currentUser);
+  const primaryMembership = getPrimaryMembership(currentUser);
+  const primaryVenueId = primaryMembership?.venueId;
+  const primaryVenueName = primaryMembership?.venue?.name;
+  const canSwitchVenues = primaryRole === "owner" || primaryRole === "admin";
   const knownRequestIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedRequestsRef = useRef(false);
   const hasLoadedOperationsRef = useRef(false);
@@ -59,6 +133,9 @@ export function OperationsCommand() {
   const [activeBucket, setActiveBucket] = useState<OperationsBucket>("active");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+  const [filters, setFilters] = useState<OperationsFilters>(defaultOperationsFilters);
+  const [draftFilters, setDraftFilters] = useState<OperationsFilters>(defaultOperationsFilters);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
@@ -76,9 +153,9 @@ export function OperationsCommand() {
 
     const nextVenues = await apiRequest<CommandVenue[]>(supabase, "/admin/venues");
     setVenues(nextVenues);
-    setSelectedVenueId((current) => current || nextVenues[0]?.id || "");
+    setSelectedVenueId((current) => current || primaryVenueId || nextVenues[0]?.id || "");
     return nextVenues;
-  }, [supabase]);
+  }, [primaryVenueId, supabase]);
 
   const notifyForNewRequests = useCallback((nextRequests: CommandSupportRequest[]) => {
     if (!hasLoadedRequestsRef.current) {
@@ -129,14 +206,14 @@ export function OperationsCommand() {
 
     try {
       const nextVenues = venues.length ? venues : await loadVenues();
-      const venueId = selectedVenueId || nextVenues[0]?.id || "";
+      const venueId = selectedVenueId || primaryVenueId || nextVenues[0]?.id || "";
       await loadRequests(venueId);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not load operations");
     } finally {
       setLoading(false);
     }
-  }, [loadRequests, loadVenues, selectedVenueId, venues]);
+  }, [loadRequests, loadVenues, primaryVenueId, selectedVenueId, venues]);
 
   async function patchRequestStatus(request: CommandSupportRequest, status: CommandRequestStatus) {
     if (!supabase) {
@@ -229,10 +306,48 @@ export function OperationsCommand() {
     }
   }
 
-  const bucketSummary = summarizeOperationsBuckets(requests);
-  const selectedRequests = requests.filter((request) => getOperationsBucket(request.status) === activeBucket);
-  const ratingAnalytics = calculateRatingAnalytics(requests);
-  const operationsAnalytics = calculateOperationsAnalytics(requests);
+  function changeVenue(venueId: string) {
+    knownRequestIdsRef.current = new Set();
+    hasLoadedRequestsRef.current = false;
+    setRequests([]);
+    setSelectedVenueId(venueId);
+    void loadRequests(venueId);
+  }
+
+  function openFilterModal() {
+    setDraftFilters(filters);
+    setIsFilterModalOpen(true);
+  }
+
+  function closeFilterModal() {
+    setDraftFilters(filters);
+    setIsFilterModalOpen(false);
+  }
+
+  function updateDraftFilters(patch: Partial<OperationsFilters>) {
+    setDraftFilters((current) => ({ ...current, ...patch }));
+  }
+
+  function clearFilters() {
+    setFilters(defaultOperationsFilters);
+    setDraftFilters(defaultOperationsFilters);
+    setIsFilterModalOpen(false);
+  }
+
+  function applyFilters() {
+    setFilters(draftFilters);
+    setIsFilterModalOpen(false);
+  }
+
+  const filteredRequests = runOperationsFilterPipeline(requests, filters);
+  const bucketSummary = summarizeOperationsBuckets(filteredRequests);
+  const selectedRequests = filteredRequests.filter((request) => getOperationsBucket(request.status) === activeBucket);
+  const selectedVenueName = venues.find((venue) => venue.id === selectedVenueId)?.name || primaryVenueName || "Assigned venue";
+  const filterOptions = getOperationsFilterOptions(requests);
+  const activeFilterChips = getOperationsFilterChips(filters);
+  const hasActiveFilters = hasActiveOperationsFilters(filters);
+  const ratingAnalytics = calculateRatingAnalytics(filteredRequests);
+  const operationsAnalytics = calculateOperationsAnalytics(filteredRequests);
   const ratingAverage = ratingAnalytics.averageRating === null ? "No ratings" : ratingAnalytics.averageRating.toFixed(1);
   const metrics = [
     { label: "Active queue", value: bucketSummary.activeCount.toString(), detail: `${requests.length} total`, tone: "ok", icon: RadioTower },
@@ -255,13 +370,20 @@ export function OperationsCommand() {
           <h1>Operations</h1>
         </div>
         <div className="command-actions">
-          <select className="command-select" onChange={(event) => setSelectedVenueId(event.target.value)} value={selectedVenueId}>
-            {venues.map((venue) => (
-              <option key={venue.id} value={venue.id}>
-                {venue.name}
-              </option>
-            ))}
-          </select>
+          {canSwitchVenues && venues.length > 1 ? (
+            <select className="command-select" onChange={(event) => changeVenue(event.target.value)} value={selectedVenueId}>
+              {venues.map((venue) => (
+                <option key={venue.id} value={venue.id}>
+                  {venue.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="data-chip venue-lock">
+              <MapPin size={13} />
+              {selectedVenueName}
+            </span>
+          )}
           <button className="command-button" disabled={loading} onClick={() => void refresh()} type="button">
             <RefreshCw size={16} />
             Refresh
@@ -317,57 +439,49 @@ export function OperationsCommand() {
               </button>
             </div>
           </div>
-          <div className="analytics-strip">
-            <div>
-              <BarChart3 size={15} />
-              <strong>Top categories</strong>
-              <span>
-                {operationsAnalytics.requestCountByCategory
-                  .slice(0, 3)
-                  .map((item) => `${item.category} ${item.count}`)
-                  .join(" · ") || "No data yet"}
-              </span>
-            </div>
-            <div>
-              <Clock3 size={15} />
-              <strong>Busiest hours</strong>
-              <span>
-                {operationsAnalytics.busiestHours.map((item) => `${item.hour} ${item.count}`).join(" · ") || "No data yet"}
-              </span>
-            </div>
-            <div>
-              <ShieldAlert size={15} />
-              <strong>Unresolved</strong>
-              <span>
-                {operationsAnalytics.unresolvedCount} open · {operationsAnalytics.slowRequestCount} slow
-              </span>
-            </div>
+          <div className="operations-filter-bar">
+            <button className="command-button" onClick={openFilterModal} type="button">
+              <SlidersHorizontal size={16} />
+              Filter & Sort
+              {activeFilterChips.length ? <span className="button-count">{activeFilterChips.length}</span> : null}
+            </button>
+            <span className="data-chip">
+              {selectedRequests.length} {activeBucket === "active" ? "active" : "completed"}
+            </span>
+            {hasActiveFilters ? (
+              <button className="command-button ghost-action" onClick={clearFilters} type="button">
+                <X size={15} />
+                Clear all
+              </button>
+            ) : null}
           </div>
+          {activeFilterChips.length ? (
+            <div className="active-filter-chips" aria-label="Active filters">
+              {activeFilterChips.map((chip) => (
+                <span className="data-chip" key={chip}>
+                  {chip}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="queue-list">
             {selectedRequests.map((request) => {
               const action = getRequestOperationAction(request.status);
               const statusTone = getOperationsStatusTone(request.status);
               return (
-                <article className={`request-row status-tone-${statusTone}`} key={request.id}>
-                  <div className="request-main">
-                    <span className={`severity-dot severity-${priorityClass(request.priority)}`} />
-                    <div>
-                      <strong>{request.title}</strong>
-                      <span>{request.servicePoint?.label || "Service point"} · {request.category}</span>
-                      <span className="request-preview">
-                        <MessageSquareText size={13} />
-                        {latestPreview(request)}
-                      </span>
-                      {request.guestLocationLabel ? <span className="request-preview">Location: {request.guestLocationLabel}</span> : null}
+                <article className={`request-row operations-request-card status-tone-${statusTone}`} key={request.id}>
+                  <span className={`pill priority-${getPriorityClassName(request.priority)} request-priority-corner`}>{getPriorityLabel(request.priority)}</span>
+                  <div className="request-main operations-request-main">
+                    <div className="request-message">
+                      <MessageSquareText size={15} />
+                      <strong>{latestPreview(request)}</strong>
                     </div>
-                  </div>
-                  <div className="pill-row compact">
-                    <span className={`pill priority-${priorityClass(request.priority)}`}>{priorityClass(request.priority)}</span>
-                    <span className={`pill status-${sharedStatus(request.status)}`}>{createCommandRequestStatusLabel(request.status)}</span>
-                    <span className={`pill rating-chip ${request.satisfactionRating && request.satisfactionRating <= 2 ? "low-rating" : ""}`}>
-                      <Star size={12} />
-                      {ratingLabel(request)}
-                    </span>
+                    <div className="request-meta-line">
+                      <span>{request.servicePoint?.label || request.guestLocationLabel || "Service point"}</span>
+                      <span>{formatRequestAge(request.createdAt)}</span>
+                      <span>{request.title}</span>
+                      {activeBucket === "completed" ? <span>{ratingLabel(request)}</span> : null}
+                    </div>
                   </div>
                   {action ? (
                     <button
@@ -390,6 +504,184 @@ export function OperationsCommand() {
           </div>
         </section>
       </div>
+      {isFilterModalOpen ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={closeFilterModal}>
+          <section
+            aria-labelledby="operations-filter-title"
+            aria-modal="true"
+            className="operations-filter-modal"
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className="modal-heading">
+              <div>
+                <div className="eyebrow">Operations controls</div>
+                <h2 id="operations-filter-title">Filter & Sort Requests</h2>
+              </div>
+              <button aria-label="Close filter modal" className="icon-button" onClick={closeFilterModal} type="button">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="filter-table" role="table" aria-label="Operations filters">
+              <div className="filter-table-header" role="row">
+                <span role="columnheader">Filter</span>
+                <span role="columnheader">Current Value</span>
+                <span role="columnheader">Control</span>
+              </div>
+
+              <div className="filter-table-row" role="row">
+                <strong>Date Range</strong>
+                <span>{dateRangeOptions.find((item) => item.value === draftFilters.dateRange)?.label}</span>
+                <div className="filter-control-stack">
+                  <select
+                    className="command-select"
+                    onChange={(event) => updateDraftFilters({ dateRange: event.target.value as OperationsDateRange })}
+                    value={draftFilters.dateRange}
+                  >
+                    {dateRangeOptions.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                  {draftFilters.dateRange === "custom" ? (
+                    <div className="date-range-inputs">
+                      <input
+                        aria-label="Custom start date"
+                        onChange={(event) => updateDraftFilters({ customStart: event.target.value })}
+                        type="date"
+                        value={draftFilters.customStart}
+                      />
+                      <input
+                        aria-label="Custom end date"
+                        onChange={(event) => updateDraftFilters({ customEnd: event.target.value })}
+                        type="date"
+                        value={draftFilters.customEnd}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="filter-table-row" role="row">
+                <strong>Rating</strong>
+                <span>{draftFilters.rating === "all" ? "All ratings" : `${draftFilters.rating} stars`}</span>
+                <select
+                  className="command-select"
+                  onChange={(event) => updateDraftFilters({ rating: event.target.value === "all" ? "all" : Number(event.target.value) })}
+                  value={draftFilters.rating}
+                >
+                  <option value="all">All ratings</option>
+                  {[1, 2, 3, 4, 5].map((rating) => (
+                    <option key={rating} value={rating}>
+                      {rating} {rating === 1 ? "star" : "stars"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="filter-table-row" role="row">
+                <strong>Priority</strong>
+                <span>{draftFilters.priorities.length ? `${draftFilters.priorities.length} selected` : "All priorities"}</span>
+                <div className="filter-check-grid">
+                  {priorityOptions.map((priority) => (
+                    <label key={priority}>
+                      <input
+                        checked={draftFilters.priorities.includes(priority)}
+                        onChange={() => updateDraftFilters({ priorities: toggleValue(draftFilters.priorities, priority) })}
+                        type="checkbox"
+                      />
+                      {getOperationsPriorityLabel(priority)}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="filter-table-row" role="row">
+                <strong>Request Category</strong>
+                <span>{draftFilters.categories.length ? `${draftFilters.categories.length} selected` : "All request types"}</span>
+                <div className="filter-check-grid scroll-list">
+                  {filterOptions.categories.map((category) => (
+                    <label key={category}>
+                      <input
+                        checked={draftFilters.categories.includes(category)}
+                        onChange={() => updateDraftFilters({ categories: toggleValue(draftFilters.categories, category) })}
+                        type="checkbox"
+                      />
+                      {titleCase(category)}
+                    </label>
+                  ))}
+                  {!filterOptions.categories.length ? <span className="meta">No categories available.</span> : null}
+                </div>
+              </div>
+
+              <div className="filter-table-row" role="row">
+                <strong>Table Number</strong>
+                <span>{draftFilters.tableQuery.trim() || "All tables"}</span>
+                <div className="filter-control-stack">
+                  <input
+                    className="command-input"
+                    list="operations-table-options"
+                    onChange={(event) => updateDraftFilters({ tableQuery: event.target.value })}
+                    placeholder="Search table or service point"
+                    value={draftFilters.tableQuery}
+                  />
+                  <datalist id="operations-table-options">
+                    {filterOptions.tables.map((table) => (
+                      <option key={table} value={table} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              <div className="filter-table-row" role="row">
+                <strong>Sort By</strong>
+                <span>{sortOptions.find((item) => item.value === draftFilters.sortBy)?.label}</span>
+                <select
+                  className="command-select"
+                  onChange={(event) => updateDraftFilters({ sortBy: event.target.value as OperationsSortBy })}
+                  value={draftFilters.sortBy}
+                >
+                  {sortOptions.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="filter-table-row" role="row">
+                <strong>Sort Direction</strong>
+                <span>{sortDirectionOptions.find((item) => item.value === draftFilters.sortDirection)?.label}</span>
+                <select
+                  className="command-select"
+                  onChange={(event) => updateDraftFilters({ sortDirection: event.target.value as OperationsSortDirection })}
+                  value={draftFilters.sortDirection}
+                >
+                  {sortDirectionOptions.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button className="command-button ghost-action" onClick={clearFilters} type="button">
+                Clear all
+              </button>
+              <button className="command-button" onClick={closeFilterModal} type="button">
+                Cancel
+              </button>
+              <button className="command-button primary" onClick={applyFilters} type="button">
+                Apply filters
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

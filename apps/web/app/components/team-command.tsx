@@ -111,7 +111,7 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
     <section className="command-grid">
       <div className="command-heading">
         <div>
-          <div className="eyebrow">Credential control</div>
+          <div className="eyebrow">Role access</div>
           <h1>Team</h1>
         </div>
         <button className="command-button" disabled={refreshing} onClick={() => void refresh()} type="button">
@@ -120,7 +120,13 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
         </button>
       </div>
       <div className="command-panel">
-        <h2>Create user</h2>
+        <div className="panel-title-row">
+          <div>
+            <h2>Create role access</h2>
+            <p className="meta">Create an account and assign one of the existing workspace roles.</p>
+          </div>
+          <UserPlus size={22} />
+        </div>
         <form className="command-form" onSubmit={submit}>
           <label>
             <span>Email</span>
@@ -156,7 +162,7 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
           {error ? <div className="form-error">{error}</div> : null}
           <button className="command-button primary" disabled={loading} type="submit">
             <UserPlus size={16} />
-            {loading ? "Creating..." : "Create credentials"}
+            {loading ? "Creating..." : "Create role access"}
           </button>
         </form>
       </div>

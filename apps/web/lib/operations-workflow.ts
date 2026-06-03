@@ -106,3 +106,19 @@ export function mergeOperationRequestUpdate<
     satisfactionRating: updated.satisfactionRating ?? existing.satisfactionRating
   };
 }
+
+export function sortOperationsQueue<T extends { priority: string }>(requests: T[]) {
+  return requests
+    .map((request, index) => ({ index, request }))
+    .sort((left, right) => {
+      const leftUrgent = left.request.priority === "URGENT";
+      const rightUrgent = right.request.priority === "URGENT";
+
+      if (leftUrgent !== rightUrgent) {
+        return leftUrgent ? -1 : 1;
+      }
+
+      return left.index - right.index;
+    })
+    .map((item) => item.request);
+}

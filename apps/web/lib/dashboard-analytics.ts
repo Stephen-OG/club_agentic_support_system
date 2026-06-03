@@ -13,6 +13,7 @@ type DashboardRequest = {
 };
 
 type RatingValue = 1 | 2 | 3 | 4 | 5;
+export type DashboardVolumeWindow = "hourly" | "daily" | "weekly" | "monthly";
 
 const closedStatuses = new Set<CommandRequestStatus>(["COMPLETED", "RESOLVED", "CANCELLED"]);
 const urgentPriorities = new Set<CommandRequestPriority>(["HIGH", "URGENT"]);
@@ -104,6 +105,42 @@ export function calculateDashboardAnalytics(requests: DashboardRequest[], now = 
   };
 }
 
+export function getRequestVolumeSeries(requests: ReadonlyArray<Pick<DashboardRequest, "createdAt">>, window: DashboardVolumeWindow) {
+  const counts = new Map<string, { count: number; order: number }>();
+
+  for (const request of requests) {
+    const createdAt = parseDate(request.createdAt);
+    if (!createdAt) {
+      continue;
+    }
+
+    const bucket = volumeBucket(createdAt, window);
+    const current = counts.get(bucket.key);
+    counts.set(bucket.key, {
+      count: (current?.count ?? 0) + 1,
+      order: bucket.order
+    });
+  }
+
+  const series = Array.from(counts, ([label, value]) => ({
+    label,
+    count: value.count,
+    order: value.order
+  }))
+    .sort((left, right) => left.order - right.order || left.label.localeCompare(right.label))
+    .map(({ label, count }) => ({ label, count }));
+  const busiest = series.reduce<{ count: number; label: string } | null>(
+    (best, item) => (!best || item.count > best.count ? item : best),
+    null
+  );
+
+  return {
+    label: volumeBusiestLabel(window),
+    series,
+    busiest
+  };
+}
+
 function sortedCategoryCounts(counts: Map<string, number>, total: number) {
   return Array.from(counts, ([category, count]) => ({
     category,
@@ -131,4 +168,57 @@ function averageMinutes(minutes: number[]) {
 
 function normalizeRating(value: number | null | undefined): RatingValue | null {
   return Number.isInteger(value) && value && value >= 1 && value <= 5 ? (value as RatingValue) : null;
+}
+
+function volumeBucket(date: Date, window: DashboardVolumeWindow) {
+  if (window === "hourly") {
+    const hour = date.getUTCHours();
+    return {
+      key: `${String(hour).padStart(2, "0")}:00`,
+      order: hour
+    };
+  }
+
+  if (window === "daily") {
+    return {
+      key: formatMonthDay(date),
+      order: Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+    };
+  }
+
+  if (window === "weekly") {
+    const start = startOfUtcWeek(date);
+    return {
+      key: `Week of ${formatMonthDay(start)}`,
+      order: start.getTime()
+    };
+  }
+
+  return {
+    key: `${monthNames[date.getUTCMonth()]} ${date.getUTCFullYear()}`,
+    order: Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)
+  };
+}
+
+function volumeBusiestLabel(window: DashboardVolumeWindow) {
+  return {
+    hourly: "Busiest hour",
+    daily: "Busiest day",
+    weekly: "Busiest week",
+    monthly: "Busiest month"
+  }[window];
+}
+
+const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function formatMonthDay(date: Date) {
+  return `${monthNames[date.getUTCMonth()]} ${date.getUTCDate()}`;
+}
+
+function startOfUtcWeek(date: Date) {
+  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = start.getUTCDay();
+  const daysSinceMonday = day === 0 ? 6 : day - 1;
+  start.setUTCDate(start.getUTCDate() - daysSinceMonday);
+  return start;
 }

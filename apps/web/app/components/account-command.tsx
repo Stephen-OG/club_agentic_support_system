@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Bell, Building2, CalendarClock, Clock3, Copy, Eye, EyeOff, LogOut, RefreshCw, Save, ShieldCheck, UserRound } from "lucide-react";
+import { Bell, Building2, CalendarClock, Clock3, Copy, Eye, EyeOff, LogOut, RefreshCw, Save, ShieldCheck } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { validatePasswordChange } from "@/lib/account-security";
 import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, hasCommandDashboardAccess } from "@/lib/auth/role-policy";
@@ -16,10 +17,9 @@ import {
   weekdayLabels
 } from "@/lib/venue-controls";
 
-type SettingsSection = "profile" | "workspace" | "venue-hours" | "notifications" | "security";
+type SettingsSection = "workspace" | "venue-hours" | "notifications" | "security";
 
-const settingsSections: Array<{ id: SettingsSection; label: string; icon: typeof UserRound }> = [
-  { id: "profile", label: "Profile", icon: UserRound },
+const settingsSections: Array<{ id: SettingsSection; label: string; icon: LucideIcon }> = [
   { id: "workspace", label: "Workspace", icon: Building2 },
   { id: "venue-hours", label: "Venue Hours", icon: CalendarClock },
   { id: "notifications", label: "Notifications", icon: Bell },
@@ -30,7 +30,7 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const primaryMembership = getPrimaryMembership(currentUser);
   const canManageVenueSettings = hasCommandDashboardAccess(currentUser);
-  const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
+  const [activeSection, setActiveSection] = useState<SettingsSection>("workspace");
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -224,38 +224,12 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
         </aside>
 
         <div className="settings-stack">
-          {activeSection === "profile" ? (
-            <section className="command-panel settings-panel">
-              <div className="panel-title-row">
-                <div>
-                  <h2>Profile</h2>
-                  <p className="meta">The identity shown across GuestOS operations.</p>
-                </div>
-                <UserRound size={22} />
-              </div>
-              <div className="settings-facts">
-                <div>
-                  <span>Name</span>
-                  <strong>{currentUser.displayName}</strong>
-                </div>
-                <div>
-                  <span>Email</span>
-                  <strong>{currentUser.email || "No email on profile"}</strong>
-                </div>
-                <div>
-                  <span>Primary role</span>
-                  <strong>{primaryMembership?.role.replace("_", " ") || "read only"}</strong>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
           {activeSection === "workspace" ? (
             <section className="command-panel settings-panel">
               <div className="panel-title-row">
                 <div>
-                  <h2>Workspace</h2>
-                  <p className="meta">Workspace and venue access summary.</p>
+                  <h2>Workspace Settings</h2>
+                  <p className="meta">Workspace-level configuration, policy, and operational defaults.</p>
                 </div>
                 <Building2 size={22} />
               </div>
@@ -265,12 +239,32 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
                   <strong>{primaryMembership?.workspace.name || "Workspace"}</strong>
                 </div>
                 <div>
-                  <span>Assigned venue</span>
+                  <span>Workspace slug</span>
+                  <strong>{primaryMembership?.workspace.slug || "Not configured"}</strong>
+                </div>
+                <div>
+                  <span>Access scope</span>
                   <strong>{primaryMembership?.venue?.name || "Workspace-wide access"}</strong>
                 </div>
                 <div>
                   <span>Memberships</span>
                   <strong>{currentUser.memberships.length}</strong>
+                </div>
+                <div>
+                  <span>Default timezone</span>
+                  <strong>{selectedVenue?.timezone || "Venue timezone"}</strong>
+                </div>
+                <div>
+                  <span>Request categories</span>
+                  <strong>QR quick actions + AI triage</strong>
+                </div>
+                <div>
+                  <span>Visible priorities</span>
+                  <strong>Normal, High, Urgent</strong>
+                </div>
+                <div>
+                  <span>Data policy</span>
+                  <strong>Workspace scoped</strong>
                 </div>
               </div>
             </section>

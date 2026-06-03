@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, BarChart3, Clock3, PieChart, RefreshCw, Star } from "lucide-react";
+import { AlertTriangle, Clock3, Info, PieChart, RefreshCw, ShieldAlert } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import type { CommandSupportRequest, CommandVenue } from "@/lib/auth/types";
-import { calculateDashboardAnalytics } from "@/lib/dashboard-analytics";
+import { type DashboardVolumeWindow, calculateDashboardAnalytics, getRequestVolumeSeries } from "@/lib/dashboard-analytics";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 function plural(value: number, singular: string, pluralLabel = `${singular}s`) {
@@ -48,6 +48,7 @@ export function CommandCenterDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const [volumeWindow, setVolumeWindow] = useState<DashboardVolumeWindow>("hourly");
 
   const refresh = useCallback(async () => {
     if (!supabase) {
@@ -79,13 +80,9 @@ export function CommandCenterDashboard() {
   }, [refresh]);
 
   const analytics = useMemo(() => calculateDashboardAnalytics(requests), [requests]);
-  const maxHourlyCount = Math.max(1, ...analytics.requestVolumeByHour.map((item) => item.count));
-  const maxCategoryCount = Math.max(1, ...analytics.categoryBreakdown.map((item) => item.count));
+  const volume = useMemo(() => getRequestVolumeSeries(requests, volumeWindow), [requests, volumeWindow]);
+  const maxVolumeCount = Math.max(1, ...volume.series.map((item) => item.count));
   const maxRatingCount = Math.max(1, ...analytics.satisfactionRecovery.ratingDistribution.map((item) => item.count));
-  const busiestHour = analytics.requestVolumeByHour.reduce<{ count: number; hour: string } | null>(
-    (best, item) => (!best || item.count > best.count ? item : best),
-    null
-  );
   const categoryGradient = analytics.categoryBreakdown.length
     ? analytics.categoryBreakdown.reduce(
         (segments, item, index) => {
@@ -99,11 +96,12 @@ export function CommandCenterDashboard() {
         { offset: 0, value: "" }
       ).value
     : "rgba(255,255,255,0.08) 0% 100%";
-  const summary = requests.length
-    ? `${plural(requests.length, "request")} across ${plural(venues.length, "venue")} · busiest hour ${
-        busiestHour ? `${busiestHour.hour} (${busiestHour.count})` : "none"
-      } · ${plural(analytics.liveHealth.slaBreaches, "SLA breach", "SLA breaches")}`
-    : "No request data yet. Activity will appear here as guests use QR support.";
+  const volumeWindows: Array<{ label: string; value: DashboardVolumeWindow }> = [
+    { label: "Hourly", value: "hourly" },
+    { label: "Daily", value: "daily" },
+    { label: "Weekly", value: "weekly" },
+    { label: "Monthly", value: "monthly" }
+  ];
   const kpis = [
     {
       detail: `${analytics.liveHealth.urgentOrHighPriority} urgent/high`,
@@ -120,18 +118,18 @@ export function CommandCenterDashboard() {
       value: formatMinutes(analytics.liveHealth.longestWaitingMinutes)
     },
     {
-      detail: `${analytics.responseSpeed.overResponseThreshold} slow acknowledgements`,
-      icon: BarChart3,
-      label: "Avg acknowledgement",
-      tone: analytics.responseSpeed.overResponseThreshold ? "warn" : "ok",
-      value: formatMinutes(analytics.responseSpeed.averageAcknowledgementMinutes)
+      detail: `${plural(requests.length, "total request")} · ${plural(venues.length, "venue")}`,
+      icon: Info,
+      label: "Request Information",
+      tone: requests.length ? "idle" : "ok",
+      value: analytics.satisfactionRecovery.averageRating === null ? "No rating" : `${analytics.satisfactionRecovery.averageRating.toFixed(1)}/5`
     },
     {
-      detail: `${analytics.satisfactionRecovery.ratedCount} rated`,
-      icon: Star,
-      label: "Guest rating",
-      tone: analytics.satisfactionRecovery.lowRatingCount ? "warn" : "idle",
-      value: analytics.satisfactionRecovery.averageRating === null ? "No data" : analytics.satisfactionRecovery.averageRating.toFixed(1)
+      detail: "open requests over 10 minutes",
+      icon: ShieldAlert,
+      label: "SLA Breaches",
+      tone: analytics.liveHealth.slaBreaches ? "warn" : "ok",
+      value: analytics.liveHealth.slaBreaches.toString()
     }
   ];
 
@@ -142,22 +140,18 @@ export function CommandCenterDashboard() {
           <div className="eyebrow">Owner analytics</div>
           <h1>Dashboard</h1>
         </div>
-        <button className="command-button" disabled={loading} onClick={() => void refresh()} type="button">
-          <RefreshCw size={16} />
-          Refresh
-        </button>
+        <div className="command-actions">
+          <span className="data-chip">{lastUpdatedAt ? `Updated ${lastUpdatedAt}` : loading ? "Syncing" : "Live"}</span>
+          <button className="command-button" disabled={loading} onClick={() => void refresh()} type="button">
+            <RefreshCw size={16} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error ? <div className="form-error wide">{error}</div> : null}
 
-      <section className="command-panel wide dashboard-summary-card">
-        <div>
-          <span className="data-chip">{lastUpdatedAt ? `Updated ${lastUpdatedAt}` : loading ? "Syncing" : "Live"}</span>
-          <h2>{summary}</h2>
-        </div>
-      </section>
-
-      <div className="metric-strip">
+      <div className="metric-strip dashboard-summary-grid">
         {kpis.map((metric) => {
           const Icon = metric.icon;
           return (
@@ -175,24 +169,41 @@ export function CommandCenterDashboard() {
 
       <section className="command-panel chart-panel chart-panel-large">
         <div className="panel-title-row">
-          <h2>Request Volume</h2>
-          <span className="data-chip">By hour</span>
+          <div>
+            <h2>Request Volume</h2>
+            <span className="panel-subtle">
+              {volume.busiest ? `${volume.label}: ${volume.busiest.label} (${volume.busiest.count})` : "No request volume yet"}
+            </span>
+          </div>
+          <div className="dashboard-range-controls" aria-label="Request volume range">
+            {volumeWindows.map((item) => (
+              <button
+                aria-pressed={volumeWindow === item.value}
+                className={volumeWindow === item.value ? "active" : ""}
+                key={item.value}
+                onClick={() => setVolumeWindow(item.value)}
+                type="button"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="vertical-chart" aria-label="Requests by hour">
-          {analytics.requestVolumeByHour.map((item) => (
-            <div className="vertical-chart-column" key={item.hour}>
+        <div className="vertical-chart" aria-label={`Requests by ${volumeWindow}`}>
+          {volume.series.map((item) => (
+            <div className="vertical-chart-column" key={item.label}>
               <span>{item.count}</span>
-              <div style={{ height: chartPercent(item.count, maxHourlyCount) }} />
-              <small>{item.hour}</small>
+              <div style={{ height: chartPercent(item.count, maxVolumeCount) }} />
+              <small>{item.label}</small>
             </div>
           ))}
-          {!analytics.requestVolumeByHour.length ? <div className="empty-state">No request volume yet.</div> : null}
+          {!volume.series.length ? <div className="empty-state">No request volume yet.</div> : null}
         </div>
       </section>
 
       <section className="command-panel chart-panel">
         <div className="panel-title-row">
-          <h2>Issue Mix</h2>
+          <h2>Request Types</h2>
           <PieChart size={17} />
         </div>
         <div className="donut-row">
@@ -210,25 +221,6 @@ export function CommandCenterDashboard() {
             ))}
             {!analytics.categoryBreakdown.length ? <div className="empty-state">No categories yet.</div> : null}
           </div>
-        </div>
-      </section>
-
-      <section className="command-panel chart-panel">
-        <div className="panel-title-row">
-          <h2>Top Categories</h2>
-          <span className="data-chip">Ranked</span>
-        </div>
-        <div className="horizontal-chart">
-          {analytics.categoryBreakdown.slice(0, 5).map((item) => (
-            <div className="horizontal-chart-row" key={item.category}>
-              <span>{titleCase(item.category)}</span>
-              <div>
-                <i style={{ width: chartPercent(item.count, maxCategoryCount) }} />
-              </div>
-              <strong>{item.count}</strong>
-            </div>
-          ))}
-          {!analytics.categoryBreakdown.length ? <div className="empty-state">No category data yet.</div> : null}
         </div>
       </section>
 

@@ -7,6 +7,7 @@ import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
 import type { CommandRequestStatus, CommandSupportRequest, CommandUser } from "@/lib/auth/types";
 import { initializeDefaultRequestNotificationSound, playDefaultRequestNotificationSound } from "@/lib/default-notification-sound";
 import { getOperationsNotifications } from "@/lib/operations-workflow";
+import { getPriorityClassName, getPriorityLabel } from "@/lib/priority-display";
 import { connectStaffVenueEvents } from "@/lib/realtime-events";
 import {
   getStaffNextStatus,
@@ -260,14 +261,14 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
             return (
               <article className="staff-task" key={request.id}>
                 <div className="request-main">
-                  <span className={`severity-dot severity-${label(request.priority)}`} />
+                  <span className={`severity-dot severity-${getPriorityClassName(request.priority)}`} />
                   <div>
                     <strong>{request.title}</strong>
                     <span>{request.servicePoint?.label || "Service point"} · {request.summary || request.category}</span>
                   </div>
                 </div>
                 <div className="pill-row compact">
-                  <span className={`pill priority-${label(request.priority)}`}>{label(request.priority)}</span>
+                  <span className={`pill priority-${getPriorityClassName(request.priority)}`}>{getPriorityLabel(request.priority)}</span>
                   <span className={`pill status-${sharedStatus(request.status)}`}>{label(request.status)}</span>
                 </div>
                 {nextStatus ? (

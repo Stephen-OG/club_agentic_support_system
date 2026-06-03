@@ -7,6 +7,7 @@ import {
   mergeOperationRequestUpdate,
   getRequestOperationAction,
   operationsPollIntervalMs,
+  sortOperationsQueue,
   summarizeOperationsBuckets
 } from "./operations-workflow";
 
@@ -106,5 +107,20 @@ describe("operations workflow", () => {
       recentMessages: existing.recentMessages,
       satisfactionRating: null
     });
+  });
+
+  it("keeps urgent requests first while high and normal stay in incoming order", () => {
+    const sorted = sortOperationsQueue([
+      { id: "request-1", priority: "NORMAL", createdAt: "2026-06-02T10:00:00.000Z" },
+      { id: "request-2", priority: "HIGH", createdAt: "2026-06-02T10:01:00.000Z" },
+      { id: "request-3", priority: "URGENT", createdAt: "2026-06-02T10:03:00.000Z" },
+      { id: "request-4", priority: "NORMAL", createdAt: "2026-06-02T10:02:00.000Z" },
+      { id: "request-5", priority: "URGENT", createdAt: "2026-06-02T10:04:00.000Z" }
+    ]);
+
+    assert.deepEqual(
+      sorted.map((request) => request.id),
+      ["request-3", "request-5", "request-1", "request-2", "request-4"]
+    );
   });
 });

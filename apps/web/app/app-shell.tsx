@@ -115,7 +115,7 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
         ) : null}
         {visitedViews.includes("operations") ? (
           <div {...panelProps("operations")}>
-            <OperationsCommand />
+            <OperationsCommand currentUser={currentUser} />
           </div>
         ) : null}
         {visitedViews.includes("team") ? (

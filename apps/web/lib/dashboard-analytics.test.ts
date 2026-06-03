@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { calculateDashboardAnalytics } from "./dashboard-analytics";
+import { calculateDashboardAnalytics, getRequestVolumeSeries } from "./dashboard-analytics";
 
 describe("dashboard analytics", () => {
   it("calculates the five owner dashboard analytics from support requests", () => {
@@ -92,5 +92,85 @@ describe("dashboard analytics", () => {
     assert.equal(analytics.responseSpeed.averageCompletionMinutes, null);
     assert.equal(analytics.satisfactionRecovery.averageRating, null);
     assert.deepEqual(analytics.requestVolumeByHour, []);
+  });
+
+  it("groups request volume by the selected dashboard time window", () => {
+    const requests = [
+      {
+        id: "request-1",
+        title: "Water",
+        category: "drink",
+        priority: "NORMAL",
+        status: "NEW",
+        createdAt: "2026-06-01T09:10:00.000Z",
+        acknowledgedAt: null,
+        completedAt: null
+      },
+      {
+        id: "request-2",
+        title: "Bill",
+        category: "payment",
+        priority: "NORMAL",
+        status: "NEW",
+        createdAt: "2026-06-01T09:40:00.000Z",
+        acknowledgedAt: null,
+        completedAt: null
+      },
+      {
+        id: "request-3",
+        title: "Spill",
+        category: "spill",
+        priority: "HIGH",
+        status: "NEW",
+        createdAt: "2026-06-02T10:05:00.000Z",
+        acknowledgedAt: null,
+        completedAt: null
+      },
+      {
+        id: "request-4",
+        title: "Safety",
+        category: "safety",
+        priority: "URGENT",
+        status: "NEW",
+        createdAt: "2026-06-09T12:05:00.000Z",
+        acknowledgedAt: null,
+        completedAt: null
+      }
+    ] as const;
+
+    assert.deepEqual(getRequestVolumeSeries(requests, "hourly"), {
+      label: "Busiest hour",
+      series: [
+        { label: "09:00", count: 2 },
+        { label: "10:00", count: 1 },
+        { label: "12:00", count: 1 }
+      ],
+      busiest: { label: "09:00", count: 2 }
+    });
+
+    assert.deepEqual(getRequestVolumeSeries(requests, "daily"), {
+      label: "Busiest day",
+      series: [
+        { label: "Jun 1", count: 2 },
+        { label: "Jun 2", count: 1 },
+        { label: "Jun 9", count: 1 }
+      ],
+      busiest: { label: "Jun 1", count: 2 }
+    });
+
+    assert.deepEqual(getRequestVolumeSeries(requests, "weekly"), {
+      label: "Busiest week",
+      series: [
+        { label: "Week of Jun 1", count: 3 },
+        { label: "Week of Jun 8", count: 1 }
+      ],
+      busiest: { label: "Week of Jun 1", count: 3 }
+    });
+
+    assert.deepEqual(getRequestVolumeSeries(requests, "monthly"), {
+      label: "Busiest month",
+      series: [{ label: "Jun 2026", count: 4 }],
+      busiest: { label: "Jun 2026", count: 4 }
+    });
   });
 });
