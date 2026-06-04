@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "npm run build -w @guestos/shared && tsc -p tsconfig.build.json",
-    "lint": "npm run build -w @guestos/shared && tsc --noEmit -p tsconfig.json",
+    "prepare:types": "npm run build -w @guestos/shared && npm run prisma:generate -w @guestos/database",
+    "build": "npm run prepare:types && tsc -p tsconfig.build.json",
+    "lint": "npm run prepare:types && tsc --noEmit -p tsconfig.json",
     "start": "node dist/main.js",
     "start:dev": "ts-node -r tsconfig-paths/register src/main.ts",
-    "test": "node scripts/run-tests.cjs"
+    "test": "npm run prepare:types && node scripts/run-tests.cjs"
   },
   "dependencies": {
     "@guestos/shared": "0.1.0",
