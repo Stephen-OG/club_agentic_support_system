@@ -7,7 +7,6 @@ import { Activity, Building2, LayoutDashboard, LogOut, RadioTower, Settings, Use
 import { AccountCommand } from "./components/account-command";
 import { CommandCenterDashboard } from "./components/command-center-dashboard";
 import { OperationsCommand } from "./components/operations-command";
-import { StaffDashboard } from "./components/staff-dashboard";
 import { TeamCommand } from "./components/team-command";
 import { VenuesCommand } from "./components/venues-command";
 import type { CommandView } from "@/lib/auth/role-policy";
@@ -30,7 +29,7 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const defaultView = getRoleDashboardMode(currentUser) === "staff" ? "staff" : "dashboard";
+  const defaultView = getRoleDashboardMode(currentUser) === "staff" ? "operations" : "dashboard";
   const visibleViews = useMemo(() => getVisibleCommandViews(currentUser), [currentUser]);
   const requestedView = searchParams.get("view");
   const startingView = resolveCommandView(currentUser, requestedView, initialView || defaultView);
@@ -126,11 +125,6 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
         {visitedViews.includes("venues") ? (
           <div {...panelProps("venues")}>
             <VenuesCommand />
-          </div>
-        ) : null}
-        {visitedViews.includes("staff") ? (
-          <div {...panelProps("staff")}>
-            <StaffDashboard currentUser={currentUser} />
           </div>
         ) : null}
         {visitedViews.includes("account") ? (

@@ -6,6 +6,7 @@ import { Building2, ChevronRight, Globe, Hash, Loader2, MapPinned, User, Users }
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { useSupabaseSession } from "@/lib/supabase/use-session";
 import { mustChangePassword } from "@/lib/auth/session-route-policy";
+import { getSignupSlugError, normalizeSignupSlug } from "@/lib/auth/signup-flow";
 import { apiBaseUrl, createApiUnreachableError } from "@/lib/api/client";
 import { safeReplace } from "@/lib/navigation";
 
@@ -41,8 +42,13 @@ export default function SetupPage() {
       return;
     }
 
-    // Check if user already has a staff profile by calling /me
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000"}/me`, {
+    if (!session.user.email_confirmed_at && !session.user.confirmed_at) {
+      setError("Verify your email before completing workspace setup.");
+      return;
+    }
+
+    // Check if user already has a staff profile by calling /me.
+    fetch(`${apiBaseUrl}/me`, {
       headers: {
         Authorization: `Bearer ${session.access_token}`
       }
@@ -59,12 +65,23 @@ export default function SetupPage() {
       });
   }, [session, router]);
 
+  useEffect(() => {
+    if (!session || displayName) {
+      return;
+    }
+
+    const metadataName = typeof session.user.user_metadata?.displayName === "string"
+      ? session.user.user_metadata.displayName
+      : typeof session.user.user_metadata?.full_name === "string"
+      ? session.user.user_metadata.full_name
+      : "";
+    const emailName = session.user.email?.split("@")[0]?.replace(/[._-]+/g, " ") || "";
+    setDisplayName(metadataName || emailName);
+  }, [displayName, session]);
+
   // Auto-generate slugs from names
   function toSlug(value: string) {
-    return value
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
+    return normalizeSignupSlug(value);
   }
 
   async function handleStartWorkspace(event: FormEvent) {
@@ -88,6 +105,15 @@ export default function SetupPage() {
       return;
     }
 
+    const nextWorkspaceSlug = workspaceSlug || toSlug(workspaceName);
+    const slugError = getSignupSlugError("Workspace", nextWorkspaceSlug);
+    if (slugError) {
+      setError(slugError);
+      setWorkspaceSlug(nextWorkspaceSlug);
+      return;
+    }
+
+    setWorkspaceSlug(nextWorkspaceSlug);
     setStep("venue");
   }
 
@@ -99,6 +125,26 @@ export default function SetupPage() {
       setError("Please enter a venue name.");
       return;
     }
+
+    const nextWorkspaceSlug = workspaceSlug || toSlug(workspaceName);
+    const workspaceSlugError = getSignupSlugError("Workspace", nextWorkspaceSlug);
+    if (workspaceSlugError) {
+      setError(workspaceSlugError);
+      setWorkspaceSlug(nextWorkspaceSlug);
+      setStep("workspace");
+      return;
+    }
+
+    const nextVenueSlug = venueSlug || toSlug(venueName);
+    const venueSlugError = getSignupSlugError("Venue", nextVenueSlug);
+    if (venueSlugError) {
+      setError(venueSlugError);
+      setVenueSlug(nextVenueSlug);
+      return;
+    }
+
+    setWorkspaceSlug(nextWorkspaceSlug);
+    setVenueSlug(nextVenueSlug);
 
     if (!session || !supabase) {
       setError("Session expired. Please sign in again.");
@@ -122,9 +168,9 @@ export default function SetupPage() {
             email: session.user.email,
             displayName: displayName.trim(),
             workspaceName: workspaceName.trim(),
-            workspaceSlug: workspaceSlug || toSlug(workspaceName),
+            workspaceSlug: nextWorkspaceSlug,
             venueName: venueName.trim(),
-            venueSlug: venueSlug || toSlug(venueName),
+            venueSlug: nextVenueSlug,
             timezone
           })
         });
@@ -166,6 +212,7 @@ export default function SetupPage() {
             <form className="auth-form" onSubmit={handleStartWorkspace}>
               <label>
                 <span>Your name</span>
+                <small className="field-hint">Shown to your team as the first owner of the workspace.</small>
                 <span className="input-shell">
                   <User size={16} />
                   <input
@@ -202,6 +249,7 @@ export default function SetupPage() {
             <form className="auth-form" onSubmit={handleCreateWorkspace}>
               <label>
                 <span>Workspace name</span>
+                <small className="field-hint">The business or organisation that owns the venues.</small>
                 <span className="input-shell">
                   <Building2 size={16} />
                   <input
@@ -221,10 +269,12 @@ export default function SetupPage() {
 
               <label>
                 <span>Workspace URL slug</span>
+                <small className="field-hint">A unique lowercase identifier for the workspace, like lost-mary.</small>
                 <span className="input-shell">
                   <Hash size={16} />
                   <input
-                    onChange={(e) => setWorkspaceSlug(e.target.value)}
+                    onBlur={() => setWorkspaceSlug((current) => normalizeSignupSlug(current))}
+                    onChange={(e) => setWorkspaceSlug(normalizeSignupSlug(e.target.value))}
                     placeholder="e.g. acme-group"
                     required
                     type="text"
@@ -261,6 +311,7 @@ export default function SetupPage() {
             <form className="auth-form" onSubmit={handleCompleteSetup}>
               <label>
                 <span>Venue name</span>
+                <small className="field-hint">The first physical location guests and staff will use.</small>
                 <span className="input-shell">
                   <MapPinned size={16} />
                   <input
@@ -280,10 +331,12 @@ export default function SetupPage() {
 
               <label>
                 <span>Venue URL slug</span>
+                <small className="field-hint">A unique lowercase identifier for this location, like soho-main-room.</small>
                 <span className="input-shell">
                   <Hash size={16} />
                   <input
-                    onChange={(e) => setVenueSlug(e.target.value)}
+                    onBlur={() => setVenueSlug((current) => normalizeSignupSlug(current))}
+                    onChange={(e) => setVenueSlug(normalizeSignupSlug(e.target.value))}
                     placeholder="e.g. the-grand-lounge"
                     required
                     type="text"
@@ -294,6 +347,7 @@ export default function SetupPage() {
 
               <label>
                 <span>Timezone</span>
+                <small className="field-hint">Used for opening hours, request timestamps, and reporting.</small>
                 <span className="input-shell">
                   <Globe size={16} />
                   <select onChange={(e) => setTimezone(e.target.value)} value={timezone}>

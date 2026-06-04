@@ -104,6 +104,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
   const primaryVenueId = primaryMembership?.venueId;
   const primaryVenueName = primaryMembership?.venue?.name;
   const canSwitchVenues = primaryRole === "owner" || primaryRole === "admin";
+  const canUpdateRequests = ["owner", "admin", "manager", "staff", "security"].includes(primaryRole);
   const knownRequestIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedRequestsRef = useRef(false);
   const hasLoadedOperationsRef = useRef(false);
@@ -135,11 +136,16 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
       return [];
     }
 
+    if (!canSwitchVenues) {
+      setSelectedVenueId((current) => current || primaryVenueId || "");
+      return [];
+    }
+
     const nextVenues = await apiRequest<CommandVenue[]>(supabase, "/admin/venues");
     setVenues(nextVenues);
     setSelectedVenueId((current) => current || primaryVenueId || nextVenues[0]?.id || "");
     return nextVenues;
-  }, [primaryVenueId, supabase]);
+  }, [canSwitchVenues, primaryVenueId, supabase]);
 
   const notifyForNewRequests = useCallback((nextRequests: CommandSupportRequest[]) => {
     if (!hasLoadedRequestsRef.current) {
@@ -217,7 +223,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
   async function applyRequestAction(request: CommandSupportRequest) {
     const action = getRequestOperationAction(request.status);
 
-    if (!action) {
+    if (!action || !canUpdateRequests) {
       return;
     }
 
@@ -465,7 +471,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
           ) : null}
           <div className="queue-list">
             {paginatedRequests.items.map((request) => {
-              const action = getRequestOperationAction(request.status);
+              const action = canUpdateRequests ? getRequestOperationAction(request.status) : null;
               const statusTone = getOperationsStatusTone(request.status);
               return (
                 <article className={`request-row operations-request-card status-tone-${statusTone}`} key={request.id}>

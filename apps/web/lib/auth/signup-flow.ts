@@ -3,3 +3,31 @@ export type SignupCompletionAction = { kind: "setup" } | { kind: "verify-email" 
 export function getSignupCompletionAction(input: { hasSession: boolean }): SignupCompletionAction {
   return input.hasSession ? { kind: "setup" } : { kind: "verify-email" };
 }
+
+export function normalizeSignupSlug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+export function getSignupSlugError(label: string, slug: string) {
+  if (!slug) {
+    return `${label} slug is required.`;
+  }
+
+  if (slug.length < 3) {
+    return `${label} slug must be at least 3 characters.`;
+  }
+
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+    return `${label} slug can only use lowercase letters, numbers, and single hyphens.`;
+  }
+
+  return null;
+}
+
+export function getSignupEmailRedirectTo(origin: string) {
+  return `${origin.replace(/\/$/, "")}/login`;
+}

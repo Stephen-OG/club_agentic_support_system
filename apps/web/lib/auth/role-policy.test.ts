@@ -24,9 +24,9 @@ const visibleIds = (user: CommandUser) => getVisibleCommandViews(user).map((view
 assert.deepEqual(visibleIds(baseUser("admin", null)), ["dashboard", "operations", "team", "venues", "account"]);
 assert.deepEqual(visibleIds(baseUser("owner")), ["dashboard", "operations", "team", "venues", "account"]);
 assert.deepEqual(visibleIds(baseUser("manager")), ["dashboard", "operations", "team", "venues", "account"]);
-assert.deepEqual(visibleIds(baseUser("staff")), ["staff", "account"]);
-assert.deepEqual(visibleIds(baseUser("security")), ["staff", "account"]);
-assert.deepEqual(visibleIds(baseUser("read_only")), ["staff", "account"]);
+assert.deepEqual(visibleIds(baseUser("staff")), ["operations", "account"]);
+assert.deepEqual(visibleIds(baseUser("security")), ["operations", "account"]);
+assert.deepEqual(visibleIds(baseUser("read_only")), ["operations", "account"]);
 assert.equal(getVisibleCommandViews(baseUser("admin", null)).find((view) => view.id === "account")?.label, "Settings");
 
 assert.equal(getRoleDashboardMode(baseUser("admin", null)), "command");
@@ -34,6 +34,6 @@ assert.equal(getRoleDashboardMode(baseUser("manager")), "command");
 assert.equal(getRoleDashboardMode(baseUser("staff")), "staff");
 
 assert.equal(resolveCommandView(baseUser("admin", null), "operations", "dashboard"), "operations");
-assert.equal(resolveCommandView(baseUser("staff"), "operations", "staff"), "staff");
+assert.equal(resolveCommandView(baseUser("staff"), "operations", "operations"), "operations");
 assert.equal(resolveCommandView(baseUser("manager"), "team", "dashboard"), "team");
 assert.equal(getCommandViewHref("/command", "operations"), "/command?view=operations");

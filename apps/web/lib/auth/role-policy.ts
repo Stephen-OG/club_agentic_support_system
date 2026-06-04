@@ -25,9 +25,9 @@ const visibleViewsByRole: Record<CommandRole, CommandView[]> = {
   owner: ["dashboard", "operations", "team", "venues", "account"],
   admin: ["dashboard", "operations", "team", "venues", "account"],
   manager: ["dashboard", "operations", "team", "venues", "account"],
-  security: ["staff", "account"],
-  staff: ["staff", "account"],
-  read_only: ["staff", "account"]
+  security: ["operations", "account"],
+  staff: ["operations", "account"],
+  read_only: ["operations", "account"]
 };
 
 export function getPrimaryMembership(user: CommandUser): CommandMembership | null {

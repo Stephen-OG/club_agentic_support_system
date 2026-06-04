@@ -6,7 +6,7 @@ import { LockKeyhole, Mail, Radar, UserPlus } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { apiRequest } from "@/lib/api/client";
 import { getSignedInRouteAction, mustChangePassword } from "@/lib/auth/session-route-policy";
-import { getSignupCompletionAction } from "@/lib/auth/signup-flow";
+import { getSignupCompletionAction, getSignupEmailRedirectTo } from "@/lib/auth/signup-flow";
 import type { CommandUser } from "@/lib/auth/types";
 
 export function LoginPanel() {
@@ -48,6 +48,7 @@ export function LoginPanel() {
         email,
         password,
         options: {
+          emailRedirectTo: typeof window === "undefined" ? undefined : getSignupEmailRedirectTo(window.location.origin),
           data: { mustChangePassword: false }
         }
       });
@@ -65,7 +66,9 @@ export function LoginPanel() {
         return;
       }
 
-      setVerificationEmail(email);
+      setVerificationEmail(email.trim().toLowerCase());
+      setPassword("");
+      setConfirmPassword("");
       return;
     }
 
@@ -125,12 +128,12 @@ export function LoginPanel() {
           <div className="eyebrow">Secure access</div>
           <h2>{mode === "signin" ? "Sign in" : "Create account"}</h2>
           {verificationEmail ? (
-            <p className="muted">Check {verificationEmail} to confirm your account, then sign in to finish workspace setup.</p>
+            <p className="muted">Check {verificationEmail} to verify your account. After confirming, sign in here to finish workspace setup.</p>
           ) : (
             <p className="muted">
               {mode === "signin"
                 ? "Sign in with your email and password."
-                : "First time? Create an account and set up your workspace."}
+                : "Create your owner login first. We will email you a verification link before workspace setup."}
             </p>
           )}
         </div>
@@ -155,7 +158,7 @@ export function LoginPanel() {
             <span>Email</span>
             <span className="input-shell">
               <Mail size={16} />
-              <input autoComplete="email" onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
+              <input autoComplete="email" onChange={(event) => setEmail(event.target.value.trim())} required type="email" value={email} />
             </span>
           </label>
           <label>
