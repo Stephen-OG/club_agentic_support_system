@@ -1,4 +1,4 @@
-const localApiPort = 4001;
+const localApiPort = 4000;
 
 function parsePort(value: string | undefined) {
   if (!value) {
@@ -13,6 +13,13 @@ function parsePort(value: string | undefined) {
   return parsed;
 }
 
-export function getApiPort(env: Partial<Pick<NodeJS.ProcessEnv, "PORT" | "API_PORT">> = process.env) {
-  return parsePort(env.PORT) ?? parsePort(env.API_PORT) ?? localApiPort;
+export function getApiPort(env: Partial<Pick<NodeJS.ProcessEnv, "NODE_ENV" | "PORT" | "API_PORT">> = process.env) {
+  const apiPort = parsePort(env.API_PORT);
+  const platformPort = parsePort(env.PORT);
+
+  if (env.NODE_ENV === "production") {
+    return platformPort ?? apiPort ?? localApiPort;
+  }
+
+  return apiPort ?? localApiPort;
 }

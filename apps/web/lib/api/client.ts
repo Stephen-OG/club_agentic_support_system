@@ -30,7 +30,7 @@ async function parseResponse<T>(response: Response) {
   return body as T;
 }
 
-function unreachableError() {
+export function createApiUnreachableError() {
   return new Error(`API server is unreachable at ${apiBaseUrl}. Start it with npm run dev:api or set NEXT_PUBLIC_API_URL.`);
 }
 
@@ -53,7 +53,7 @@ export async function apiRequest<T>(supabase: SupabaseClient, path: string, init
       headers: buildHeaders(requestInit.headers, token)
     });
   } catch {
-    throw unreachableError();
+    throw createApiUnreachableError();
   }
 
   return parseResponse<T>(response);
@@ -68,7 +68,7 @@ export async function publicApiRequest<T>(path: string, init: RequestInit = {}) 
       headers: buildHeaders(init.headers)
     });
   } catch {
-    throw unreachableError();
+    throw createApiUnreachableError();
   }
 
   return parseResponse<T>(response);

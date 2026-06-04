@@ -25,6 +25,7 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
   const primaryRole = getPrimaryRole(currentUser);
   const primaryMembership = getPrimaryMembership(currentUser);
   const canCreatePlatformRoles = primaryRole === "admin";
+  const canChooseVenueForRole = canCreatePlatformRoles || (primaryRole === "owner" && !primaryMembership?.venueId);
   const availableRoles = useMemo(
     () => (canCreatePlatformRoles ? roles : roles.filter((item) => ["manager", "staff", "security", "read_only"].includes(item.value))),
     [canCreatePlatformRoles]
@@ -86,6 +87,13 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
     setLoading(true);
     setError(null);
 
+    const mustChooseVenue = roleRequiresVenue(role) && canChooseVenueForRole;
+    if (mustChooseVenue && !venueId) {
+      setError("Choose a venue before creating venue-scoped access.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const result = await apiRequest<CreatedStaffCredential>(supabase, "/team", {
         method: "POST",
@@ -93,7 +101,7 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
           email,
           displayName,
           role,
-          venueId: canCreatePlatformRoles && roleRequiresVenue(role) ? venueId : undefined
+          venueId: mustChooseVenue ? venueId : undefined
         })
       });
       setCreated(result);
@@ -146,7 +154,7 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
               ))}
             </select>
           </label>
-          {roleRequiresVenue(role) && canCreatePlatformRoles ? (
+          {roleRequiresVenue(role) && canChooseVenueForRole ? (
             <label>
               <span>Venue</span>
               <select onChange={(event) => setVenueId(event.target.value)} required value={venueId}>

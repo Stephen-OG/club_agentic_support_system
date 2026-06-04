@@ -17,11 +17,24 @@ describe("CreateStaffUserDto", () => {
     assert.deepEqual(errors, []);
   });
 
-  it("requires venue owners to be scoped to a venue", async () => {
+  it("allows venue-scoped roles to omit venueId so the service can resolve the actor venue", async () => {
     const dto = Object.assign(new CreateStaffUserDto(), {
-      email: "owner@example.com",
-      displayName: "Owner",
-      role: "owner"
+      email: "staff2@example.com",
+      displayName: "Staff 2",
+      role: "staff"
+    });
+
+    const errors = await validate(dto);
+
+    assert.deepEqual(errors, []);
+  });
+
+  it("rejects malformed venue ids when provided", async () => {
+    const dto = Object.assign(new CreateStaffUserDto(), {
+      email: "staff3@example.com",
+      displayName: "Staff 3",
+      role: "staff",
+      venueId: "venue-1"
     });
 
     const errors = await validate(dto);

@@ -6,6 +6,7 @@ import { Building2, ChevronRight, Globe, Hash, Loader2, MapPinned, User, Users }
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { useSupabaseSession } from "@/lib/supabase/use-session";
 import { mustChangePassword } from "@/lib/auth/session-route-policy";
+import { apiBaseUrl, createApiUnreachableError } from "@/lib/api/client";
 import { safeReplace } from "@/lib/navigation";
 
 type Step = "welcome" | "workspace" | "venue" | "creating";
@@ -108,23 +109,28 @@ export default function SetupPage() {
     setStep("creating");
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
-      const response = await fetch(`${apiUrl}/signup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          email: session.user.email,
-          displayName: displayName.trim(),
-          workspaceName: workspaceName.trim(),
-          workspaceSlug: workspaceSlug || toSlug(workspaceName),
-          venueName: venueName.trim(),
-          venueSlug: venueSlug || toSlug(venueName),
-          timezone
-        })
-      });
+      let response: Response;
+
+      try {
+        response = await fetch(`${apiBaseUrl}/signup`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            email: session.user.email,
+            displayName: displayName.trim(),
+            workspaceName: workspaceName.trim(),
+            workspaceSlug: workspaceSlug || toSlug(workspaceName),
+            venueName: venueName.trim(),
+            venueSlug: venueSlug || toSlug(venueName),
+            timezone
+          })
+        });
+      } catch {
+        throw createApiUnreachableError();
+      }
 
       if (!response.ok) {
         const body = await response.json().catch(() => null);

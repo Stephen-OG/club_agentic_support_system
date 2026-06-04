@@ -173,7 +173,15 @@ export class StaffService {
     this.assertCanManageTeam(auth);
 
     if (auth.role === "admin") {
-      return input.role === "admin" ? null : input.venueId;
+      if (input.role === "admin") {
+        return null;
+      }
+
+      if (!input.venueId) {
+        throw new ForbiddenException("Admins must choose a venue for venue-scoped staff");
+      }
+
+      return input.venueId;
     }
 
     if (auth.role === "owner" && !auth.venueId) {

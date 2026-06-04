@@ -238,6 +238,34 @@ describe("StaffService", () => {
     assert.equal(createdAuthUser, false);
   });
 
+  it("rejects admin venue-scoped user creation when no venue is selected", async () => {
+    let createdAuthUser = false;
+    const service = new StaffService(
+      {
+        staffProfile: {
+          findUnique: async () => null
+        }
+      } as any,
+      {
+        createTemporaryPasswordUser: async () => {
+          createdAuthUser = true;
+          return { id: "auth-missing-venue" };
+        }
+      } as any
+    );
+
+    await assert.rejects(
+      () =>
+        service.createStaffUser(adminAuth, {
+          email: "missing-venue@example.com",
+          displayName: "Missing Venue",
+          role: "staff"
+        }),
+      ForbiddenException
+    );
+    assert.equal(createdAuthUser, false);
+  });
+
   it("deletes the temporary Supabase auth user when staff profile persistence fails", async () => {
     const deletedAuthUserIds: string[] = [];
     const service = new StaffService(

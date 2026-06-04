@@ -87,17 +87,7 @@ export class SetupService {
         }
       });
 
-      // 3. Create owner membership
-      await tx.staffMembership.create({
-        data: {
-          workspaceId: workspace.id,
-          staffProfileId: staff.id,
-          role: "OWNER"
-        }
-      });
-      this.logger.logEvent("signup.staff_created", { staffProfileId: staff.id, email }, "SetupService");
-
-      // 4. Create venue with default opening hours
+      // 3. Create venue with default opening hours
       const venue = await tx.venue.create({
         data: {
           workspaceId: workspace.id,
@@ -110,6 +100,17 @@ export class SetupService {
         }
       });
       this.logger.logEvent("signup.venue_created", { venueId: venue.id, name: venue.name }, "SetupService");
+
+      // 4. Create the initial owner as a venue-scoped operator for the venue they just set up.
+      await tx.staffMembership.create({
+        data: {
+          workspaceId: workspace.id,
+          venueId: venue.id,
+          staffProfileId: staff.id,
+          role: "OWNER"
+        }
+      });
+      this.logger.logEvent("signup.staff_created", { staffProfileId: staff.id, email, venueId: venue.id }, "SetupService");
 
       return { workspace, staff, venue };
     });
