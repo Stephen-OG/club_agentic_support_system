@@ -1,6 +1,6 @@
 import { createCancelledReply, createSatisfactionReply, createServiceRecoveryReply } from "./chat-copy";
 import type { RequestStatus } from "./chat-copy";
-import { normalizeSatisfactionRating } from "@guestos/shared";
+import { normalizeSatisfactionRating } from "@madupe/shared";
 
 export type ClientRequestAction = "cancel" | "confirm_resolved" | "not_satisfied";
 export type SatisfactionRating = 1 | 2 | 3 | 4 | 5;

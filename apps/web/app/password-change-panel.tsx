@@ -71,7 +71,7 @@ export function PasswordChangePanel() {
         <div>
           <div className="eyebrow">Temporary credential</div>
           <h1>Set a new password</h1>
-          <p className="muted">Your workspace admin created this account with a temporary password. Set your own password before entering GuestOS.</p>
+          <p className="muted">Your workspace admin created this account with a temporary password. Set your own password before entering Madupe.</p>
         </div>
         <form className="auth-form" onSubmit={submit}>
           <label className="password-field">

@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { classifyPriority, type RequestPriority } from "@guestos/shared";
+import { classifyPriority, type RequestPriority } from "@madupe/shared";
 
 @Injectable()
 export class PriorityClassifierService {

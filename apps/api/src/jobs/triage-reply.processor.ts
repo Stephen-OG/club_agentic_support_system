@@ -2,7 +2,7 @@ import { Processor, WorkerHost } from "@nestjs/bullmq";
 import { Injectable, Logger, Optional } from "@nestjs/common";
 import type { Job } from "bullmq";
 import { SenderType } from "@prisma/client";
-import type { RequestPriority } from "@guestos/shared";
+import type { RequestPriority } from "@madupe/shared";
 import { PrismaService } from "../database/prisma.service";
 import { AiTriageService } from "../triage/ai-triage.service";
 import { PriorityClassifierService } from "../triage/priority-classifier.service";

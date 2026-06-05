@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 const algorithm = "aes-256-gcm";
 const envelopePrefix = "enc:v1";
-const aad = Buffer.from("guestos:message:v1", "utf8");
+const aad = Buffer.from("madupe:message:v1", "utf8");
 
 type CryptoOptions = {
   requireKey?: boolean;

@@ -7,7 +7,7 @@ import {
   normalizeSatisfactionRating,
   type RequestActor,
   type RequestStatus
-} from "@guestos/shared";
+} from "@madupe/shared";
 import type { AuthContext } from "../auth/auth-context";
 import { PrismaService } from "../database/prisma.service";
 import { VenueAccessService } from "../venues/access.service";

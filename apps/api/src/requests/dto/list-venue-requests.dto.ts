@@ -1,6 +1,6 @@
 import { Transform } from "class-transformer";
 import { IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, Max, Min } from "class-validator";
-import { requestStatuses } from "@guestos/shared";
+import { requestStatuses } from "@madupe/shared";
 
 export class ListVenueRequestsDto {
   @IsOptional()

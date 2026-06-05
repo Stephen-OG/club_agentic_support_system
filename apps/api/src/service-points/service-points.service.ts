@@ -3,7 +3,7 @@ import { BadRequestException, Injectable, NotFoundException, Optional } from "@n
 import { InjectQueue } from "@nestjs/bullmq";
 import type { Queue } from "bullmq";
 import { RequestPriority as PrismaRequestPriority, RequestStatus, SenderType } from "@prisma/client";
-import type { RequestPriority } from "@guestos/shared";
+import type { RequestPriority } from "@madupe/shared";
 import type { AuthContext } from "../auth/auth-context";
 import { RedisCacheService } from "../common/cache/redis-cache.service";
 import { PrismaService } from "../database/prisma.service";

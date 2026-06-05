@@ -8,8 +8,8 @@ const setupInput = {
   email: "owner@example.com",
   venueName: "Main Venue",
   venueSlug: "main-venue",
-  workspaceName: "GuestOS Group",
-  workspaceSlug: "guestos-group"
+  workspaceName: "Madupe Group",
+  workspaceSlug: "madupe-group"
 };
 
 describe("SetupController", () => {

@@ -1,4 +1,4 @@
-# GuestOS User Stories
+# Madupe User Stories
 
 ## Venue Guest
 

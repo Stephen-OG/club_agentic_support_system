@@ -1,15 +1,15 @@
 # API Deployment
 
-The GuestOS API is a NestJS service in `apps/api`. It can run on Fly.io, ECS, Render, Railway, or a self-hosted Docker host. Build the API image from the repository root:
+The Madupe API is a NestJS service in `apps/api`. It can run on Fly.io, ECS, Render, Railway, or a self-hosted Docker host. Build the API image from the repository root:
 
 ```bash
-docker build -f apps/api/Dockerfile -t guestos-api .
+docker build -f apps/api/Dockerfile -t madupe-api .
 ```
 
 Run it locally with production-like secrets:
 
 ```bash
-docker run --rm -p 4000:4000 --env-file .env.prod guestos-api
+docker run --rm -p 4000:4000 --env-file .env.prod madupe-api
 ```
 
 ## Required Production Environment
@@ -45,7 +45,7 @@ npm ci
 npm test --workspaces --if-present
 npm run lint --workspaces --if-present
 npm run build --workspaces --if-present
-npm run prisma:generate -w @guestos/database
+npm run prisma:generate -w @madupe/database
 ```
 
 Run migrations against the target database before switching traffic:

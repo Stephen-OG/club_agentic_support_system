@@ -11,6 +11,7 @@ import {
   createLocationPayload,
   createServicePointPayload,
   createServicePointUpdatePayload,
+  resolveGuestAppOrigin,
   servicePointGuestUrl,
   venueWideGuestUrl
 } from "@/lib/venue-controls";
@@ -300,7 +301,10 @@ export function VenuesCommand() {
         {venues.map((venue) => (
           <article className="command-panel venue-card" key={venue.id}>
             {(() => {
-              const guestAppUrl = typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:3000";
+              const guestAppUrl = resolveGuestAppOrigin(
+                process.env.NEXT_PUBLIC_APP_URL,
+                typeof window !== "undefined" ? window.location.origin : undefined
+              );
               const venueUrl = venueWideGuestUrl(guestAppUrl, venue.slug);
               const servicePointDraft = servicePointDrafts[venue.id] ?? { label: "", locationId: "" };
               const locationDraft = locationDrafts[venue.id] ?? { name: "" };

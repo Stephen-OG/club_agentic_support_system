@@ -8,7 +8,7 @@ export class HealthController {
   @ApiOkResponse({ description: "API health check" })
   getHealth() {
     return {
-      service: "guestos-api",
+      service: "madupe-api",
       status: "ok",
       timestamp: new Date().toISOString()
     };

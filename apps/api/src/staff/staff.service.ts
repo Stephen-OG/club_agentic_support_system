@@ -229,6 +229,6 @@ export class StaffService {
 
   private generateTemporaryPassword() {
     const suffix = randomBytes(9).toString("hex").slice(0, 14);
-    return `GuestOS-${suffix}!`;
+    return `Madupe-${suffix}!`;
   }
 }

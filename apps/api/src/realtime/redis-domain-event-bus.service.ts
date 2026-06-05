@@ -15,7 +15,7 @@ export type RedisDomainEventBusAdapter = {
   subscribe(stream: string, onPayload: (payload: RedisDomainEventBusPayload) => void): Promise<(() => void) | void>;
 };
 
-const domainEventsStream = "guestos:domain-events";
+const domainEventsStream = "madupe:domain-events";
 
 @Injectable()
 export class RedisDomainEventBusService implements OnModuleDestroy {

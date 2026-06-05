@@ -1,6 +1,6 @@
 # MVP Security And Compliance Checklist
 
-This checklist maps GuestOS MVP controls to the OWASP Top 10 2021 categories referenced by OWASP and Cloudflare.
+This checklist maps Madupe MVP controls to the OWASP Top 10 2021 categories referenced by OWASP and Cloudflare.
 
 Sources:
 - OWASP Top 10 2021: https://owasp.org/Top10/2021/

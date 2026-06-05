@@ -23,7 +23,7 @@ describe("RedisDomainEventBusService", () => {
 
     assert.deepEqual(writes, [
       {
-        stream: "guestos:domain-events",
+        stream: "madupe:domain-events",
         payload: {
           originId: "instance_1",
           event: {

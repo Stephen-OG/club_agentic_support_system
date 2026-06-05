@@ -7,15 +7,15 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w @guestos/web",
-    "dev:web": "npm run dev -w @guestos/web",
-    "dev:api": "npm run start:dev -w @guestos/api",
+    "dev": "npm run dev -w @madupe/web",
+    "dev:web": "npm run dev -w @madupe/web",
+    "dev:api": "npm run start:dev -w @madupe/api",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "prisma:generate": "npm run prisma:generate -w @guestos/database",
-    "prisma:migrate": "npm run prisma:migrate -w @guestos/database",
-    "seed": "npm run seed -w @guestos/database",
+    "prisma:generate": "npm run prisma:generate -w @madupe/database",
+    "prisma:migrate": "npm run prisma:migrate -w @madupe/database",
+    "seed": "npm run seed -w @madupe/database",
     "supabase": "supabase"
   },
   "devDependencies": {

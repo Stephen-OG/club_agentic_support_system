@@ -6,7 +6,7 @@ import {
   RequestPrioritySchema,
   type AiTriageOutput,
   type RequestPriority
-} from "@guestos/shared";
+} from "@madupe/shared";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -15,7 +15,7 @@ import { ReplyGuardService } from "./reply-guard.service";
 
 const TRIAGE_CACHE_TTL = 60; // 1 minute — venue context changes slowly
 
-export const GUESTOS_TRIAGE_SYSTEM_PROMPT = `You are Lily, the GuestOS AI operations assistant for hospitality venues.
+export const MADUPE_TRIAGE_SYSTEM_PROMPT = `You are Lily, the Madupe AI operations assistant for hospitality venues.
 
 Your job is to turn guest chat messages into safe, concise support request triage.
 
@@ -98,11 +98,11 @@ export class AiTriageService {
           message: input.message,
           servicePointLabel: input.servicePointLabel
         }),
-        instructions: GUESTOS_TRIAGE_SYSTEM_PROMPT,
+        instructions: MADUPE_TRIAGE_SYSTEM_PROMPT,
         model: this.model,
         store: false,
         text: {
-          format: zodTextFormat(AiTriageStructuredOutputSchema, "guestos_triage")
+          format: zodTextFormat(AiTriageStructuredOutputSchema, "madupe_triage")
         }
       });
 

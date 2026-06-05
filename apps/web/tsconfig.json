@@ -27,7 +27,7 @@
       "@/*": [
         "./*"
       ],
-      "@guestos/shared": [
+      "@madupe/shared": [
         "../../packages/shared/src"
       ]
     }

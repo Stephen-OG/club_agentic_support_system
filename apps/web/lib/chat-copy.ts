@@ -1,4 +1,4 @@
-import { createGuestStatusMessage as createSharedGuestStatusMessage } from "@guestos/shared";
+import { createGuestStatusMessage as createSharedGuestStatusMessage } from "@madupe/shared";
 
 export type RequestPriority = "low" | "normal" | "high" | "urgent";
 export type RequestStatus =

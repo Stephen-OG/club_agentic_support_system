@@ -1,4 +1,4 @@
-# GuestOS API
+# Madupe API
 
 ## Public Venue Intake
 

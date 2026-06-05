@@ -116,6 +116,11 @@ function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
 }
 
+export function resolveGuestAppOrigin(configuredOrigin?: string, browserOrigin?: string) {
+  const origin = configuredOrigin?.trim() || browserOrigin?.trim() || "http://127.0.0.1:3000";
+  return trimTrailingSlash(origin);
+}
+
 export function venueWideGuestUrl(origin: string, slug: string) {
   return `${trimTrailingSlash(origin)}/venue/${slug}`;
 }

@@ -7,8 +7,8 @@ const setupInput = {
   email: "OWNER@example.com",
   venueName: "Main Venue",
   venueSlug: "main-venue",
-  workspaceName: "GuestOS Group",
-  workspaceSlug: "guestos-group"
+  workspaceName: "Madupe Group",
+  workspaceSlug: "madupe-group"
 };
 
 describe("SetupService", () => {

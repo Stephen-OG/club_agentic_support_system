@@ -32,7 +32,7 @@ npx prisma migrate status --schema packages/database/prisma/schema.prisma
 Generate Prisma client after schema recovery:
 
 ```bash
-npm run prisma:generate -w @guestos/database
+npm run prisma:generate -w @madupe/database
 ```
 
 ## Follow-Up

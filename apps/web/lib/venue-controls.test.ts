@@ -8,11 +8,18 @@ import {
   createServicePointUpdatePayload,
   getVenueChatAvailabilityPreview,
   normalizeOpeningHours,
+  resolveGuestAppOrigin,
   servicePointGuestUrl,
   venueWideGuestUrl
 } from "./venue-controls";
 
 describe("venue controls", () => {
+  it("prefers the configured app URL when building public guest links", () => {
+    assert.equal(resolveGuestAppOrigin("https://madupe.com/", "https://preview.vercel.app"), "https://madupe.com");
+    assert.equal(resolveGuestAppOrigin("", "https://preview.vercel.app"), "https://preview.vercel.app");
+    assert.equal(resolveGuestAppOrigin(undefined, undefined), "http://127.0.0.1:3000");
+  });
+
   it("builds guest URLs for venue-wide and service-point QR codes", () => {
     assert.equal(venueWideGuestUrl("https://app.example.com", "blue-note"), "https://app.example.com/venue/blue-note");
     assert.equal(servicePointGuestUrl("https://app.example.com/", "qr_table_1"), "https://app.example.com/qr/qr_table_1");

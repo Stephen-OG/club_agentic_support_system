@@ -1,4 +1,4 @@
-import { normalizeSatisfactionRating } from "@guestos/shared";
+import { normalizeSatisfactionRating } from "@madupe/shared";
 
 type RatingValue = 1 | 2 | 3 | 4 | 5;
 
@@ -96,7 +96,7 @@ function requestRating(request: RateableRequest) {
   return normalizeRating(request.satisfactionRating ?? request.satisfaction_rating);
 }
 
-// Using normalizeSatisfactionRating from @guestos/shared
+// Using normalizeSatisfactionRating from @madupe/shared
 function normalizeRating(value: unknown): RatingValue | null {
   return normalizeSatisfactionRating(value) as RatingValue | null;
 }

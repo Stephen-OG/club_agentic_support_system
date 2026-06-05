@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "GuestOS Command Center",
+  title: "Madupe Command Center",
   description: "Production command center for venue guest support"
 };
 

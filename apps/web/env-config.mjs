@@ -60,6 +60,7 @@ export function loadWorkspaceEnv({ appDir, repoRoot, existingEnv = process.env }
     merged,
     publicEnv: compactEnv({
       NEXT_PUBLIC_API_URL: apiUrl,
+      NEXT_PUBLIC_APP_URL: merged.NEXT_PUBLIC_APP_URL || merged.NEXT_PUBLIC_WEB_URL,
       NEXT_PUBLIC_SUPABASE_ANON_KEY: merged.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       NEXT_PUBLIC_SUPABASE_URL: merged.NEXT_PUBLIC_SUPABASE_URL
     })

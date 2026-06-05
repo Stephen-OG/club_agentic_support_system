@@ -1,9 +1,9 @@
 {
-  "name": "@guestos/api",
+  "name": "@madupe/api",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "prepare:types": "npm run build -w @guestos/shared && npm run prisma:generate -w @guestos/database",
+    "prepare:types": "npm run build -w @madupe/shared && npm run prisma:generate -w @madupe/database",
     "build": "npm run prepare:types && tsc -p tsconfig.build.json",
     "lint": "npm run prepare:types && tsc --noEmit -p tsconfig.json",
     "start": "node dist/main.js",
@@ -11,7 +11,7 @@
     "test": "npm run prepare:types && node scripts/run-tests.cjs"
   },
   "dependencies": {
-    "@guestos/shared": "0.1.0",
+    "@madupe/shared": "0.1.0",
     "@nestjs/bullmq": "^11.0.3",
     "@nestjs/common": "^11.1.9",
     "@nestjs/config": "^4.0.2",

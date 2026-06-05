@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import type { RequestPriority } from "@guestos/shared";
+import type { RequestPriority } from "@madupe/shared";
 
 @Injectable()
 export class ReplyGuardService {

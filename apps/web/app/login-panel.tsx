@@ -114,12 +114,12 @@ export function LoginPanel() {
 
   return (
     <main className="auth-screen">
-      <section className="auth-hero" aria-label="GuestOS command center">
+      <section className="auth-hero" aria-label="Madupe command center">
         <div className="auth-signal">
           <Radar size={18} />
           Live venue command
         </div>
-        <h1>GuestOS Command Center</h1>
+        <h1>Madupe Command Center</h1>
         <p>Sign in to manage venues, service points, staff credentials, and live guest requests.</p>
       </section>
 

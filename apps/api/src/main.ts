@@ -54,7 +54,7 @@ async function bootstrap() {
 
   if (shouldExposeApiDocs(process.env)) {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle("GuestOS API")
+      .setTitle("Madupe API")
       .setDescription("AI guest support and staff orchestration API")
       .setVersion("0.1.0")
       .addBearerAuth()

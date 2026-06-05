@@ -43,7 +43,7 @@ describe("StaffService", () => {
     assert.equal(result.staff.authUserId, "auth-1");
     assert.equal(result.staff.email, "sam@example.com");
     assert.equal(result.membership.role, "STAFF");
-    assert.match(result.temporaryPassword, /^GuestOS-/);
+    assert.match(result.temporaryPassword, /^Madupe-/);
   });
 
   it("stores venue owners as venue-scoped memberships", async () => {

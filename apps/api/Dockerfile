@@ -18,8 +18,8 @@ COPY apps/api apps/api
 COPY packages/database packages/database
 COPY packages/shared packages/shared
 
-RUN npm run prisma:generate -w @guestos/database
-RUN npm run build -w @guestos/api
+RUN npm run prisma:generate -w @madupe/database
+RUN npm run build -w @madupe/api
 RUN npm prune --omit=dev
 
 FROM node:22-alpine AS runner
@@ -40,4 +40,4 @@ COPY --from=build /app/packages/shared/dist packages/shared/dist
 
 EXPOSE 4000
 
-CMD ["npm", "run", "start", "-w", "@guestos/api"]
+CMD ["npm", "run", "start", "-w", "@madupe/api"]

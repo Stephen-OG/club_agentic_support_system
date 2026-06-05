@@ -1,5 +1,5 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
-import { StaffRoleSchema } from "@guestos/shared";
+import { StaffRoleSchema } from "@madupe/shared";
 import type { RequestWithAuth } from "./auth-context";
 
 @Injectable()

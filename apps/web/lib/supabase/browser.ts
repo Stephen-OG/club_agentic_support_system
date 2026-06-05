@@ -8,7 +8,7 @@ type BrowserSupabaseRegistry = {
   config: string | null;
 };
 
-const registryKey = "__guestosBrowserSupabase";
+const registryKey = "__madupeBrowserSupabase";
 
 function getRegistry() {
   const globalScope = globalThis as typeof globalThis & {

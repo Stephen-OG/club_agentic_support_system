@@ -1,5 +1,5 @@
 import { IsIn, IsOptional, IsUUID } from "class-validator";
-import { requestStatuses } from "@guestos/shared";
+import { requestStatuses } from "@madupe/shared";
 
 export class UpdateRequestStatusDto {
   @IsIn(requestStatuses)

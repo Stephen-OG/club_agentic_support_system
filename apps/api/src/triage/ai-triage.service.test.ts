@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { RequestPriority } from "@guestos/shared";
+import type { RequestPriority } from "@madupe/shared";
 import { isAgentActionAllowed } from "./agent-policy";
-import { AiTriageService, GUESTOS_TRIAGE_SYSTEM_PROMPT } from "./ai-triage.service";
+import { AiTriageService, MADUPE_TRIAGE_SYSTEM_PROMPT } from "./ai-triage.service";
 
 describe("agent policy", () => {
   it("allows safe replies and low-risk assignment in semi-autonomous mode", () => {
@@ -44,7 +44,7 @@ function cacheStub() {
 }
 
 describe("AI triage", () => {
-  it("uses GPT-4o mini with the GuestOS structured triage prompt", async () => {
+  it("uses GPT-4o mini with the Madupe structured triage prompt", async () => {
     let capturedBody: any;
     const service = new AiTriageService(cacheStub() as never, replyGuard() as never, {
       get(key: string) {
@@ -80,12 +80,12 @@ describe("AI triage", () => {
     });
 
     assert.equal(capturedBody.model, "gpt-4o-mini");
-    assert.equal(capturedBody.instructions, GUESTOS_TRIAGE_SYSTEM_PROMPT);
-    assert.equal(capturedBody.text.format.name, "guestos_triage");
+    assert.equal(capturedBody.instructions, MADUPE_TRIAGE_SYSTEM_PROMPT);
+    assert.equal(capturedBody.text.format.name, "madupe_triage");
     assert.match(capturedBody.input, /table 12/i);
-    assert.match(GUESTOS_TRIAGE_SYSTEM_PROMPT, /ask for location/i);
-    assert.match(GUESTOS_TRIAGE_SYSTEM_PROMPT, /non-staff intents/i);
-    assert.match(GUESTOS_TRIAGE_SYSTEM_PROMPT, /3 consecutive request/i);
+    assert.match(MADUPE_TRIAGE_SYSTEM_PROMPT, /ask for location/i);
+    assert.match(MADUPE_TRIAGE_SYSTEM_PROMPT, /non-staff intents/i);
+    assert.match(MADUPE_TRIAGE_SYSTEM_PROMPT, /3 consecutive request/i);
     assert.equal(triage.title, "Napkins needed");
     assert.equal(triage.guestLocationLabel, "Table 12");
   });

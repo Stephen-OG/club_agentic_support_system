@@ -205,7 +205,7 @@ export default function SetupPage() {
               <span className="status-orbit">
                 <Building2 size={24} />
               </span>
-              <h1>Welcome to GuestOS</h1>
+              <h1>Welcome to Madupe</h1>
               <p>Let&apos;s set up your workspace. You&apos;ll be the first owner.</p>
             </div>
 

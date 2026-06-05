@@ -1,12 +1,12 @@
 # Web Deployment
 
-The GuestOS web app is a Next.js app in `apps/web`. Vercel is the simplest target for the MVP because it handles Next.js routing, static assets, and server rendering with very little infrastructure.
+The Madupe web app is a Next.js app in `apps/web`. Vercel is the simplest target for the MVP because it handles Next.js routing, static assets, and server rendering with very little infrastructure.
 
 ## Recommended Vercel Settings
 
 - Framework preset: Next.js
 - Root directory: repository root
-- Build command: `npm run build -w @guestos/web`
+- Build command: `npm run build -w @madupe/web`
 - Install command: `npm ci`
 - Output: Next.js default
 
@@ -15,12 +15,15 @@ The GuestOS web app is a Next.js app in `apps/web`. Vercel is the simplest targe
 Set these values in the web hosting project:
 
 - `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_APP_URL=https://madupe.com`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `LOG_LEVEL`
 
 Only `NEXT_PUBLIC_*` values are exposed to the browser. Keep `SUPABASE_SERVICE_ROLE_KEY` server-side only; it is used by server components and API-adjacent web code and must never be sent to client components.
+
+`NEXT_PUBLIC_APP_URL` is the canonical guest-facing base URL used for generated QR codes and venue links. Set it to the production domain so QR codes encode `https://madupe.com/qr/:token` even if an admin opens the command center from a Vercel preview URL.
 
 ## Pre-Deploy Checks
 
@@ -46,7 +49,7 @@ After deployment:
 The API must allow the deployed web origin through `CORS_ORIGINS`, for example:
 
 ```bash
-CORS_ORIGINS=https://app.example.com
+CORS_ORIGINS=https://madupe.com
 ```
 
 Use comma-separated origins only when you intentionally support multiple environments.

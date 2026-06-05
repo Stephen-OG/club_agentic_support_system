@@ -82,7 +82,7 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
             <Activity size={18} />
           </span>
           <div>
-            <strong>GuestOS</strong>
+            <strong>Madupe</strong>
             <span>Command Center</span>
           </div>
         </div>

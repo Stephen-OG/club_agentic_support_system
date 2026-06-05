@@ -1,5 +1,5 @@
 import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
-import type { GuestRequestAction } from "@guestos/shared";
+import type { GuestRequestAction } from "@madupe/shared";
 
 export class GuestRequestActionDto {
   @IsIn(["cancel", "confirm_resolved", "not_satisfied"])

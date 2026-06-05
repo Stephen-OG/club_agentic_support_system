@@ -1,4 +1,4 @@
-import type { AgentAction, AgentPolicyVersion, RequestPriority } from "@guestos/shared";
+import type { AgentAction, AgentPolicyVersion, RequestPriority } from "@madupe/shared";
 
 const routinePriorities = new Set<RequestPriority>(["low", "normal"]);
 

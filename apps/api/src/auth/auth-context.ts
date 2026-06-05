@@ -1,4 +1,4 @@
-import type { StaffRole } from "@guestos/shared";
+import type { StaffRole } from "@madupe/shared";
 
 export type AuthContext = {
   staffProfileId: string;

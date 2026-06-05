@@ -20,8 +20,8 @@ type RedisDomainEventConsumerOptions = {
   stream?: string;
 };
 
-const defaultStream = "guestos:domain-events";
-const defaultDeadLetterStream = "guestos:domain-events:dead-letter";
+const defaultStream = "madupe:domain-events";
+const defaultDeadLetterStream = "madupe:domain-events:dead-letter";
 
 export class RedisDomainEventConsumerAdapter implements DomainEventConsumerAdapter {
   private readonly logger = new Logger(RedisDomainEventConsumerAdapter.name);
@@ -191,7 +191,7 @@ export class RedisDomainEventConsumerAdapter implements DomainEventConsumerAdapt
   }
 
   private groupName(lane: DomainEventConsumerLane) {
-    return `guestos:${lane}`;
+    return `madupe:${lane}`;
   }
 }
 

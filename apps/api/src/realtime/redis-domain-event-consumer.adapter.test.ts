@@ -27,7 +27,7 @@ describe("RedisDomainEventConsumerAdapter", () => {
 
         return [
           [
-            "guestos:domain-events",
+            "madupe:domain-events",
             [
               [
                 "redis_id_1",
@@ -50,7 +50,7 @@ describe("RedisDomainEventConsumerAdapter", () => {
       },
       disconnect: () => undefined
     };
-    const adapter = new RedisDomainEventConsumerAdapter(client, { blockMs: 1, consumerName: "consumer_1", stream: "guestos:domain-events" });
+    const adapter = new RedisDomainEventConsumerAdapter(client, { blockMs: 1, consumerName: "consumer_1", stream: "madupe:domain-events" });
     const messages: unknown[] = [];
     let stop: (() => void) | void;
 
@@ -74,7 +74,7 @@ describe("RedisDomainEventConsumerAdapter", () => {
     ]);
     assert.deepEqual(calls[0], {
       command: "xgroup",
-      args: ["CREATE", "guestos:domain-events", "guestos:notifications", "$", "MKSTREAM"]
+      args: ["CREATE", "madupe:domain-events", "madupe:notifications", "$", "MKSTREAM"]
     });
   });
 
@@ -109,9 +109,9 @@ describe("RedisDomainEventConsumerAdapter", () => {
     );
 
     assert.equal((calls[0] as any).command, "xack");
-    assert.deepEqual((calls[0] as any).args, ["guestos:domain-events", "guestos:webhooks", "redis_id_2"]);
+    assert.deepEqual((calls[0] as any).args, ["madupe:domain-events", "madupe:webhooks", "redis_id_2"]);
     assert.equal((calls[1] as any).command, "xadd");
-    assert.equal((calls[1] as any).args[0], "guestos:domain-events:dead-letter");
+    assert.equal((calls[1] as any).args[0], "madupe:domain-events:dead-letter");
   });
 
   it("claims pending lane messages before waiting for new stream entries", async () => {

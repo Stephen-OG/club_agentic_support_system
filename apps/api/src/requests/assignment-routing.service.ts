@@ -1,4 +1,4 @@
-import type { RequestPriority } from "@guestos/shared";
+import type { RequestPriority } from "@madupe/shared";
 
 export type AssignmentQueue = "bar" | "floor" | "kitchen" | "operations" | "security";
 

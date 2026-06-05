@@ -7,7 +7,7 @@ import { loadWorkspaceEnv } from "./env-config.mjs";
 
 describe("loadWorkspaceEnv", () => {
   it("uses app env values over repo root values", () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "guestos-env-"));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "madupe-env-"));
     const appDir = path.join(workspace, "apps", "web");
     fs.mkdirSync(appDir, { recursive: true });
     fs.writeFileSync(path.join(workspace, ".env"), "NEXT_PUBLIC_SUPABASE_URL=https://root.example\nPORT=5000\nHOST=\"127.0.0.1\"\n");
@@ -20,7 +20,7 @@ describe("loadWorkspaceEnv", () => {
   });
 
   it("keeps explicit process env values as highest priority", () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "guestos-env-"));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "madupe-env-"));
     const appDir = path.join(workspace, "apps", "web");
     fs.mkdirSync(appDir, { recursive: true });
     fs.writeFileSync(path.join(workspace, ".env"), "PORT=5000\nHOST=127.0.0.1\n");
@@ -36,8 +36,19 @@ describe("loadWorkspaceEnv", () => {
     assert.equal(result.publicEnv.NEXT_PUBLIC_API_URL, "https://api.example");
   });
 
+  it("exposes the configured app URL to browser code", () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "madupe-env-"));
+    const appDir = path.join(workspace, "apps", "web");
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(path.join(workspace, ".env"), "NEXT_PUBLIC_APP_URL=https://madupe.com\n");
+
+    const result = loadWorkspaceEnv({ appDir, repoRoot: workspace, existingEnv: {} });
+
+    assert.equal(result.publicEnv.NEXT_PUBLIC_APP_URL, "https://madupe.com");
+  });
+
   it("ignores a public API URL that points at the configured web app origin", () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "guestos-env-"));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "madupe-env-"));
     const appDir = path.join(workspace, "apps", "web");
     fs.mkdirSync(appDir, { recursive: true });
     fs.writeFileSync(
@@ -56,7 +67,7 @@ describe("loadWorkspaceEnv", () => {
   });
 
   it("uses explicit API host and port ahead of generic deployment host and port", () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "guestos-env-"));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "madupe-env-"));
     const appDir = path.join(workspace, "apps", "web");
     fs.mkdirSync(appDir, { recursive: true });
     fs.writeFileSync(
@@ -75,7 +86,7 @@ describe("loadWorkspaceEnv", () => {
   });
 
   it("does not let generic shell host and port override workspace env API settings", () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "guestos-env-"));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "madupe-env-"));
     const appDir = path.join(workspace, "apps", "web");
     fs.mkdirSync(appDir, { recursive: true });
     fs.writeFileSync(path.join(workspace, ".env"), "PORT=4000\nHOST=127.0.0.1\n");
@@ -93,7 +104,7 @@ describe("loadWorkspaceEnv", () => {
   });
 
   it("does not use the web dev server port as the API port", () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "guestos-env-"));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "madupe-env-"));
     const appDir = path.join(workspace, "apps", "web");
     fs.mkdirSync(appDir, { recursive: true });
     fs.writeFileSync(path.join(workspace, ".env"), "PORT=4000\nHOST=127.0.0.1\n");

@@ -1,4 +1,4 @@
-# GuestOS Agentic Support System
+# Madupe Agentic Support System
 
 This project is an MVP for QR-based venue support. Guests scan either a venue QR code or a service-point QR code, describe what they need, and get a conversational response while the request is turned into an operations task for staff.
 
