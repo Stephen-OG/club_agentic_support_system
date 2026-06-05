@@ -1857,6 +1857,185 @@ describe("ServicePointsService public QR workflow", () => {
     assert.deepEqual((result as any).messages, storedMessages);
   });
 
+  it("routes service-point QR menu questions to operations instead of answering as venue info", async () => {
+    const servicePoint = {
+      id: "sp_menu_request",
+      venueId: "venue_menu_request",
+      label: "Table 8",
+      qrToken: "qr_menu_request",
+      isActive: true,
+      venue: { id: "venue_menu_request", name: "Blue Note", openingHours: [] }
+    };
+    const conversation = {
+      id: "conversation_menu_request",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id
+    };
+    const supportRequest = {
+      id: "request_menu_request",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      conversationId: conversation.id,
+      title: "Menu request",
+      category: "menu",
+      summary: "Can I see the menu?",
+      priority: RequestPriority.NORMAL,
+      deterministicPriority: RequestPriority.NORMAL,
+      status: RequestStatus.NEW
+    };
+    const storedMessages = [
+      { id: "message_guest", conversationId: conversation.id, requestId: supportRequest.id, sender: SenderType.GUEST, body: "Can I see the menu?" },
+      {
+        id: "message_assistant",
+        conversationId: conversation.id,
+        requestId: supportRequest.id,
+        sender: SenderType.ASSISTANT,
+        body: "Of course, I have let the team know for Table 8."
+      }
+    ];
+    let requestCreated = false;
+    let requestCreateArgs: any;
+    const tx = {
+      conversation: {
+        create: async () => conversation
+      },
+      supportRequest: {
+        create: async (args: unknown) => {
+          requestCreated = true;
+          requestCreateArgs = args;
+          return supportRequest;
+        }
+      },
+      message: {
+        create: async (args: unknown) => args,
+        findMany: async () => storedMessages
+      },
+      requestEvent: {
+        create: async () => ({})
+      }
+    };
+    const service = createService(
+      {
+        createFallback: () => {
+          throw new Error("synchronous request acknowledgement should not need fallback triage");
+        }
+      } as never,
+      { classifyOrDefault: () => "normal" } as never,
+      {
+        servicePoint: {
+          findFirst: async () => servicePoint
+        },
+        conversation: {
+          findFirst: async () => null
+        },
+        $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
+      } as never,
+      {} as never
+    );
+
+    const result = await service.createGuestMessage("qr_menu_request", {
+      message: "Can I see the menu?",
+      sessionId: "session_menu_request"
+    });
+
+    assert.equal(requestCreated, true);
+    assert.equal(requestCreateArgs.data.title, "Menu request");
+    assert.equal(requestCreateArgs.data.category, "menu");
+    assert.deepEqual((result as any).request, supportRequest);
+    assert.equal((result as any).replyPending, false);
+  });
+
+  it("routes venue QR menu questions to operations without asking for location first", async () => {
+    const venue = { id: "venue_menu_request", slug: "blue-note", workspaceId: "workspace_1", name: "Blue Note" };
+    const servicePoint = {
+      id: "sp_venue_menu_request",
+      venueId: venue.id,
+      label: "Venue support",
+      qrToken: "venue_support_blue_note",
+      isActive: true
+    };
+    const conversation = {
+      id: "conversation_venue_menu_request",
+      venueId: venue.id,
+      servicePointId: servicePoint.id
+    };
+    const supportRequest = {
+      id: "request_venue_menu_request",
+      venueId: venue.id,
+      servicePointId: servicePoint.id,
+      conversationId: conversation.id,
+      guestLocationLabel: null,
+      guestLocationSource: null,
+      title: "Menu request",
+      category: "menu",
+      summary: "Do you have a food menu?",
+      priority: RequestPriority.NORMAL,
+      deterministicPriority: RequestPriority.NORMAL,
+      status: RequestStatus.NEW
+    };
+    const storedMessages = [
+      { id: "message_guest", conversationId: conversation.id, requestId: supportRequest.id, sender: SenderType.GUEST, body: "Do you have a food menu?" }
+    ];
+    let requestCreated = false;
+    let requestCreateArgs: any;
+    const tx = {
+      conversation: {
+        create: async () => conversation
+      },
+      supportRequest: {
+        create: async (args: unknown) => {
+          requestCreated = true;
+          requestCreateArgs = args;
+          return supportRequest;
+        }
+      },
+      message: {
+        create: async (args: unknown) => args,
+        findMany: async () => storedMessages
+      },
+      requestEvent: {
+        create: async () => ({})
+      }
+    };
+    const service = createService(
+      {
+        createFallback: () => ({
+          assistantReply: "I have asked the team to help with the menu.",
+          category: "menu",
+          needsStaff: true,
+          priority: "normal",
+          summary: "Guest asked for the food menu.",
+          title: "Menu request"
+        })
+      } as never,
+      { classifyOrDefault: () => "normal" } as never,
+      {
+        venue: { findFirst: async () => venue },
+        servicePoint: {
+          findFirst: async () => servicePoint,
+          create: async () => servicePoint
+        },
+        conversation: {
+          findFirst: async () => null
+        },
+        $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
+      } as never,
+      {} as never
+    );
+
+    const result = await service.createVenueGuestMessage("blue-note", {
+      message: "Do you have a food menu?",
+      sessionId: "session_venue_menu_request"
+    });
+
+    assert.equal(requestCreated, true);
+    assert.equal(requestCreateArgs.data.title, "Menu request");
+    assert.equal(requestCreateArgs.data.category, "menu");
+    assert.equal(requestCreateArgs.data.guestLocationLabel, null);
+    assert.deepEqual((result as any).request, supportRequest);
+    assert.equal((result as any).replyPending, true);
+  });
+
   it("returns closed chat availability when updated venue hours close every day", async () => {
     const closedHours = Array.from({ length: 7 }, (_, dayOfWeek) => ({
       closesAt: "17:00",

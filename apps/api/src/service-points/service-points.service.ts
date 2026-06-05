@@ -489,8 +489,12 @@ export class ServicePointsService {
 
   private informationalReply(message: string, venueName: string) {
     const normalized = message.trim().toLowerCase();
+    if (this.isOperationsInformationRequest(normalized)) {
+      return null;
+    }
+
     const isInformationalQuestion =
-      /\b(wifi|wi-fi|password|opening hours|hours|close|closing|open|menu|dress code|age limit|parking|where is|where are|toilet|restroom|bathroom)\b/i.test(
+      /\b(wifi|wi-fi|password|opening hours|hours|close|closing|open|dress code|age limit|parking|where is|where are|toilet|restroom|bathroom)\b/i.test(
         normalized
       ) &&
       !/\b(need|bring|send|help|spill|broken|missing|wrong|waiting|allerg|medical|injur|fight|security|harass|fire|smoke|emergency)\b/i.test(
@@ -502,6 +506,28 @@ export class ServicePointsService {
     }
 
     return `I can help with service requests at ${venueName}. For venue info, please check with the team nearby.`;
+  }
+
+  private isOperationsInformationRequest(message: string) {
+    return /\b(menu|food menu|drink menu|wine list|cocktail list|prices?|price list|available|availability|vegan|vegetarian|gluten[-\s]?free|halal|kosher|allergen|allergens|dietary)\b/i.test(
+      message
+    );
+  }
+
+  private requestDraftForGuestMessage(message: string) {
+    if (this.isOperationsInformationRequest(message)) {
+      return {
+        category: "menu",
+        title: "Menu request",
+        summary: message
+      };
+    }
+
+    return {
+      category: "general",
+      title: "Guest support request",
+      summary: message
+    };
   }
 
   private nonRequestReply(message: string, venueName: string) {
@@ -891,8 +917,9 @@ export class ServicePointsService {
     // --- Async path: needs AI triage — save guest message + support request, enqueue job ---
     const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
     const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
+    const requestDraft = this.requestDraftForGuestMessage(input.message);
     const assignmentRoute = determineAssignmentRoute({
-      category: "general",
+      category: requestDraft.category,
       message: input.message,
       priority: deterministicPriority
     });
@@ -915,9 +942,9 @@ export class ServicePointsService {
           venueId: servicePoint.venueId,
           servicePointId: servicePoint.id,
           conversationId: conversation.id,
-          title: "Guest support request",
-          category: "general",
-          summary: input.message,
+          title: requestDraft.title,
+          category: requestDraft.category,
+          summary: requestDraft.summary,
           priority: prismaPriority,
           deterministicPriority: prismaPriority,
           status,
@@ -1122,7 +1149,8 @@ export class ServicePointsService {
           (m: any) => m.sender === SenderType.GUEST && !m.requestId
         )
       : null;
-    const needsLocation = !hasOpenRequest && !locationLabel && !pendingGuestMessage;
+    const canRouteWithoutLocation = this.isOperationsInformationRequest(input.message);
+    const needsLocation = !hasOpenRequest && !locationLabel && !pendingGuestMessage && !canRouteWithoutLocation;
 
     if (needsLocation) {
       const result = await this.prisma.$transaction(async (tx) => {
@@ -1241,8 +1269,9 @@ export class ServicePointsService {
     // --- Async path: save guest message + support request, enqueue AI job ---
     const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
     const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
+    const requestDraft = this.requestDraftForGuestMessage(input.message);
     const assignmentRoute = determineAssignmentRoute({
-      category: "general",
+      category: requestDraft.category,
       message: input.message,
       priority: deterministicPriority
     });
@@ -1280,9 +1309,9 @@ export class ServicePointsService {
             conversationId: conversation.id,
             guestLocationLabel: locationLabel,
             guestLocationSource: locationLabel ? "guest" : null,
-            title: "Guest support request",
-            category: "general",
-            summary: input.message,
+            title: requestDraft.title,
+            category: requestDraft.category,
+            summary: requestDraft.summary,
             priority: prismaPriority,
             deterministicPriority: prismaPriority,
             status,

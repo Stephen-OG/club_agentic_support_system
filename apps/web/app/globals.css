@@ -349,10 +349,23 @@ button {
 }
 
 .message-cluster {
+  animation: messageArrive 180ms ease-out both;
   display: flex;
   flex-direction: column;
   gap: 12px;
   width: 100%;
+}
+
+@keyframes messageArrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message-timestamp {
@@ -3247,18 +3260,25 @@ body {
 .qr-chat-page .bubble.pending {
   align-items: center;
   display: inline-flex;
-  min-height: 46px;
-  min-width: 70px;
+  min-height: 48px;
+  min-width: 164px;
 }
 
 .typing-loader {
+  align-items: center;
+  display: inline-flex;
+  gap: 9px;
+  min-height: 20px;
+}
+
+.typing-dots {
   align-items: center;
   display: inline-flex;
   gap: 5px;
   height: 18px;
 }
 
-.typing-loader span {
+.typing-dots span {
   animation: typingPulse 920ms ease-in-out infinite;
   background: currentColor;
   border-radius: 999px;
@@ -3267,12 +3287,19 @@ body {
   width: 7px;
 }
 
-.typing-loader span:nth-child(2) {
+.typing-dots span:nth-child(2) {
   animation-delay: 140ms;
 }
 
-.typing-loader span:nth-child(3) {
+.typing-dots span:nth-child(3) {
   animation-delay: 280ms;
+}
+
+.typing-label {
+  color: rgba(232, 251, 255, 0.76);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 @keyframes typingPulse {
@@ -3688,7 +3715,9 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .qr-chat-page .intro-actions button,
-  .qr-chat-page .intro-actions button::after {
+  .qr-chat-page .intro-actions button::after,
+  .message-cluster {
+    animation: none;
     transition: none;
   }
 
@@ -3697,7 +3726,7 @@ body {
     transform: none;
   }
 
-  .typing-loader span {
+  .typing-dots span {
     animation: none;
     opacity: 0.72;
   }

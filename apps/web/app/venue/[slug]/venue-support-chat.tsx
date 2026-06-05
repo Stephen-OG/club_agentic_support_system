@@ -14,6 +14,7 @@ import { createClosedVenueBody, createSendErrorBody, createUpdateErrorBody, crea
 import { formatClientChatTimestamp } from "@/lib/chat-time";
 import { normalizeGuestChatMessages } from "@/lib/guest-chat-messages";
 import { reconcileGuestConversationMessages } from "@/lib/guest-chat-state";
+import { shouldShowGuestIntroActions, shouldShowGuestMessageTimestamp } from "@/lib/guest-chat-ui";
 import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "@/lib/guest-session";
 import { connectGuestConversationEvents } from "@/lib/realtime-events";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
@@ -96,6 +97,12 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
     : "pill";
   const canCancel = request && !["COMPLETED", "RESOLVED", "CANCELLED"].includes(request.status);
   const awaitingSatisfaction = request?.status === "COMPLETED";
+  const showIntroActions = shouldShowGuestIntroActions({
+    awaitingSatisfaction,
+    chatClosed,
+    messages,
+    requestStatus: request?.status ?? null
+  });
 
   useEffect(() => {
     isSendingRef.current = isSending;
@@ -353,16 +360,19 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
               <div className={`bubble ${message.sender.toLowerCase()}${message.isPending ? " pending" : ""}`}>
                 {message.isPending ? (
                   <span className="typing-loader" aria-label="Lily is typing">
-                    <span />
-                    <span />
-                    <span />
+                    <span className="typing-dots" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                    <span className="typing-label">Lily is routing this</span>
                   </span>
                 ) : (
                   message.body
                 )}
               </div>
-              {!message.isPending ? <time className="message-timestamp" dateTime={message.createdAt}>{formatClientChatTimestamp(message.createdAt)}</time> : null}
-              {index === 0 && !awaitingSatisfaction && !chatClosed ? (
+              {shouldShowGuestMessageTimestamp(message) ? <time className="message-timestamp" dateTime={message.createdAt}>{formatClientChatTimestamp(message.createdAt)}</time> : null}
+              {index === 0 && showIntroActions ? (
                 <div className="quick-actions intro-actions" aria-label="Common requests">
                   {supportQuickActions.map((action) => (
                     <button

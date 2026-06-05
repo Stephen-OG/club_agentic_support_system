@@ -24,7 +24,8 @@ QR support is the guest-facing venue support chat. Treat QR support messages as 
 You must:
 - acknowledge the guest warmly
 - decide if staff are needed
-- treat greetings, casual chat, and venue-information questions as non-staff intents when no action is being requested
+- treat greetings, casual chat, and answerable venue-information questions as non-staff intents when no action is being requested
+- route menu, price, availability, allergen, and dietary-option questions to the operations team because this app has no live menu source
 - classify category
 - infer location if stated
 - summarize the request for staff
@@ -32,8 +33,8 @@ You must:
 - escalate safety, medical, harassment, fire, smoke, security, or emergency issues
 - never claim staff completed an action
 - never promise exact wait times
+- never invent menus, prices, venue policies, availability, opening hours, or operational facts not supplied in the input
 - ask for location if the venue-wide QR request needs staff and location is missing
-- ask for rating after the first request has been fulfilled then ask for rating after 3 consecutive request by the same user
 
 Return only structured triage data matching the schema.`;
 
@@ -122,6 +123,20 @@ export class AiTriageService {
   }
 
   createFallback(input: TriageInput): AiTriageOutput {
+    if (!input.isFollowup && this.isOperationsInformationRequest(input.message)) {
+      return AiTriageSchema.parse({
+        assistantReply: `I have asked the team to help with that at ${input.servicePointLabel}.`,
+        category: this.categoryFromMessage(input.message),
+        confidence: 0.86,
+        guestLocationLabel: this.locationFromMessage(input.message),
+        needsStaff: true,
+        priority: input.deterministicPriority,
+        suggestedAction: "reply",
+        summary: input.message,
+        title: this.titleFromMessage(input.message, input.deterministicPriority)
+      });
+    }
+
     const nonStaffReply = this.nonStaffReply(input.message, input.servicePointLabel);
 
     if (!input.isFollowup && nonStaffReply) {
@@ -227,7 +242,7 @@ export class AiTriageService {
     }
 
     const asksForVenueInfo =
-      /\b(wifi|wi-fi|password|opening hours|hours|close|closing|open|menu|dress code|age limit|parking|where is|where are|toilet|restroom|bathroom)\b/i.test(
+      /\b(wifi|wi-fi|password|opening hours|hours|close|closing|open|dress code|age limit|parking|where is|where are|toilet|restroom|bathroom)\b/i.test(
         normalized
       );
     const asksForAction =
@@ -240,6 +255,12 @@ export class AiTriageService {
     }
 
     return null;
+  }
+
+  private isOperationsInformationRequest(message: string) {
+    return /\b(menu|food menu|drink menu|wine list|cocktail list|prices?|price list|available|availability|vegan|vegetarian|gluten[-\s]?free|halal|kosher|allergen|allergens|dietary)\b/i.test(
+      message
+    );
   }
 
   private locationFromMessage(message: string) {
@@ -268,6 +289,10 @@ export class AiTriageService {
   }
 
   private categoryFromMessage(message: string) {
+    if (this.isOperationsInformationRequest(message)) {
+      return "menu";
+    }
+
     if (/\b(allerg|medical|injur|fight|security|harass|fire|smoke|emergency)\b/i.test(message)) {
       return "safety";
     }
@@ -281,6 +306,14 @@ export class AiTriageService {
     }
 
     return "general";
+  }
+
+  private titleFromMessage(message: string, priority: RequestPriority) {
+    if (this.isOperationsInformationRequest(message)) {
+      return "Menu request";
+    }
+
+    return this.titleFromPriority(priority);
   }
 
   private titleFromPriority(priority: RequestPriority) {

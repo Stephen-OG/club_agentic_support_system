@@ -85,7 +85,10 @@ describe("AI triage", () => {
     assert.match(capturedBody.input, /table 12/i);
     assert.match(MADUPE_TRIAGE_SYSTEM_PROMPT, /ask for location/i);
     assert.match(MADUPE_TRIAGE_SYSTEM_PROMPT, /non-staff intents/i);
-    assert.match(MADUPE_TRIAGE_SYSTEM_PROMPT, /3 consecutive request/i);
+    assert.match(MADUPE_TRIAGE_SYSTEM_PROMPT, /menu/i);
+    assert.match(MADUPE_TRIAGE_SYSTEM_PROMPT, /operations team/i);
+    assert.match(MADUPE_TRIAGE_SYSTEM_PROMPT, /never invent/i);
+    assert.doesNotMatch(MADUPE_TRIAGE_SYSTEM_PROMPT, /rating/i);
     assert.equal(triage.title, "Napkins needed");
     assert.equal(triage.guestLocationLabel, "Table 12");
   });
@@ -177,5 +180,21 @@ describe("AI triage", () => {
     assert.match(greeting.assistantReply, /Lily/i);
     assert.equal(infoQuestion.needsStaff, false);
     assert.equal(infoQuestion.title, "No staff action needed");
+  });
+
+  it("routes menu requests to staff because the app has no menu source", () => {
+    const service = new AiTriageService(cacheStub() as never, replyGuard() as never);
+
+    const triage = service.createFallback({
+      deterministicPriority: "normal",
+      message: "Can I see the menu?",
+      servicePointLabel: "Blue Note"
+    });
+
+    assert.equal(triage.needsStaff, true);
+    assert.equal(triage.priority, "normal");
+    assert.equal(triage.category, "menu");
+    assert.equal(triage.title, "Menu request");
+    assert.match(triage.assistantReply, /team/i);
   });
 });
