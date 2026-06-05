@@ -155,6 +155,7 @@ model ServicePoint {
 
   @@unique([venueId, label])
   @@index([venueId, isActive])
+  @@index([locationId])
 }
 
 model StaffProfile {
@@ -188,6 +189,7 @@ model StaffMembership {
   @@unique([workspaceId, staffProfileId, venueId])
   @@index([workspaceId, role, isActive])
   @@index([venueId, role, isActive])
+  @@index([staffProfileId, isActive])
 }
 
 model Conversation {
@@ -226,6 +228,7 @@ model Message {
   createdAt      DateTime        @default(now())
 
   @@index([venueId, createdAt])
+  @@index([servicePointId, createdAt])
   @@index([conversationId, createdAt])
   @@index([requestId, createdAt])
 }
@@ -285,6 +288,7 @@ model RequestAssignment {
 
   @@index([venueId, status, createdAt])
   @@index([staffProfileId, status])
+  @@index([assignedById, createdAt])
   @@index([requestId, createdAt])
 }
 
@@ -305,6 +309,7 @@ model RequestEvent {
 
   @@index([venueId, createdAt])
   @@index([requestId, createdAt])
+  @@index([actorStaffId, createdAt])
 }
 
 model AuditLog {

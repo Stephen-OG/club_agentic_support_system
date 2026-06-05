@@ -25,6 +25,21 @@ Only `NEXT_PUBLIC_*` values are exposed to the browser. Keep `SUPABASE_SERVICE_R
 
 `NEXT_PUBLIC_APP_URL` is the canonical guest-facing base URL used for generated QR codes and venue links. Set it to the production domain so QR codes encode `https://madupe.com/qr/:token` even if an admin opens the command center from a Vercel preview URL.
 
+## Supabase Auth Email Templates
+
+Install the Madupe templates from `supabase/email-templates` before production signup tests:
+
+- Supabase Auth Site URL: `https://madupe.com`
+- Supabase Auth redirect allow list: include `https://madupe.com/signup`, `https://madupe.com/login`, and any intentional preview URLs.
+- Confirm sign up subject: `Confirm your Madupe account`
+- Magic Link / OTP subject: `Your Madupe sign-in link`
+- Reset password subject: `Reset your Madupe password`
+- Invite user subject: `You have been invited to Madupe`
+- Change email address subject: `Confirm your new Madupe email address`
+- Reauthentication subject: `Your Madupe verification code`
+
+Keep Supabase template variables such as `{{ .ConfirmationURL }}`, `{{ .Token }}`, `{{ .SiteURL }}`, `{{ .RedirectTo }}`, `{{ .Email }}`, and `{{ .NewEmail }}` unchanged when copying the templates.
+
 ## Pre-Deploy Checks
 
 ```bash

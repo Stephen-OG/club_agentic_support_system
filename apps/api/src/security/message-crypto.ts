@@ -3,6 +3,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 const algorithm = "aes-256-gcm";
 const envelopePrefix = "enc:v1";
 const aad = Buffer.from("madupe:message:v1", "utf8");
+const legacyAads = [Buffer.from("guestos:message:v1", "utf8")];
 
 type CryptoOptions = {
   requireKey?: boolean;
@@ -56,14 +57,11 @@ export function decryptMessageBody(body: string, rawKey = process.env.MESSAGE_EN
     throw new Error("Encrypted message body is malformed");
   }
 
-  const decipher = createDecipheriv(algorithm, key, Buffer.from(ivText, "base64url"));
-  decipher.setAAD(aad);
-  decipher.setAuthTag(Buffer.from(tagText, "base64url"));
+  const iv = Buffer.from(ivText, "base64url");
+  const tag = Buffer.from(tagText, "base64url");
+  const ciphertext = Buffer.from(ciphertextText, "base64url");
 
-  return Buffer.concat([
-    decipher.update(Buffer.from(ciphertextText, "base64url")),
-    decipher.final()
-  ]).toString("utf8");
+  return decryptWithAad(ciphertext, key, iv, tag, [aad, ...legacyAads]);
 }
 
 export function encryptMessageCreateData<T extends MessageCreateData>(data: T): T {
@@ -114,4 +112,25 @@ function decodeKey(value: string) {
   }
 
   return Buffer.from(value, "base64");
+}
+
+function decryptWithAad(ciphertext: Buffer, key: Buffer, iv: Buffer, tag: Buffer, aads: Buffer[]) {
+  let lastError: unknown;
+
+  for (const aad of aads) {
+    try {
+      const decipher = createDecipheriv(algorithm, key, iv);
+      decipher.setAAD(aad);
+      decipher.setAuthTag(tag);
+
+      return Buffer.concat([
+        decipher.update(ciphertext),
+        decipher.final()
+      ]).toString("utf8");
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
 }
