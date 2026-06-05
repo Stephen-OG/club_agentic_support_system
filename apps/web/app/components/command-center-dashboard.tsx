@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, ArrowRight, BrainCircuit, CheckCircle2, Circle, Clock3, Flame, Gauge, MapPin, PieChart, RefreshCw, Rocket, ShieldAlert, Star, Users } from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, BrainCircuit, CheckCircle2, Circle, Clock3, Flame, Gauge, KeyRound, MapPin, PieChart, QrCode, RefreshCw, Rocket, ShieldAlert, Star, Users } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import type { CommandSupportRequest, CommandUser, CommandVenue, OnboardingStatus } from "@/lib/auth/types";
-import { type DashboardVolumeWindow, calculateDashboardAnalytics, getRequestVolumeSeries } from "@/lib/dashboard-analytics";
+import { type DashboardVolumeWindow, calculateAdminDashboardControls, calculateDashboardAnalytics, getRequestVolumeSeries } from "@/lib/dashboard-analytics";
 import { getDashboardExperience } from "@/lib/dashboard-experience";
-import { getPrimaryRole } from "@/lib/auth/role-policy";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 function formatMinutes(value: number | null) {
@@ -46,7 +45,6 @@ function riskLabel(risk: "breached" | "soon", minutesUntilBreach: number) {
 export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUser }) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const experience = useMemo(() => getDashboardExperience(currentUser), [currentUser]);
-  const canViewOnboarding = useMemo(() => ["owner", "admin"].includes(getPrimaryRole(currentUser)), [currentUser]);
   const [venues, setVenues] = useState<CommandVenue[]>([]);
   const [requests, setRequests] = useState<CommandSupportRequest[]>([]);
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
@@ -71,7 +69,7 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
       const requestGroups = await Promise.all(
         visibleVenues.map((venue) => apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venue.id}/requests`).catch(() => []))
       );
-      const nextOnboarding = canViewOnboarding ? await apiRequest<OnboardingStatus>(supabase, "/onboarding/status").catch(() => null) : null;
+      const nextOnboarding = experience.showLaunchChecklist ? await apiRequest<OnboardingStatus>(supabase, "/onboarding/status").catch(() => null) : null;
       const scopedRequests = experience.scopeVenueIds ? requestGroups.flat().filter((request) => experience.scopeVenueIds?.includes(request.venueId)) : requestGroups.flat();
       setVenues(visibleVenues);
       setRequests(scopedRequests);
@@ -82,13 +80,14 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
     } finally {
       setLoading(false);
     }
-  }, [canViewOnboarding, experience.scopeVenueIds, supabase]);
+  }, [experience.scopeVenueIds, experience.showLaunchChecklist, supabase]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   const analytics = useMemo(() => calculateDashboardAnalytics(requests), [requests]);
+  const adminControls = useMemo(() => calculateAdminDashboardControls(venues, requests), [requests, venues]);
   const volume = useMemo(() => getRequestVolumeSeries(requests, volumeWindow), [requests, volumeWindow]);
   const maxVolumeCount = Math.max(1, ...volume.series.map((item) => item.count));
   const maxRatingCount = Math.max(1, ...analytics.satisfactionRecovery.ratingDistribution.map((item) => item.count));
@@ -164,7 +163,9 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
 
       {error ? <div className="form-error wide">{error}</div> : null}
 
-      {onboarding && !onboarding.isComplete ? <LaunchChecklist status={onboarding} /> : null}
+      {onboarding && experience.showLaunchChecklist && !onboarding.isComplete ? <LaunchChecklist status={onboarding} /> : null}
+
+      {experience.panels.adminControls ? <AdminControls controls={adminControls} /> : null}
 
       <div className="metric-strip dashboard-summary-grid">
         {kpis.map((metric) => {
@@ -411,6 +412,73 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
           </div>
         </section>
       ) : null}
+    </section>
+  );
+}
+
+function AdminControls({ controls }: { controls: ReturnType<typeof calculateAdminDashboardControls> }) {
+  const topSetupGap = controls.venueSetupGaps[0];
+  const setupGapDetail = topSetupGap
+    ? `${topSetupGap.venueName}: ${topSetupGap.gaps.join(", ")}`
+    : "All venues have opening hours and active QR points.";
+  const controlsList = [
+    {
+      detail: `${controls.urgentUnassignedRequests} urgent/high need owner assignment`,
+      href: "?view=operations",
+      icon: ShieldAlert,
+      label: "Request ownership",
+      tone: controls.urgentUnassignedRequests ? "high" : controls.openUnassignedRequests ? "medium" : "low",
+      value: `${controls.openUnassignedRequests} unassigned`
+    },
+    {
+      detail: controls.escalatedRequests ? "Escalations need admin or manager review." : "No escalated requests waiting.",
+      href: "?view=operations",
+      icon: AlertTriangle,
+      label: "Escalation queue",
+      tone: controls.escalatedRequests ? "high" : "low",
+      value: `${controls.escalatedRequests} escalated`
+    },
+    {
+      detail: `${controls.inactiveServicePoints} inactive QR point${controls.inactiveServicePoints === 1 ? "" : "s"} across managed venues`,
+      href: "?view=venues",
+      icon: QrCode,
+      label: "QR coverage",
+      tone: controls.activeServicePoints ? (controls.inactiveServicePoints ? "medium" : "low") : "high",
+      value: `${controls.activeServicePoints} active`
+    },
+    {
+      detail: setupGapDetail,
+      href: "?view=venues",
+      icon: KeyRound,
+      label: "Venue readiness",
+      tone: controls.venueSetupGaps.length ? "medium" : "low",
+      value: `${controls.venueSetupGaps.length} gaps`
+    }
+  ];
+
+  return (
+    <section className="command-panel admin-controls-panel wide" aria-label="Admin dashboard controls">
+      <div className="panel-title-row">
+        <div>
+          <h2>Admin Control Center</h2>
+          <span className="panel-subtle">Operational access, queue ownership, and venue readiness controls</span>
+        </div>
+        <span className="data-chip">{controls.activeServicePoints} live QR points</span>
+      </div>
+      <div className="admin-control-grid">
+        {controlsList.map((item) => {
+          const Icon = item.icon;
+          return (
+            <a className={`admin-control-card tone-${item.tone}`} href={item.href} key={item.label}>
+              <Icon size={18} />
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <small>{item.detail}</small>
+              <ArrowRight size={14} />
+            </a>
+          );
+        })}
+      </div>
     </section>
   );
 }

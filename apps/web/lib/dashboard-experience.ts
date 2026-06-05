@@ -9,6 +9,7 @@ export type DashboardExperience = {
   title: string;
   scopeLabel: string;
   scopeVenueIds: string[] | null;
+  showLaunchChecklist: boolean;
   actionHeading: string;
   actionEmptyCopy: string;
   volumeTitle: string;
@@ -19,6 +20,7 @@ export type DashboardExperience = {
     satisfaction: string;
   };
   panels: {
+    adminControls: boolean;
     aiTriageQuality: boolean;
     servicePointHotspots: boolean;
     staffWorkload: boolean;
@@ -41,6 +43,7 @@ export function getDashboardExperience(user: CommandUser): DashboardExperience {
       title: "Venue Dashboard",
       scopeLabel: managerVenueNames.join(", ") || getPrimaryMembership(user)?.venue?.name || "Assigned venue",
       scopeVenueIds: managerVenueIds,
+      showLaunchChecklist: false,
       actionHeading: "Venue Action Required",
       actionEmptyCopy: "This venue is steady. No urgent manager actions detected from current request data.",
       volumeTitle: "Venue Demand Heatmap",
@@ -51,6 +54,7 @@ export function getDashboardExperience(user: CommandUser): DashboardExperience {
         satisfaction: "Venue satisfaction"
       },
       panels: {
+        adminControls: false,
         aiTriageQuality: false,
         servicePointHotspots: true,
         staffWorkload: true,
@@ -66,6 +70,7 @@ export function getDashboardExperience(user: CommandUser): DashboardExperience {
       title: "Workspace Dashboard",
       scopeLabel: getPrimaryMembership(user)?.workspace.name || "Workspace",
       scopeVenueIds: null,
+      showLaunchChecklist: true,
       actionHeading: "Business Action Required",
       actionEmptyCopy: "The workspace is steady. No urgent owner actions detected from current request data.",
       volumeTitle: "Workspace Demand Heatmap",
@@ -76,6 +81,7 @@ export function getDashboardExperience(user: CommandUser): DashboardExperience {
         satisfaction: "Guest satisfaction"
       },
       panels: {
+        adminControls: false,
         aiTriageQuality: true,
         servicePointHotspots: true,
         staffWorkload: true,
@@ -90,8 +96,9 @@ export function getDashboardExperience(user: CommandUser): DashboardExperience {
     title: "Operations Dashboard",
     scopeLabel: "All managed venues",
     scopeVenueIds: null,
-    actionHeading: "Action Required",
-    actionEmptyCopy: "Everything looks steady. No urgent admin actions detected from current request data.",
+    showLaunchChecklist: false,
+    actionHeading: "Admin Action Required",
+    actionEmptyCopy: "Everything looks steady. No urgent admin interventions detected from current request data.",
     volumeTitle: "Request Volume Heatmap",
     kpiLabels: {
       health: "Operational health",
@@ -100,6 +107,7 @@ export function getDashboardExperience(user: CommandUser): DashboardExperience {
       satisfaction: "Guest satisfaction"
     },
     panels: {
+      adminControls: true,
       aiTriageQuality: true,
       servicePointHotspots: true,
       staffWorkload: true,

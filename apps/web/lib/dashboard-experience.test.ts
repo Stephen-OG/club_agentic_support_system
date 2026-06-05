@@ -29,6 +29,7 @@ describe("dashboard experience", () => {
     assert.equal(experience.mode, "owner");
     assert.equal(experience.eyebrow, "Owner intelligence");
     assert.equal(experience.title, "Workspace Dashboard");
+    assert.equal(experience.showLaunchChecklist, true);
     assert.equal(experience.scopeVenueIds, null);
     assert.equal(experience.panels.venuePerformance, true);
     assert.equal(experience.panels.aiTriageQuality, true);
@@ -40,7 +41,9 @@ describe("dashboard experience", () => {
     assert.equal(experience.mode, "admin");
     assert.equal(experience.eyebrow, "Admin intelligence");
     assert.equal(experience.title, "Operations Dashboard");
+    assert.equal(experience.showLaunchChecklist, false);
     assert.equal(experience.scopeVenueIds, null);
+    assert.equal(experience.panels.adminControls, true);
     assert.equal(experience.panels.venuePerformance, true);
     assert.equal(experience.panels.staffWorkload, true);
   });
@@ -51,10 +54,12 @@ describe("dashboard experience", () => {
     assert.equal(experience.mode, "manager");
     assert.equal(experience.eyebrow, "Manager intelligence");
     assert.equal(experience.title, "Venue Dashboard");
+    assert.equal(experience.showLaunchChecklist, false);
     assert.deepEqual(experience.scopeVenueIds, ["venue-1"]);
     assert.equal(experience.scopeLabel, "Main Room");
     assert.equal(experience.panels.venuePerformance, false);
     assert.equal(experience.panels.aiTriageQuality, false);
+    assert.equal(experience.panels.adminControls, false);
     assert.equal(experience.panels.servicePointHotspots, true);
   });
 });

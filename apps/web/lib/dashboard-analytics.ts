@@ -4,6 +4,7 @@ type DashboardRequest = {
   id: string;
   venueId?: string;
   servicePointId?: string;
+  assignedToId?: string | null;
   title: string;
   category: string;
   priority: CommandRequestPriority;
@@ -17,6 +18,13 @@ type DashboardRequest = {
   servicePoint?: { id: string; label?: string | null; name?: string | null; zone?: string | null } | null;
 };
 
+type DashboardVenue = {
+  id: string;
+  name: string;
+  openingHours?: Array<unknown> | null;
+  servicePoints?: Array<{ id: string; isActive: boolean }> | null;
+};
+
 type RatingValue = 1 | 2 | 3 | 4 | 5;
 type AnomalySeverity = "high" | "medium" | "low";
 export type DashboardVolumeWindow = "hourly" | "daily" | "weekly" | "monthly";
@@ -27,6 +35,46 @@ const acknowledgementThresholdMinutes = 5;
 const openWaitThresholdMinutes = 10;
 const slaForecastThresholdMinutes = 10;
 const lowConfidenceThreshold = 0.55;
+
+export function calculateAdminDashboardControls(venues: DashboardVenue[], requests: DashboardRequest[]) {
+  let activeServicePoints = 0;
+  let inactiveServicePoints = 0;
+  const venueSetupGaps: Array<{ venueId: string; venueName: string; gaps: string[] }> = [];
+
+  for (const venue of venues) {
+    const servicePoints = venue.servicePoints ?? [];
+    const activeCount = servicePoints.filter((servicePoint) => servicePoint.isActive).length;
+    const inactiveCount = servicePoints.length - activeCount;
+    const gaps: string[] = [];
+
+    activeServicePoints += activeCount;
+    inactiveServicePoints += inactiveCount;
+
+    if (!(venue.openingHours?.length)) {
+      gaps.push("opening hours");
+    }
+    if (!activeCount) {
+      gaps.push("active QR points");
+    }
+    if (gaps.length) {
+      venueSetupGaps.push({ gaps, venueId: venue.id, venueName: venue.name });
+    }
+  }
+
+  const openRequests = requests.filter((request) => !closedStatuses.has(request.status));
+  const openUnassignedRequests = openRequests.filter((request) => !request.assignedTo && !request.assignedToId).length;
+  const urgentUnassignedRequests = openRequests.filter((request) => urgentPriorities.has(request.priority) && !request.assignedTo && !request.assignedToId).length;
+  const escalatedRequests = openRequests.filter((request) => request.status === "ESCALATED").length;
+
+  return {
+    activeServicePoints,
+    inactiveServicePoints,
+    escalatedRequests,
+    openUnassignedRequests,
+    urgentUnassignedRequests,
+    venueSetupGaps
+  };
+}
 
 export function calculateDashboardAnalytics(requests: DashboardRequest[], now = new Date()) {
   const categoryCounts = new Map<string, number>();

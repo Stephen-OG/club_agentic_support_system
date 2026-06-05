@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { calculateDashboardAnalytics, getRequestVolumeSeries } from "./dashboard-analytics";
+import { calculateAdminDashboardControls, calculateDashboardAnalytics, getRequestVolumeSeries } from "./dashboard-analytics";
 
 describe("dashboard analytics", () => {
   it("calculates the five owner dashboard analytics from support requests", () => {
@@ -283,6 +283,77 @@ describe("dashboard analytics", () => {
       label: "Busiest month",
       series: [{ label: "Jun 2026", count: 4 }],
       busiest: { label: "Jun 2026", count: 4 }
+    });
+  });
+
+  it("calculates admin control summary from venues and requests", () => {
+    const controls = calculateAdminDashboardControls(
+      [
+        {
+          id: "venue-a",
+          name: "Main Room",
+          openingHours: [{ dayOfWeek: 1, opensAt: "09:00", closesAt: "17:00", isClosed: false }],
+          servicePoints: [
+            { id: "qr-1", isActive: true },
+            { id: "qr-2", isActive: false }
+          ]
+        },
+        {
+          id: "venue-b",
+          name: "Roof Bar",
+          openingHours: [],
+          servicePoints: []
+        }
+      ],
+      [
+        {
+          id: "request-1",
+          title: "VIP table waiting",
+          category: "service",
+          priority: "HIGH",
+          status: "NEW",
+          createdAt: "2026-06-02T12:00:00.000Z",
+          acknowledgedAt: null,
+          completedAt: null,
+          venueId: "venue-a",
+          assignedTo: null
+        },
+        {
+          id: "request-2",
+          title: "Security review",
+          category: "security",
+          priority: "URGENT",
+          status: "ESCALATED",
+          createdAt: "2026-06-02T12:10:00.000Z",
+          acknowledgedAt: null,
+          completedAt: null,
+          venueId: "venue-a",
+          assignedTo: null
+        },
+        {
+          id: "request-3",
+          title: "Completed water",
+          category: "drink",
+          priority: "NORMAL",
+          status: "COMPLETED",
+          createdAt: "2026-06-02T12:20:00.000Z",
+          acknowledgedAt: null,
+          completedAt: "2026-06-02T12:30:00.000Z",
+          venueId: "venue-b",
+          assignedTo: null
+        }
+      ]
+    );
+
+    assert.deepEqual(controls, {
+      activeServicePoints: 1,
+      inactiveServicePoints: 1,
+      escalatedRequests: 1,
+      openUnassignedRequests: 2,
+      urgentUnassignedRequests: 2,
+      venueSetupGaps: [
+        { venueId: "venue-b", venueName: "Roof Bar", gaps: ["opening hours", "active QR points"] }
+      ]
     });
   });
 });

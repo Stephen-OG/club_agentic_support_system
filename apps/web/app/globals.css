@@ -1818,6 +1818,86 @@ body {
   border-color: rgba(84, 216, 167, 0.32);
 }
 
+.admin-controls-panel {
+  background:
+    linear-gradient(135deg, rgba(89, 221, 255, 0.1), transparent 42%),
+    linear-gradient(90deg, rgba(255, 204, 102, 0.06), transparent 62%),
+    var(--surface);
+}
+
+.admin-control-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: var(--space-4);
+}
+
+.admin-control-card {
+  background: #0a100e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  display: grid;
+  gap: 8px;
+  min-height: 156px;
+  padding: 14px;
+  position: relative;
+  text-decoration: none;
+}
+
+.admin-control-card > svg:first-child {
+  color: var(--accent);
+}
+
+.admin-control-card > svg:last-child {
+  bottom: 14px;
+  color: var(--muted);
+  position: absolute;
+  right: 14px;
+}
+
+.admin-control-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.admin-control-card strong {
+  font-size: 21px;
+  line-height: 1.12;
+}
+
+.admin-control-card small {
+  color: var(--muted);
+  line-height: 1.45;
+  padding-right: 18px;
+}
+
+.admin-control-card.tone-high {
+  border-color: rgba(255, 107, 74, 0.48);
+}
+
+.admin-control-card.tone-high > svg:first-child {
+  color: var(--danger);
+}
+
+.admin-control-card.tone-medium {
+  border-color: rgba(255, 204, 102, 0.42);
+}
+
+.admin-control-card.tone-medium > svg:first-child {
+  color: var(--warning);
+}
+
+.admin-control-card.tone-low {
+  border-color: rgba(84, 216, 167, 0.32);
+}
+
+.admin-control-card.tone-low > svg:first-child {
+  color: var(--success);
+}
+
 .launch-checklist {
   background:
     linear-gradient(135deg, rgba(164, 255, 122, 0.09), transparent 40%),
@@ -2885,6 +2965,7 @@ body {
   .auth-screen,
   .command-shell,
   .dashboard-analytics,
+  .admin-control-grid,
   .action-grid,
   .metric-strip,
   .ops-layout,
