@@ -2,8 +2,17 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://madupe.com"),
   title: "Madupe Command Center",
-  description: "Production command center for venue guest support"
+  description: "Production command center for venue guest support",
+  applicationName: "Madupe",
+  icons: {
+    icon: "/icon.svg"
+  },
+  openGraph: {
+    siteName: "Madupe",
+    type: "website"
+  }
 };
 
 export const viewport: Viewport = {
