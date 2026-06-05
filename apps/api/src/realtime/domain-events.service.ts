@@ -3,7 +3,7 @@ import { Injectable, OnModuleInit, Optional } from "@nestjs/common";
 import { filter, Observable, Subject } from "rxjs";
 import { RedisDomainEventBusService } from "./redis-domain-event-bus.service";
 
-export type DomainEventType = "request.created" | "request.updated" | "message.created";
+export type DomainEventType = "request.created" | "request.updated" | "request.escalated" | "message.created";
 
 export type DomainEvent = {
   eventId?: string;
