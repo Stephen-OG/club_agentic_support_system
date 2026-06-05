@@ -46,8 +46,8 @@ Keep this key in the hosting provider secret manager. Do not commit it to Git or
 
 ### Security Misconfiguration
 
-- Production startup fails if message encryption is not configured.
-- Production startup fails if `REDIS_URL` is missing, because distributed cache, rate limits, and jobs need shared state.
+- Production startup fails if launch-critical API configuration is missing, including `DATABASE_URL`, Supabase admin credentials, `OPENAI_API_KEY`, `MESSAGE_ENCRYPTION_KEY`, `REDIS_URL`, and `CORS_ORIGINS`.
+- Production startup fails if `NEXT_PUBLIC_SUPABASE_URL` or `CORS_ORIGINS` are not public HTTPS URLs.
 - CORS is allow-list based via `CORS_ORIGINS`.
 - API security headers include no-sniff, frame denial, strict referrer policy, and restricted permissions policy.
 - Swagger docs are disabled by default in production.
@@ -61,6 +61,7 @@ Keep this key in the hosting provider secret manager. Do not commit it to Git or
 ### Security Logging And Monitoring Failures
 
 - Request lifecycle events are written as `requestEvent` records.
+- Request, message, and escalation domain events are mirrored into `AuditLog` records without raw guest message bodies.
 - HTTP access logs redact query strings so guest session IDs and other URL secrets are not persisted.
 - Next step: add security audit events for failed guest session checks, forbidden venue access, login failures, and rate-limit denials.
 
@@ -84,7 +85,7 @@ Keep this key in the hosting provider secret manager. Do not commit it to Git or
 
 ## Recommended Next Controls
 
-- Add request and auth audit logs for failed authorization checks.
+- Add auth and denial audit logs for failed authorization checks.
 - Add a key rotation plan with `MESSAGE_ENCRYPTION_KEY_CURRENT` and `MESSAGE_ENCRYPTION_KEY_PREVIOUS`.
 - Add a one-time encrypted-message backfill job for existing plaintext messages.
 - Add a data retention policy, for example auto-delete or anonymize guest conversations after 90 days.
