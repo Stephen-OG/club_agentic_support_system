@@ -76,7 +76,10 @@ function buildLocalApiUrl({ host, port }) {
 }
 
 function resolveExplicitApiUrl({ existingEnv, appEnv, rootEnv }) {
-  const explicitApiUrl = existingEnv.NEXT_PUBLIC_API_URL || appEnv.NEXT_PUBLIC_API_URL || rootEnv.NEXT_PUBLIC_API_URL;
+  const localDevelopment = !isProductionLike(existingEnv);
+  const explicitApiUrl = localDevelopment
+    ? appEnv.NEXT_PUBLIC_API_URL || rootEnv.NEXT_PUBLIC_API_URL || existingEnv.NEXT_PUBLIC_API_URL
+    : existingEnv.NEXT_PUBLIC_API_URL || appEnv.NEXT_PUBLIC_API_URL || rootEnv.NEXT_PUBLIC_API_URL;
 
   if (!explicitApiUrl) {
     return undefined;
@@ -95,6 +98,10 @@ function resolveExplicitApiUrl({ existingEnv, appEnv, rootEnv }) {
   }
 
   return explicitApiUrl;
+}
+
+function isProductionLike(env) {
+  return env.NODE_ENV === "production" || env.VERCEL === "1";
 }
 
 function sameOrigin(left, right) {

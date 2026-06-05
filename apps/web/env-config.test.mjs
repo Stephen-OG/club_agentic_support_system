@@ -36,6 +36,23 @@ describe("loadWorkspaceEnv", () => {
     assert.equal(result.publicEnv.NEXT_PUBLIC_API_URL, "https://api.example");
   });
 
+  it("prefers local env API URLs over inherited shell values outside production", () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "madupe-env-"));
+    const appDir = path.join(workspace, "apps", "web");
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(path.join(workspace, ".env"), "NEXT_PUBLIC_API_URL=http://127.0.0.1:4000\n");
+
+    const result = loadWorkspaceEnv({
+      appDir,
+      repoRoot: workspace,
+      existingEnv: {
+        NEXT_PUBLIC_API_URL: "https://club-agentic-support-system.onrender.com"
+      }
+    });
+
+    assert.equal(result.publicEnv.NEXT_PUBLIC_API_URL, "http://127.0.0.1:4000");
+  });
+
   it("exposes the configured app URL to browser code", () => {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "madupe-env-"));
     const appDir = path.join(workspace, "apps", "web");

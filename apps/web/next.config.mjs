@@ -19,9 +19,7 @@ for (const key of [
 }
 
 for (const [key, value] of Object.entries(publicEnv)) {
-  if (!process.env[key]) {
-    process.env[key] = value;
-  }
+  process.env[key] = value;
 }
 
 /** @type {import('next').NextConfig} */
