@@ -100,48 +100,42 @@ describe("security config", () => {
     assert.equal(getApiHost({ NODE_ENV: "production", HOST: "127.0.0.1" }), "127.0.0.1");
   });
 
-  it("requires message encryption configuration in production", () => {
+  it("requires launch-critical production configuration", () => {
     assert.doesNotThrow(() => assertProductionSecurityConfig({ NODE_ENV: "development" }));
-    assert.throws(() => assertProductionSecurityConfig({ NODE_ENV: "production" }), /MESSAGE_ENCRYPTION_KEY/);
+    assert.throws(() => assertProductionSecurityConfig({ NODE_ENV: "production" }), /DATABASE_URL/);
     assert.throws(
-      () => assertProductionSecurityConfig({ NODE_ENV: "production", MESSAGE_ENCRYPTION_KEY: "not-a-32-byte-key" }),
+      () =>
+        assertProductionSecurityConfig({
+          ...validProductionEnv(),
+          NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321"
+        }),
+      /SUPABASE_URL.*HTTPS/
+    );
+    assert.throws(
+      () =>
+        assertProductionSecurityConfig({
+          ...validProductionEnv(),
+          MESSAGE_ENCRYPTION_KEY: "not-a-32-byte-key"
+        }),
       /32 bytes/
     );
     assert.throws(
       () =>
         assertProductionSecurityConfig({
-          NODE_ENV: "production",
-          MESSAGE_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+          ...validProductionEnv(),
+          REDIS_URL: ""
         }),
       /REDIS_URL/
     );
     assert.throws(
       () =>
         assertProductionSecurityConfig({
-          NODE_ENV: "production",
-          MESSAGE_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000",
-          REDIS_URL: "redis://localhost:6379"
-        }),
-      /CORS_ORIGINS/
-    );
-    assert.throws(
-      () =>
-        assertProductionSecurityConfig({
-          NODE_ENV: "production",
-          MESSAGE_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000",
-          REDIS_URL: "redis://localhost:6379",
+          ...validProductionEnv(),
           CORS_ORIGINS: "http://localhost:3001"
         }),
       /public HTTPS/
     );
-    assert.doesNotThrow(() =>
-      assertProductionSecurityConfig({
-        NODE_ENV: "production",
-        MESSAGE_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000",
-        REDIS_URL: "redis://localhost:6379",
-        CORS_ORIGINS: "https://app.example.com"
-      })
-    );
+    assert.doesNotThrow(() => assertProductionSecurityConfig(validProductionEnv()));
   });
 });
 
@@ -155,4 +149,17 @@ function createHttpContext(path: string) {
       };
     }
   } as never;
+}
+
+function validProductionEnv() {
+  return {
+    NODE_ENV: "production",
+    DATABASE_URL: "postgresql://postgres:postgres@db.example.com:5432/postgres",
+    NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+    OPENAI_API_KEY: "openai-key",
+    MESSAGE_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000",
+    REDIS_URL: "rediss://default:secret@redis.example.com:6379",
+    CORS_ORIGINS: "https://app.example.com"
+  };
 }

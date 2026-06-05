@@ -97,18 +97,18 @@ export function assertProductionSecurityConfig(env: EnvMap = process.env) {
     return;
   }
 
-  if (!env.MESSAGE_ENCRYPTION_KEY?.trim()) {
-    throw new Error("MESSAGE_ENCRYPTION_KEY is required in production");
-  }
+  assertRequiredProductionEnv(env, "DATABASE_URL");
+  assertRequiredProductionEnv(env, "NEXT_PUBLIC_SUPABASE_URL");
+  assertRequiredProductionEnv(env, "SUPABASE_SERVICE_ROLE_KEY");
+  assertRequiredProductionEnv(env, "OPENAI_API_KEY");
+  assertRequiredProductionEnv(env, "MESSAGE_ENCRYPTION_KEY");
+  assertValidMessageEncryptionKey(env.MESSAGE_ENCRYPTION_KEY || "");
+  assertRequiredProductionEnv(env, "REDIS_URL", "REDIS_URL is required in production for shared rate limits, cache, and background jobs");
+  assertRequiredProductionEnv(env, "CORS_ORIGINS");
 
-  assertValidMessageEncryptionKey(env.MESSAGE_ENCRYPTION_KEY);
-
-  if (!env.REDIS_URL?.trim()) {
-    throw new Error("REDIS_URL is required in production for shared rate limits, cache, and background jobs");
-  }
-
-  if (!env.CORS_ORIGINS?.trim()) {
-    throw new Error("CORS_ORIGINS is required in production");
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
+  if (!supabaseUrl.startsWith("https://")) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL must be a public HTTPS URL in production");
   }
 
   const origins = parseCorsOrigins(env.CORS_ORIGINS);
@@ -133,6 +133,12 @@ export function applySecurityHeaders(app: INestApplication, env: EnvMap = proces
     }
     next();
   });
+}
+
+function assertRequiredProductionEnv(env: EnvMap, name: string, message = `${name} is required in production`) {
+  if (!env[name]?.trim()) {
+    throw new Error(message);
+  }
 }
 
 function positiveInteger(value: string | undefined, fallback: number) {
