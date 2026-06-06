@@ -7,6 +7,11 @@ import { validatePasswordChange } from "@/lib/account-security";
 import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, hasCommandDashboardAccess } from "@/lib/auth/role-policy";
 import type { CommandUser, CommandVenue, CommandVenueOpeningHour } from "@/lib/auth/types";
+import {
+  getRequestNotificationPermission,
+  isRequestNotificationSupported,
+  requestRequestNotificationPermission
+} from "@/lib/request-notification-alerts";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import {
   copyMondayHoursToWeekdays,
@@ -84,8 +89,9 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
   }, [canManageVenueSettings, setSelectedVenueId, supabase]);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      setNotificationPermission(window.Notification.permission);
+    const permission = getRequestNotificationPermission();
+    if (permission !== "unsupported") {
+      setNotificationPermission(permission);
     }
   }, []);
 
@@ -136,13 +142,15 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
   }
 
   async function enableNotifications() {
-    if (typeof window === "undefined" || !("Notification" in window)) {
+    if (!isRequestNotificationSupported()) {
       setSettingsError("Browser notifications are not supported here.");
       return;
     }
 
-    const permission = await window.Notification.requestPermission();
-    setNotificationPermission(permission);
+    const permission = await requestRequestNotificationPermission();
+    if (permission !== "unsupported") {
+      setNotificationPermission(permission);
+    }
   }
 
   async function changePassword(event: FormEvent<HTMLFormElement>) {

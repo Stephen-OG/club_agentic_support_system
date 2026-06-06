@@ -57,16 +57,20 @@ export async function playDefaultRequestNotificationSound(targetWindow: BrowserA
     const gain = context.createGain();
     const startAt = context.currentTime;
 
-    oscillator.type = "sine";
+    oscillator.type = "square";
     oscillator.frequency.setValueAtTime(880, startAt);
     gain.gain.setValueAtTime(0.001, startAt);
-    gain.gain.exponentialRampToValueAtTime(0.18, startAt + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.22);
+    gain.gain.exponentialRampToValueAtTime(1, startAt + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.28);
+    oscillator.frequency.setValueAtTime(1320, startAt + 0.3);
+    gain.gain.setValueAtTime(0.001, startAt + 0.3);
+    gain.gain.exponentialRampToValueAtTime(1, startAt + 0.315);
+    gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.58);
 
     oscillator.connect(gain);
     gain.connect(context.destination);
     oscillator.start(startAt);
-    oscillator.stop(startAt + 0.24);
+    oscillator.stop(startAt + 0.6);
 
     return true;
   } catch {

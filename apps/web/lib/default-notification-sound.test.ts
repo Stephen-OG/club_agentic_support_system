@@ -115,12 +115,16 @@ describe("default notification sound", () => {
     assert.deepEqual(calls, [
       "frequency:880:10",
       "gain:0.001:10",
-      "ramp:0.18:10.02",
-      "ramp:0.001:10.22",
+      "ramp:1:10.015",
+      "ramp:0.001:10.28",
+      "frequency:1320:10.3",
+      "gain:0.001:10.3",
+      "ramp:1:10.315",
+      "ramp:0.001:10.58",
       "oscillator.connect",
       "gain.connect",
       "start:10",
-      "stop:10.24"
+      "stop:10.6"
     ]);
     resetDefaultRequestNotificationSoundForTests();
   });

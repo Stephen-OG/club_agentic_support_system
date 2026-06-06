@@ -5,10 +5,10 @@ import { CheckCircle2, Clock3, LogOut, Play, RefreshCw, ShieldCheck, UserCheck }
 import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
 import type { CommandRequestStatus, CommandSupportRequest, CommandUser } from "@/lib/auth/types";
-import { initializeDefaultRequestNotificationSound, playDefaultRequestNotificationSound } from "@/lib/default-notification-sound";
 import { getOperationsNotifications } from "@/lib/operations-workflow";
 import { getPriorityClassName, getPriorityLabel } from "@/lib/priority-display";
 import { connectStaffVenueEvents } from "@/lib/realtime-events";
+import { deliverRequestNotificationAlerts, initializeRequestNotificationAlerts } from "@/lib/request-notification-alerts";
 import {
   getStaffNextStatus,
   getStaffQueueBucket,
@@ -45,7 +45,7 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
   const hasLoadedRequestsRef = useRef(false);
 
   useEffect(() => {
-    initializeDefaultRequestNotificationSound();
+    initializeRequestNotificationAlerts();
   }, []);
 
   const notifyForNewRequests = useCallback((nextRequests: CommandSupportRequest[]) => {
@@ -58,9 +58,7 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
     const notifications = getOperationsNotifications(knownRequestIdsRef.current, nextRequests);
     knownRequestIdsRef.current = new Set(nextRequests.map((request) => request.id));
 
-    if (notifications.length > 0) {
-      void playDefaultRequestNotificationSound();
-    }
+    void deliverRequestNotificationAlerts(notifications);
   }, []);
 
   async function refresh() {

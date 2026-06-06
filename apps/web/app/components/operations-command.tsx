@@ -5,7 +5,6 @@ import { Bell, Clock3, MapPin, MessageSquareText, RadioTower, RefreshCw, ShieldA
 import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
 import type { CommandRequestStatus, CommandSupportRequest, CommandUser, CommandVenue } from "@/lib/auth/types";
-import { initializeDefaultRequestNotificationSound, playDefaultRequestNotificationSound } from "@/lib/default-notification-sound";
 import {
   type OperationsDateRange,
   type OperationsFilters,
@@ -35,6 +34,13 @@ import {
 import { getPriorityClassName, getPriorityLabel } from "@/lib/priority-display";
 import { calculateRatingAnalytics } from "@/lib/rating-analytics";
 import { connectStaffVenueEvents } from "@/lib/realtime-events";
+import {
+  deliverRequestNotificationAlerts,
+  getRequestNotificationPermission,
+  initializeRequestNotificationAlerts,
+  isRequestNotificationSupported,
+  requestRequestNotificationPermission
+} from "@/lib/request-notification-alerts";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 function sharedStatus(status: CommandRequestStatus) {
@@ -123,10 +129,11 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      setNotificationPermission(window.Notification.permission);
+    const permission = getRequestNotificationPermission();
+    if (permission !== "unsupported") {
+      setNotificationPermission(permission);
     }
-    initializeDefaultRequestNotificationSound();
+    initializeRequestNotificationAlerts();
   }, []);
 
   const loadVenues = useCallback(async () => {
@@ -157,20 +164,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
     const notifications = getOperationsNotifications(knownRequestIdsRef.current, nextRequests);
     knownRequestIdsRef.current = new Set(nextRequests.map((request) => request.id));
 
-    if (notifications.length > 0) {
-      void playDefaultRequestNotificationSound();
-    }
-
-    if (typeof window === "undefined" || !("Notification" in window) || window.Notification.permission !== "granted") {
-      return;
-    }
-
-    for (const notification of notifications) {
-      new window.Notification(notification.title, {
-        body: notification.body,
-        tag: notification.id
-      });
-    }
+    void deliverRequestNotificationAlerts(notifications);
   }, []);
 
   const loadRequests = useCallback(async (venueId: string) => {
@@ -283,16 +277,18 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
   }, [loadRequests, selectedVenueId, supabase]);
 
   async function enableNotifications() {
-    if (typeof window === "undefined" || !("Notification" in window)) {
+    if (!isRequestNotificationSupported()) {
       setError("Browser notifications are not supported here.");
       return;
     }
 
-    const permission = await window.Notification.requestPermission();
-    setNotificationPermission(permission);
-    initializeDefaultRequestNotificationSound();
+    const permission = await requestRequestNotificationPermission();
+    if (permission !== "unsupported") {
+      setNotificationPermission(permission);
+    }
+    initializeRequestNotificationAlerts();
     if (permission === "granted") {
-      void playDefaultRequestNotificationSound();
+      void deliverRequestNotificationAlerts([{ id: "alerts-enabled", title: "Operations alerts enabled", body: "New urgent guest requests will alert this device." }]);
     }
   }
 
