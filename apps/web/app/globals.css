@@ -2993,14 +2993,21 @@ body {
   grid-template-columns: minmax(0, 1fr) auto;
   min-height: 118px;
   padding: 16px;
-  position: relative;
 }
 
 .operations-request-main {
   align-items: stretch;
   display: grid;
   gap: 12px;
-  padding-right: 110px;
+}
+
+.operations-request-actions {
+  align-items: end;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-self: end;
+  min-width: 144px;
 }
 
 .request-message {
@@ -3043,9 +3050,7 @@ body {
 .request-priority-corner {
   justify-self: end;
   min-height: 24px;
-  position: absolute;
-  right: 14px;
-  top: 14px;
+  position: static;
 }
 
 .venue-lock {
@@ -3633,11 +3638,12 @@ body {
 
   .operations-request-card {
     grid-template-columns: 1fr;
-    padding-top: 52px;
   }
 
-  .operations-request-main {
-    padding-right: 0;
+  .operations-request-actions {
+    align-items: start;
+    justify-self: stretch;
+    min-width: 0;
   }
 
   .modal-backdrop {

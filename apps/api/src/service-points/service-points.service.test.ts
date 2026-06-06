@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { NotFoundException } from "@nestjs/common";
+import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import { RequestPriority, RequestStatus, SenderType } from "@prisma/client";
 import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
@@ -13,7 +13,8 @@ function createService(
   priorityClassifier: ConstructorParameters<typeof ServicePointsService>[3],
   prisma: ConstructorParameters<typeof ServicePointsService>[4],
   venueAccess: ConstructorParameters<typeof ServicePointsService>[5],
-  events?: ConstructorParameters<typeof ServicePointsService>[6]
+  events?: ConstructorParameters<typeof ServicePointsService>[6],
+  queueOverride?: ConstructorParameters<typeof ServicePointsService>[2]
 ) {
   const triageService =
     aiTriage && typeof (aiTriage as { triage?: unknown }).triage === "function"
@@ -27,7 +28,7 @@ function createService(
     set: async () => undefined
   } as never;
 
-  const queue = { add: async () => ({ id: "mock-job-id" }) } as never;
+  const queue = queueOverride ?? ({ add: async () => ({ id: "mock-job-id" }) } as never);
 
   return new ServicePointsService(triageService, cache, queue, priorityClassifier, prisma, venueAccess, events);
 }
@@ -605,7 +606,7 @@ describe("ServicePointsService public QR workflow", () => {
     const result = (await service.createGuestMessage("qr_resume_123", {
       conversationId: "conversation_resume_1",
       message: "Could we get more water?",
-      sessionId: "ignored_session_123"
+      sessionId: "session_existing_123"
     })) as unknown as PublicGuestMessageResult;
 
     assert.equal(result.conversationId, conversation.id);
@@ -1855,6 +1856,279 @@ describe("ServicePointsService public QR workflow", () => {
     assert.equal(requestCreated, false);
     assert.equal((result as any).request, null);
     assert.deepEqual((result as any).messages, storedMessages);
+  });
+
+  it("routes restroom issue wording to operations instead of venue information", async () => {
+    const servicePoint = {
+      id: "sp_restroom_issue",
+      venueId: "venue_restroom_issue",
+      label: "Table 2",
+      qrToken: "qr_restroom_issue",
+      isActive: true,
+      venue: { id: "venue_restroom_issue", name: "Cipher", openingHours: [] }
+    };
+    const conversation = {
+      id: "conversation_restroom_issue",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      guestSessionId: "session_restroom_issue"
+    };
+    const supportRequest = {
+      id: "request_restroom_issue",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      conversationId: conversation.id,
+      title: "Guest support request",
+      category: "general",
+      summary: "There is a toilet or restroom issue.",
+      priority: RequestPriority.NORMAL,
+      deterministicPriority: RequestPriority.NORMAL,
+      status: RequestStatus.NEW
+    };
+    const storedMessages = [
+      { id: "message_guest", conversationId: conversation.id, requestId: supportRequest.id, sender: SenderType.GUEST, body: "There is a toilet or restroom issue." },
+      {
+        id: "message_assistant",
+        conversationId: conversation.id,
+        requestId: supportRequest.id,
+        sender: SenderType.ASSISTANT,
+        body: "Of course, I have let the team know for Table 2."
+      }
+    ];
+    let requestCreated = false;
+    const tx = {
+      conversation: { create: async () => conversation },
+      supportRequest: {
+        create: async () => {
+          requestCreated = true;
+          return supportRequest;
+        }
+      },
+      message: {
+        create: async (args: unknown) => args,
+        findMany: async () => storedMessages
+      },
+      requestEvent: { create: async () => ({}) }
+    };
+    const service = createService(
+      {
+        createFallback: () => {
+          throw new Error("synchronous request acknowledgement should not need fallback triage");
+        }
+      } as never,
+      { classifyOrDefault: () => "normal" } as never,
+      {
+        servicePoint: { findFirst: async () => servicePoint },
+        conversation: { findFirst: async () => null },
+        $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
+      } as never,
+      {} as never
+    );
+
+    const result = await service.createGuestMessage("qr_restroom_issue", {
+      message: "There is a toilet or restroom issue.",
+      sessionId: "session_restroom_issue"
+    });
+
+    assert.equal(requestCreated, true);
+    assert.deepEqual((result as any).request, supportRequest);
+  });
+
+  it("does not append a duplicate fallback reply when service-point triage enqueue fails", async () => {
+    const servicePoint = {
+      id: "sp_queue_down",
+      venueId: "venue_queue_down",
+      label: "Table 2",
+      qrToken: "qr_queue_down",
+      isActive: true,
+      venue: { id: "venue_queue_down", name: "Cipher", openingHours: [] }
+    };
+    const conversation = {
+      id: "conversation_queue_down",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      guestSessionId: "session_queue_down"
+    };
+    const supportRequest = {
+      id: "request_queue_down",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      conversationId: conversation.id,
+      title: "Guest support request",
+      category: "general",
+      summary: "There is a toilet or restroom issue.",
+      priority: RequestPriority.NORMAL,
+      deterministicPriority: RequestPriority.NORMAL,
+      status: RequestStatus.NEW
+    };
+    const storedMessages = [
+      {
+        id: "message_guest_queue_down",
+        conversationId: conversation.id,
+        requestId: supportRequest.id,
+        sender: SenderType.GUEST,
+        body: "There is a toilet or restroom issue."
+      },
+      {
+        id: "message_assistant_queue_down",
+        conversationId: conversation.id,
+        requestId: supportRequest.id,
+        sender: SenderType.ASSISTANT,
+        body: "Of course, I have let the team know for Table 2."
+      }
+    ];
+    const tx = {
+      conversation: { create: async () => conversation },
+      supportRequest: { create: async () => supportRequest },
+      message: {
+        create: async (args: unknown) => args,
+        findMany: async () => storedMessages
+      },
+      requestEvent: { create: async () => ({}) }
+    };
+    let fallbackCalled = false;
+    const service = createService(
+      {
+        createFallback: () => {
+          fallbackCalled = true;
+          throw new Error("fallback triage is unavailable");
+        }
+      } as never,
+      { classifyOrDefault: () => "normal" } as never,
+      {
+        servicePoint: { findFirst: async () => servicePoint },
+        conversation: { findFirst: async () => null },
+        $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
+        message: {
+          create: async () => {
+            throw new Error("silent metadata fallback must not write a visible assistant message");
+          }
+        }
+      } as never,
+      {} as never,
+      undefined,
+      {
+        add: async () => {
+          throw new Error("Background jobs are unavailable");
+        }
+      } as never
+    );
+
+    const result = await service.createGuestMessage("qr_queue_down", {
+      message: "There is a toilet or restroom issue.",
+      sessionId: "session_queue_down"
+    });
+
+    assert.deepEqual((result as any).messages, storedMessages);
+    assert.equal((result as any).messages.filter((message: { sender: SenderType }) => message.sender === SenderType.ASSISTANT).length, 1);
+    assert.equal(fallbackCalled, false);
+  });
+
+  it("keeps ambiguous chatter open-request-aware instead of sending a fresh greeting", async () => {
+    const servicePoint = {
+      id: "sp_open_request_chat",
+      venueId: "venue_open_request_chat",
+      label: "Table 2",
+      qrToken: "qr_open_request_chat",
+      isActive: true,
+      venue: { id: "venue_open_request_chat", name: "Cipher", openingHours: [] }
+    };
+    const supportRequest = {
+      id: "request_open_request_chat",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      conversationId: "conversation_open_request_chat",
+      title: "Guest support request",
+      category: "general",
+      summary: "I asked for a tissue",
+      priority: RequestPriority.NORMAL,
+      status: RequestStatus.NEW
+    };
+    const conversation = {
+      id: "conversation_open_request_chat",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      guestSessionId: "session_open_request_chat",
+      requests: [supportRequest]
+    };
+    const createdMessages: Array<{ data: { sender: SenderType; body: string; metadata: Record<string, unknown> } }> = [];
+    const tx = {
+      message: {
+        create: async (args: { data: { sender: SenderType; body: string; metadata: Record<string, unknown> } }) => {
+          createdMessages.push(args);
+          return args;
+        },
+        findMany: async () => createdMessages.map((message, index) => ({ id: `message_${index}`, conversationId: conversation.id, ...message.data }))
+      }
+    };
+    const service = createService(
+      {} as never,
+      {
+        classifyOrDefault: () => {
+          throw new Error("conversation chatter should not create a new request");
+        }
+      } as never,
+      {
+        servicePoint: { findFirst: async () => servicePoint },
+        conversation: { findFirst: async () => conversation },
+        supportRequest: {
+          create: async () => {
+            throw new Error("supportRequest.create should not run for conversation chatter");
+          }
+        },
+        $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
+      } as never,
+      {} as never
+    );
+
+    const result = await service.createGuestMessage("qr_open_request_chat", {
+      conversationId: conversation.id,
+      message: "And so",
+      sessionId: "session_open_request_chat"
+    });
+
+    assert.equal((result as any).request, supportRequest);
+    assert.equal(createdMessages.at(-1)?.data.body, "I am keeping this with your open request. If you need anything else, send it here and the team will see it.");
+  });
+
+  it("rejects public QR conversation writes from a different guest session", async () => {
+    const servicePoint = {
+      id: "sp_session_guard",
+      venueId: "venue_session_guard",
+      label: "Table 5",
+      qrToken: "qr_session_guard",
+      isActive: true,
+      venue: { id: "venue_session_guard", name: "Cipher", openingHours: [] }
+    };
+    const service = createService(
+      {} as never,
+      {} as never,
+      {
+        servicePoint: { findFirst: async () => servicePoint },
+        conversation: {
+          findFirst: async () => ({
+            id: "conversation_session_guard",
+            venueId: servicePoint.venueId,
+            servicePointId: servicePoint.id,
+            guestSessionId: "session_original",
+            requests: []
+          })
+        },
+        $transaction: async () => {
+          throw new Error("transaction should not run for a mismatched session");
+        }
+      } as never,
+      {} as never
+    );
+
+    await assert.rejects(
+      service.createGuestMessage("qr_session_guard", {
+        conversationId: "conversation_session_guard",
+        message: "I should not be able to write here",
+        sessionId: "session_other_browser"
+      }),
+      ForbiddenException
+    );
   });
 
   it("routes service-point QR menu questions to operations instead of answering as venue info", async () => {

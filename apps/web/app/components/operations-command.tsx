@@ -475,7 +475,6 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
               const statusTone = getOperationsStatusTone(request.status);
               return (
                 <article className={`request-row operations-request-card status-tone-${statusTone}`} key={request.id}>
-                  <span className={`pill priority-${getPriorityClassName(request.priority)} request-priority-corner`}>{getPriorityLabel(request.priority)}</span>
                   <div className="request-main operations-request-main">
                     <div className="request-message">
                       <MessageSquareText size={15} />
@@ -488,16 +487,19 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
                       {activeBucket === "completed" ? <span>{ratingLabel(request)}</span> : null}
                     </div>
                   </div>
-                  {action ? (
-                    <button
-                      className="command-button"
-                      disabled={updatingId === request.id}
-                      onClick={() => void applyRequestAction(request)}
-                      type="button"
-                    >
-                      {action.label}
-                    </button>
-                  ) : null}
+                  <div className="operations-request-actions">
+                    <span className={`pill priority-${getPriorityClassName(request.priority)} request-priority-corner`}>{getPriorityLabel(request.priority)}</span>
+                    {action ? (
+                      <button
+                        className="command-button"
+                        disabled={updatingId === request.id}
+                        onClick={() => void applyRequestAction(request)}
+                        type="button"
+                      >
+                        {action.label}
+                      </button>
+                    ) : null}
+                  </div>
                 </article>
               );
             })}

@@ -197,4 +197,19 @@ describe("AI triage", () => {
     assert.equal(triage.title, "Menu request");
     assert.match(triage.assistantReply, /team/i);
   });
+
+  it("routes restroom issue wording to staff instead of treating it as venue information", () => {
+    const service = new AiTriageService(cacheStub() as never, replyGuard() as never);
+
+    const triage = service.createFallback({
+      deterministicPriority: "normal",
+      message: "There is a toilet or restroom issue.",
+      servicePointLabel: "Table 2"
+    });
+
+    assert.equal(triage.needsStaff, true);
+    assert.equal(triage.priority, "normal");
+    assert.equal(triage.title, "Guest support request");
+    assert.match(triage.assistantReply, /team/i);
+  });
 });

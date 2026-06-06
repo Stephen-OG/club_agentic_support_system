@@ -246,7 +246,7 @@ export class AiTriageService {
         normalized
       );
     const asksForAction =
-      /\b(need|bring|send|help|spill|broken|missing|wrong|waiting|allerg|medical|injur|fight|security|harass|fire|smoke|emergency)\b/i.test(
+      /\b(need|bring|send|help|issue|problem|spill|broken|blocked|clogged|dirty|mess|clean|paper|soap|missing|wrong|waiting|allerg|medical|injur|fight|security|harass|fire|smoke|emergency)\b/i.test(
         normalized
       );
 

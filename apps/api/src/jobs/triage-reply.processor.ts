@@ -129,6 +129,10 @@ export class TriageReplyProcessor extends WorkerHost {
         `Failed to generate triage reply for conversation ${conversationId}: ${error instanceof Error ? error.message : "Unknown error"}`
       );
 
+      if (skipAssistantReply) {
+        return;
+      }
+
       // Write a fallback message so the guest doesn't wait indefinitely
       try {
         const message = await this.prisma.message.create({

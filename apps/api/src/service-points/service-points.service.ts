@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { InjectQueue } from "@nestjs/bullmq";
 import type { Queue } from "bullmq";
 import { RequestPriority as PrismaRequestPriority, RequestStatus, SenderType } from "@prisma/client";
@@ -497,7 +497,7 @@ export class ServicePointsService {
       /\b(wifi|wi-fi|password|opening hours|hours|close|closing|open|dress code|age limit|parking|where is|where are|toilet|restroom|bathroom)\b/i.test(
         normalized
       ) &&
-      !/\b(need|bring|send|help|spill|broken|missing|wrong|waiting|allerg|medical|injur|fight|security|harass|fire|smoke|emergency)\b/i.test(
+      !/\b(need|bring|send|help|issue|problem|spill|broken|blocked|clogged|dirty|mess|clean|paper|soap|missing|wrong|waiting|allerg|medical|injur|fight|security|harass|fire|smoke|emergency)\b/i.test(
         normalized
       );
 
@@ -544,6 +544,19 @@ export class ServicePointsService {
 
   private courtesyFollowupReply() {
     return "You're welcome. The team has your request and will keep you updated here.";
+  }
+
+  private openRequestConversationReply() {
+    return "I am keeping this with your open request. If you need anything else, send it here and the team will see it.";
+  }
+
+  private assertGuestSessionCanAccessConversation(
+    conversation: { guestSessionId?: string | null } | null | undefined,
+    sessionId: string | null | undefined
+  ) {
+    if (conversation?.guestSessionId && sessionId !== conversation.guestSessionId) {
+      throw new ForbiddenException("You are not allowed to use this conversation");
+    }
   }
 
   private requestAcknowledgementReply(priority: RequestPriority, locationLabel: string | null | undefined) {
@@ -660,6 +673,27 @@ export class ServicePointsService {
     return !newerMessages.some((message) => message.sender === SenderType.ASSISTANT || message.sender === SenderType.STAFF);
   }
 
+  private async enqueueTriageReply(data: TriageReplyJobData, options?: { timeoutMs?: number }) {
+    if (!options?.timeoutMs) {
+      await this.triageReplyQueue.add("triage-reply", data);
+      return;
+    }
+
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        this.triageReplyQueue.add("triage-reply", data),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("Timed out while enqueueing triage reply")), options.timeoutMs);
+        })
+      ]);
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    }
+  }
+
   /**
    * Fallback synchronous triage when BullMQ/Redis is unavailable.
    * Runs AI triage inline and persists the assistant reply message.
@@ -670,8 +704,13 @@ export class ServicePointsService {
     deterministicPriority: RequestPriority,
     guestMessageBody: string,
     tokenOrSlug: string,
-    source: string
+    source: string,
+    options?: { skipAssistantReply?: boolean }
   ) {
+    if (options?.skipAssistantReply) {
+      return;
+    }
+
     try {
       const triage = await this.triageGuestMessage({
         deterministicPriority,
@@ -770,6 +809,8 @@ export class ServicePointsService {
     if (input.conversationId && !existingConversation) {
       throw new NotFoundException("Service point not found");
     }
+
+    this.assertGuestSessionCanAccessConversation(existingConversation, input.sessionId);
 
     const latestPreflightRequest = Array.isArray((existingConversation as any)?.requests) ? (existingConversation as any).requests[0] : null;
     const hasOpenPreflightRequest = latestPreflightRequest ? this.isActiveRequestStatus(latestPreflightRequest.status) : false;
@@ -874,7 +915,7 @@ export class ServicePointsService {
     if (hasOpenPreflightRequest && openRequestIntent === "conversation" && existingConversation && latestPreflightRequest) {
       const result = await this.prisma.$transaction(async (tx) => {
         const conversation = existingConversation;
-        const assistantReply = this.nonRequestReply(input.message, venue?.name || servicePoint.label) ?? this.greetingReply(servicePoint.label);
+        const assistantReply = this.nonRequestReply(input.message, venue?.name || servicePoint.label) ?? this.openRequestConversationReply();
 
         await tx.message.create({
           data: encryptMessageCreateData({
@@ -1011,7 +1052,7 @@ export class ServicePointsService {
     const result = transactionResult.response;
 
     try {
-      await this.triageReplyQueue.add("triage-reply", {
+      await this.enqueueTriageReply({
         conversationId: result.conversationId,
         venueId: servicePoint.venueId,
         servicePointId: servicePoint.id,
@@ -1022,9 +1063,11 @@ export class ServicePointsService {
         isFollowup: false,
         skipAssistantReply: true,
         deterministicPriority
-      } satisfies TriageReplyJobData);
+      } satisfies TriageReplyJobData, { timeoutMs: 750 });
     } catch {
-      await this.retrySynchronousTriage(result.conversationId, servicePoint, deterministicPriority, input.message, token, "public_qr");
+      await this.retrySynchronousTriage(result.conversationId, servicePoint, deterministicPriority, input.message, token, "public_qr", {
+        skipAssistantReply: true
+      });
     }
 
     return result;
@@ -1076,6 +1119,8 @@ export class ServicePointsService {
     if (input.conversationId && !existingConversation) {
       throw new NotFoundException("Conversation not found");
     }
+
+    this.assertGuestSessionCanAccessConversation(existingConversation, input.sessionId);
 
     const latestPreflightRequest = Array.isArray((existingConversation as any)?.requests)
       ? (existingConversation as any).requests[0]
@@ -1217,7 +1262,7 @@ export class ServicePointsService {
         const assistantReply =
           openVenueRequestIntent === "courtesy"
             ? this.courtesyFollowupReply()
-            : this.nonRequestReply(input.message, venue.name) ?? this.greetingReply(servicePoint.label);
+            : this.nonRequestReply(input.message, venue.name) ?? this.openRequestConversationReply();
 
         await tx.message.create({
           data: encryptMessageCreateData({
@@ -1376,7 +1421,7 @@ export class ServicePointsService {
     const result = transactionResult.response;
 
     try {
-      await this.triageReplyQueue.add("triage-reply", {
+      await this.enqueueTriageReply({
         conversationId: result.conversationId,
         venueId: venue.id,
         servicePointId: servicePoint.id,
