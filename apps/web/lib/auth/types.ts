@@ -70,6 +70,36 @@ export type CommandServicePoint = {
   updatedAt: string;
 };
 
+export type CommandMenuItem = {
+  id: string;
+  venueId: string;
+  sectionId: string;
+  name: string;
+  description: string | null;
+  priceLabel: string | null;
+  dietaryTags: string[];
+  allergens: string[];
+  available: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CommandMenuSection = {
+  id: string;
+  venueId: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+  items: CommandMenuItem[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CommandMenu = {
+  sections: CommandMenuSection[];
+};
+
 export type CommandVenue = {
   id: string;
   workspaceId: string;
