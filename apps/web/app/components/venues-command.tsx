@@ -2,10 +2,11 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { Check, Copy, Download, Edit3, MapPinned, Plus, QrCode, RefreshCw, Trash2, X } from "lucide-react";
+import { Archive, Check, Copy, Download, Edit3, MapPinned, Plus, QrCode, RefreshCw, Trash2, Upload, Utensils, X } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
-import type { CommandServicePoint, CommandVenue, CommandVenueLocation } from "@/lib/auth/types";
+import type { CommandMenu, CommandMenuItem, CommandMenuSection, CommandServicePoint, CommandVenue, CommandVenueLocation } from "@/lib/auth/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createMenuItemPayload, createMenuSectionPayload, type MenuItemDraft, type MenuSectionDraft } from "@/lib/menu-controls";
 import { generateQrCodeDataUrl } from "@/lib/qr";
 import {
   createLocationPayload,
@@ -30,6 +31,23 @@ type LocationDraft = {
   name: string;
 };
 
+type MenuImportResult = {
+  importedCount: number;
+  invalidRows: Array<{ rowNumber: number; reason: string }>;
+};
+
+function defaultMenuItemDraft(menu?: CommandMenu): MenuItemDraft {
+  return {
+    sectionId: menu?.sections[0]?.id ?? "",
+    name: "",
+    description: "",
+    priceLabel: "",
+    dietaryTags: "",
+    allergens: "",
+    available: true
+  };
+}
+
 export function VenuesCommand() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [venues, setVenues] = useState<CommandVenue[]>([]);
@@ -44,6 +62,15 @@ export function VenuesCommand() {
   const [creatingLocationId, setCreatingLocationId] = useState<string | null>(null);
   const [savingPointId, setSavingPointId] = useState<string | null>(null);
   const [deletingPointId, setDeletingPointId] = useState<string | null>(null);
+  const [activeVenueMenuId, setActiveVenueMenuId] = useState<string | null>(null);
+  const [menusByVenue, setMenusByVenue] = useState<Record<string, CommandMenu>>({});
+  const [menuLoadingVenueId, setMenuLoadingVenueId] = useState<string | null>(null);
+  const [menuSectionDrafts, setMenuSectionDrafts] = useState<Record<string, MenuSectionDraft>>({});
+  const [menuItemDrafts, setMenuItemDrafts] = useState<Record<string, MenuItemDraft>>({});
+  const [menuImportText, setMenuImportText] = useState<Record<string, string>>({});
+  const [menuImportResult, setMenuImportResult] = useState<Record<string, MenuImportResult>>({});
+  const [savingMenuVenueId, setSavingMenuVenueId] = useState<string | null>(null);
+  const [savingMenuItemId, setSavingMenuItemId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!supabase) {
@@ -112,12 +139,225 @@ export function VenuesCommand() {
     }));
   }
 
+  function updateMenuSectionDraft(venueId: string, patch: Partial<MenuSectionDraft>) {
+    setMenuSectionDrafts((current) => ({
+      ...current,
+      [venueId]: {
+        ...(current[venueId] ?? { name: "" }),
+        ...patch
+      }
+    }));
+  }
+
+  function updateMenuItemDraft(venueId: string, patch: Partial<MenuItemDraft>) {
+    setMenuItemDrafts((current) => ({
+      ...current,
+      [venueId]: {
+        ...(current[venueId] ?? defaultMenuItemDraft(menusByVenue[venueId])),
+        ...patch
+      }
+    }));
+  }
+
   function locationForPoint(venue: CommandVenue, point: CommandServicePoint) {
     return point.location ?? venue.locations.find((location) => location.id === point.locationId) ?? null;
   }
 
   function locationLabel(location: CommandVenueLocation | null) {
     return location?.zone || location?.name || "No zone";
+  }
+
+  async function loadVenueMenu(venueId: string) {
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      return;
+    }
+
+    setActiveVenueMenuId(venueId);
+    setMenuLoadingVenueId(venueId);
+    setError(null);
+
+    try {
+      const menu = await apiRequest<CommandMenu>(supabase, `/admin/venues/${venueId}/menu`);
+      setMenusByVenue((current) => ({ ...current, [venueId]: menu }));
+      setMenuItemDrafts((current) =>
+        current[venueId]
+          ? current
+          : {
+              ...current,
+              [venueId]: defaultMenuItemDraft(menu)
+            }
+      );
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Could not load menu");
+    } finally {
+      setMenuLoadingVenueId(null);
+    }
+  }
+
+  function toggleVenueMenu(venueId: string) {
+    if (activeVenueMenuId === venueId) {
+      setActiveVenueMenuId(null);
+      return;
+    }
+
+    void loadVenueMenu(venueId);
+  }
+
+  async function createMenuSection(event: FormEvent<HTMLFormElement>, venueId: string) {
+    event.preventDefault();
+
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      return;
+    }
+
+    setSavingMenuVenueId(venueId);
+    setError(null);
+
+    try {
+      const draft = menuSectionDrafts[venueId] ?? { name: "" };
+      const section = await apiRequest<CommandMenuSection & { items?: CommandMenuItem[] }>(supabase, `/admin/venues/${venueId}/menu/sections`, {
+        method: "POST",
+        body: JSON.stringify(createMenuSectionPayload(draft))
+      });
+      const normalizedSection: CommandMenuSection = { ...section, items: section.items ?? [] };
+      setMenusByVenue((current) => ({
+        ...current,
+        [venueId]: {
+          sections: [...(current[venueId]?.sections ?? []), normalizedSection].sort((left, right) => left.sortOrder - right.sortOrder)
+        }
+      }));
+      setMenuSectionDrafts((current) => ({ ...current, [venueId]: { name: "" } }));
+      setMenuItemDrafts((current) => ({
+        ...current,
+        [venueId]: {
+          ...(current[venueId] ?? defaultMenuItemDraft()),
+          sectionId: current[venueId]?.sectionId || normalizedSection.id
+        }
+      }));
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Could not create menu section");
+    } finally {
+      setSavingMenuVenueId(null);
+    }
+  }
+
+  async function createMenuItem(event: FormEvent<HTMLFormElement>, venueId: string) {
+    event.preventDefault();
+
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      return;
+    }
+
+    setSavingMenuVenueId(venueId);
+    setError(null);
+
+    try {
+      const draft = menuItemDrafts[venueId] ?? defaultMenuItemDraft(menusByVenue[venueId]);
+      const item = await apiRequest<CommandMenuItem>(supabase, `/admin/venues/${venueId}/menu/items`, {
+        method: "POST",
+        body: JSON.stringify(createMenuItemPayload(draft))
+      });
+      setMenusByVenue((current) => ({
+        ...current,
+        [venueId]: {
+          sections: (current[venueId]?.sections ?? []).map((section) =>
+            section.id === item.sectionId
+              ? { ...section, items: [...section.items, item].sort((left, right) => left.sortOrder - right.sortOrder) }
+              : section
+          )
+        }
+      }));
+      setMenuItemDrafts((current) => ({ ...current, [venueId]: defaultMenuItemDraft(menusByVenue[venueId]) }));
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Could not create menu item");
+    } finally {
+      setSavingMenuVenueId(null);
+    }
+  }
+
+  async function updateMenuItem(venueId: string, item: CommandMenuItem, patch: Partial<Pick<CommandMenuItem, "available">>) {
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      return;
+    }
+
+    setSavingMenuItemId(item.id);
+    setError(null);
+
+    try {
+      const updated = await apiRequest<CommandMenuItem>(supabase, `/admin/venues/${venueId}/menu/items/${item.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch)
+      });
+      setMenusByVenue((current) => ({
+        ...current,
+        [venueId]: {
+          sections: (current[venueId]?.sections ?? []).map((section) => ({
+            ...section,
+            items: section.items.map((menuItem) => (menuItem.id === updated.id ? updated : menuItem))
+          }))
+        }
+      }));
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Could not update menu item");
+    } finally {
+      setSavingMenuItemId(null);
+    }
+  }
+
+  async function archiveMenuItem(venueId: string, item: CommandMenuItem) {
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      return;
+    }
+
+    setSavingMenuItemId(item.id);
+    setError(null);
+
+    try {
+      const archived = await apiRequest<CommandMenuItem>(supabase, `/admin/venues/${venueId}/menu/items/${item.id}`, {
+        method: "DELETE"
+      });
+      setMenusByVenue((current) => ({
+        ...current,
+        [venueId]: {
+          sections: (current[venueId]?.sections ?? []).map((section) => ({
+            ...section,
+            items: section.items.map((menuItem) => (menuItem.id === archived.id ? archived : menuItem))
+          }))
+        }
+      }));
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Could not archive menu item");
+    } finally {
+      setSavingMenuItemId(null);
+    }
+  }
+
+  async function importMenuCsv(venueId: string) {
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      return;
+    }
+
+    setSavingMenuVenueId(venueId);
+    setError(null);
+
+    try {
+      const result = await apiRequest<MenuImportResult>(supabase, `/admin/venues/${venueId}/menu/imports/csv`, {
+        method: "POST",
+        body: JSON.stringify({ csv: menuImportText[venueId] ?? "" })
+      });
+      setMenuImportResult((current) => ({ ...current, [venueId]: result }));
+      await loadVenueMenu(venueId);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Could not import menu CSV");
+    } finally {
+      setSavingMenuVenueId(null);
+    }
   }
 
   async function createServicePoint(event: FormEvent<HTMLFormElement>, venue: CommandVenue) {
@@ -304,6 +544,11 @@ export function VenuesCommand() {
               const venueUrl = venueWideGuestUrl(guestAppUrl, venue.slug);
               const servicePointDraft = servicePointDrafts[venue.id] ?? { label: "", locationId: "" };
               const locationDraft = locationDrafts[venue.id] ?? { name: "" };
+              const menu = menusByVenue[venue.id];
+              const menuSectionDraft = menuSectionDrafts[venue.id] ?? { name: "" };
+              const menuItemDraft = menuItemDrafts[venue.id] ?? defaultMenuItemDraft(menu);
+              const menuItemCount = menu?.sections.reduce((count, section) => count + section.items.length, 0) ?? 0;
+              const menuImport = menuImportResult[venue.id];
 
               return (
                 <>
@@ -312,11 +557,23 @@ export function VenuesCommand() {
                 <h2>{venue.name}</h2>
                 <p className="meta">{venue.timezone}</p>
               </div>
-              <MapPinned size={22} />
+              <div className="venue-card-actions">
+                <button
+                  aria-label={`${activeVenueMenuId === venue.id ? "Close" : "Manage"} menu for ${venue.name}`}
+                  className={activeVenueMenuId === venue.id ? "icon-button success" : "icon-button"}
+                  disabled={menuLoadingVenueId === venue.id}
+                  onClick={() => toggleVenueMenu(venue.id)}
+                  type="button"
+                >
+                  <Utensils size={15} />
+                </button>
+                <MapPinned size={22} />
+              </div>
             </div>
             <div className="venue-stats">
               <span>{venue.locations.length} zones</span>
               <span>{venue.servicePoints.length} QR points</span>
+              <span>{menuItemCount} menu items</span>
             </div>
             <div className="service-point-row venue-wide-row">
               <QrCode size={18} />
@@ -496,6 +753,207 @@ export function VenuesCommand() {
               })}
               {!venue.servicePoints.length ? <div className="empty-state">No service points yet.</div> : null}
             </div>
+            {activeVenueMenuId === venue.id ? (
+              <section className="menu-management-panel" aria-label={`Menu management for ${venue.name}`}>
+                <div className="menu-management-header">
+                  <div>
+                    <strong>Menu</strong>
+                    <span>
+                      {menuLoadingVenueId === venue.id
+                        ? "Loading menu..."
+                        : `${menu?.sections.length ?? 0} sections, ${menuItemCount} items`}
+                    </span>
+                  </div>
+                  <button className="command-button secondary-action" disabled={menuLoadingVenueId === venue.id} onClick={() => void loadVenueMenu(venue.id)} type="button">
+                    <RefreshCw size={15} />
+                    Sync
+                  </button>
+                </div>
+                <div className="menu-management-grid">
+                  <div className="menu-section-column">
+                    <form className="menu-section-form" onSubmit={(event) => void createMenuSection(event, venue.id)}>
+                      <label className="field-group">
+                        <span>New section</span>
+                        <input
+                          onChange={(event) => updateMenuSectionDraft(venue.id, { name: event.target.value })}
+                          placeholder="Starters, mains, drinks..."
+                          required
+                          value={menuSectionDraft.name}
+                        />
+                      </label>
+                      <button className="command-button primary" disabled={savingMenuVenueId === venue.id} type="submit">
+                        <Plus size={15} />
+                        Add section
+                      </button>
+                    </form>
+                    <div className="menu-section-list">
+                      {menu?.sections.map((section) => (
+                        <button
+                          className={menuItemDraft.sectionId === section.id ? "menu-section-pill active" : "menu-section-pill"}
+                          key={section.id}
+                          onClick={() => updateMenuItemDraft(venue.id, { sectionId: section.id })}
+                          type="button"
+                        >
+                          <span>{section.name}</span>
+                          <strong>{section.items.length}</strong>
+                        </button>
+                      ))}
+                      {menu && !menu.sections.length ? <div className="empty-state">Add a section before creating items.</div> : null}
+                    </div>
+                  </div>
+                  <div className="menu-item-column">
+                    <form className="menu-item-form" onSubmit={(event) => void createMenuItem(event, venue.id)}>
+                      <label className="field-group">
+                        <span>Section</span>
+                        <select
+                          disabled={!menu?.sections.length}
+                          onChange={(event) => updateMenuItemDraft(venue.id, { sectionId: event.target.value })}
+                          required
+                          value={menuItemDraft.sectionId}
+                        >
+                          <option value="">Choose section</option>
+                          {menu?.sections.map((section) => (
+                            <option key={section.id} value={section.id}>
+                              {section.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field-group">
+                        <span>Item</span>
+                        <input
+                          onChange={(event) => updateMenuItemDraft(venue.id, { name: event.target.value })}
+                          placeholder="Truffle fries"
+                          required
+                          value={menuItemDraft.name}
+                        />
+                      </label>
+                      <label className="field-group">
+                        <span>Price</span>
+                        <input
+                          onChange={(event) => updateMenuItemDraft(venue.id, { priceLabel: event.target.value })}
+                          placeholder="$12"
+                          value={menuItemDraft.priceLabel ?? ""}
+                        />
+                      </label>
+                      <label className="field-group menu-description-field">
+                        <span>Description</span>
+                        <input
+                          onChange={(event) => updateMenuItemDraft(venue.id, { description: event.target.value })}
+                          placeholder="Short guest-facing description"
+                          value={menuItemDraft.description ?? ""}
+                        />
+                      </label>
+                      <label className="field-group">
+                        <span>Dietary tags</span>
+                        <input
+                          onChange={(event) => updateMenuItemDraft(venue.id, { dietaryTags: event.target.value })}
+                          placeholder="vegan, gluten-free"
+                          value={menuItemDraft.dietaryTags ?? ""}
+                        />
+                      </label>
+                      <label className="field-group">
+                        <span>Allergens</span>
+                        <input
+                          onChange={(event) => updateMenuItemDraft(venue.id, { allergens: event.target.value })}
+                          placeholder="nuts, dairy"
+                          value={menuItemDraft.allergens ?? ""}
+                        />
+                      </label>
+                      <label className="menu-availability-toggle">
+                        <input
+                          checked={menuItemDraft.available ?? true}
+                          onChange={(event) => updateMenuItemDraft(venue.id, { available: event.target.checked })}
+                          type="checkbox"
+                        />
+                        <span>Available</span>
+                      </label>
+                      <button className="command-button primary" disabled={savingMenuVenueId === venue.id || !menu?.sections.length} type="submit">
+                        <Plus size={15} />
+                        Add item
+                      </button>
+                    </form>
+                    <div className="menu-item-list">
+                      {menu?.sections.flatMap((section) =>
+                        section.items.map((item) => (
+                          <div className={item.available ? "menu-item-row" : "menu-item-row unavailable"} key={item.id}>
+                            <div className="menu-item-copy">
+                              <strong>{item.name}</strong>
+                              <span>
+                                {section.name}
+                                {item.priceLabel ? ` / ${item.priceLabel}` : ""}
+                              </span>
+                              {item.description ? <p>{item.description}</p> : null}
+                              <div className="menu-tags">
+                                {item.dietaryTags.map((tag) => (
+                                  <span key={`${item.id}-diet-${tag}`}>{tag}</span>
+                                ))}
+                                {item.allergens.map((tag) => (
+                                  <span className="allergen-tag" key={`${item.id}-allergen-${tag}`}>
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="service-point-actions">
+                              <button
+                                aria-label={`${item.available ? "Mark unavailable" : "Mark available"} ${item.name}`}
+                                className={item.available ? "icon-button success" : "icon-button"}
+                                disabled={savingMenuItemId === item.id}
+                                onClick={() => void updateMenuItem(venue.id, item, { available: !item.available })}
+                                type="button"
+                              >
+                                <Check size={15} />
+                              </button>
+                              <button
+                                aria-label={`Archive ${item.name}`}
+                                className="icon-button danger"
+                                disabled={savingMenuItemId === item.id}
+                                onClick={() => void archiveMenuItem(venue.id, item)}
+                                type="button"
+                              >
+                                <Archive size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      {menu && !menuItemCount ? <div className="empty-state">No menu items yet.</div> : null}
+                    </div>
+                    <div className="menu-import-box">
+                      <label className="field-group">
+                        <span>CSV import</span>
+                        <textarea
+                          onChange={(event) => setMenuImportText((current) => ({ ...current, [venue.id]: event.target.value }))}
+                          placeholder="section,name,description,price,dietaryTags,allergens,available"
+                          value={menuImportText[venue.id] ?? ""}
+                        />
+                      </label>
+                      <button className="command-button secondary-action" disabled={savingMenuVenueId === venue.id} onClick={() => void importMenuCsv(venue.id)} type="button">
+                        <Upload size={15} />
+                        Import CSV
+                      </button>
+                      {menuImport ? (
+                        <div className="menu-import-result">
+                          <strong>{menuImport.importedCount} imported</strong>
+                          {menuImport.invalidRows.length ? (
+                            <ul>
+                              {menuImport.invalidRows.map((row) => (
+                                <li key={`${row.rowNumber}-${row.reason}`}>
+                                  Row {row.rowNumber}: {row.reason}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <span>No invalid rows</span>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : null}
                 </>
               );
             })()}

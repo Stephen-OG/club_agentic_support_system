@@ -2530,6 +2530,12 @@ body {
   align-items: end;
 }
 
+.venue-card-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: 10px;
+}
+
 .service-point-copy {
   display: grid;
   gap: var(--space-1);
@@ -2564,6 +2570,206 @@ body {
   color: var(--muted) !important;
 }
 
+.menu-management-panel {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+.menu-management-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.menu-management-header div,
+.menu-item-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.menu-management-header strong,
+.menu-item-copy strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.menu-management-header span,
+.menu-item-copy span,
+.menu-item-copy p,
+.menu-import-result,
+.menu-import-result span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.menu-item-copy p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.menu-management-grid {
+  align-items: start;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
+}
+
+.menu-section-column,
+.menu-item-column,
+.menu-section-list,
+.menu-item-list,
+.menu-import-box {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.menu-section-form,
+.menu-item-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.menu-section-form input,
+.menu-item-form input,
+.menu-item-form select,
+.menu-import-box textarea {
+  background: #0a100e;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  width: 100%;
+}
+
+.menu-import-box textarea {
+  line-height: 1.5;
+  min-height: 112px;
+  padding: 10px var(--space-3);
+  resize: vertical;
+}
+
+.menu-section-form input:focus,
+.menu-item-form input:focus,
+.menu-item-form select:focus,
+.menu-import-box textarea:focus {
+  border-color: var(--accent);
+  outline: 3px solid rgba(216, 255, 104, 0.16);
+}
+
+.menu-section-pill {
+  align-items: center;
+  background: #0a100e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.menu-section-pill.active,
+.menu-section-pill:hover {
+  border-color: rgba(216, 255, 104, 0.36);
+  color: var(--ink);
+}
+
+.menu-section-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-section-pill strong {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.menu-item-form {
+  border-bottom: 1px solid var(--line);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding-bottom: var(--space-4);
+}
+
+.menu-description-field {
+  grid-column: span 3;
+}
+
+.menu-availability-toggle {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 8px;
+}
+
+.menu-item-row {
+  align-items: center;
+  background: #0a100e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 13px;
+}
+
+.menu-item-row.unavailable {
+  opacity: 0.66;
+}
+
+.menu-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.menu-tags span,
+.menu-import-result strong {
+  background: rgba(216, 255, 104, 0.1);
+  border: 1px solid rgba(216, 255, 104, 0.22);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 7px;
+}
+
+.menu-tags .allergen-tag {
+  background: rgba(255, 204, 92, 0.1);
+  border-color: rgba(255, 204, 92, 0.26);
+  color: var(--warning);
+}
+
+.menu-import-box {
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-4);
+}
+
+.menu-import-result {
+  background: rgba(10, 16, 14, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.menu-import-result ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .staff-task-list {
   display: grid;
   gap: 10px;
@@ -2596,8 +2802,14 @@ body {
   .staff-task,
   .service-point-form,
   .zone-create-form,
-  .service-point-edit-grid {
+  .service-point-edit-grid,
+  .menu-management-grid,
+  .menu-item-form {
     grid-template-columns: 1fr;
+  }
+
+  .menu-description-field {
+    grid-column: auto;
   }
 
   .command-sidebar {
