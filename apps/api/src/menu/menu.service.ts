@@ -204,19 +204,37 @@ export class MenuService {
         sectionsByName.set(row.section, section);
       }
 
+      const data = {
+        name: row.name,
+        description: row.description,
+        priceLabel: row.priceLabel,
+        dietaryTags: row.dietaryTags,
+        allergens: row.allergens,
+        available: row.available
+      };
+      const existingItem = await this.prisma.menuItem.findFirst({
+        where: {
+          venueId,
+          sectionId: section.id,
+          name: row.name
+        }
+      });
+
       importedItems.push(
-        await this.prisma.menuItem.create({
-          data: {
-            venueId,
-            sectionId: section.id,
-            name: row.name,
-            description: row.description,
-            priceLabel: row.priceLabel,
-            dietaryTags: row.dietaryTags,
-            allergens: row.allergens,
-            available: row.available
-          }
-        })
+        existingItem
+          ? await this.prisma.menuItem.update({
+              where: {
+                id: existingItem.id
+              },
+              data
+            })
+          : await this.prisma.menuItem.create({
+              data: {
+                venueId,
+                sectionId: section.id,
+                ...data
+              }
+            })
       );
     }
 

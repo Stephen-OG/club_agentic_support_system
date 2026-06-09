@@ -353,6 +353,7 @@ describe("MenuService", () => {
         }
       },
       menuItem: {
+        findFirst: async () => null,
         create: async (args: any) => {
           createdItems.push(args.data.name);
           return { id: `item_${createdItems.length}`, ...args.data };
@@ -371,6 +372,57 @@ describe("MenuService", () => {
     assert.equal(result.invalidRows[0]!.rowNumber, 3);
     assert.deepEqual(createdSections, ["Mains"]);
     assert.deepEqual(createdItems, ["Risotto"]);
+  });
+
+  it("updates existing items during CSV import instead of creating duplicates", async () => {
+    const itemLookups: unknown[] = [];
+    const updates: unknown[] = [];
+    const service = createService({
+      venue: { findFirst: async () => ({ id: "venue_1", workspaceId: "workspace_1" }) },
+      menuSection: {
+        findFirst: async () => ({ id: "section_1", name: "Mains" }),
+        create: async () => assert.fail("must not create section")
+      },
+      menuItem: {
+        findFirst: async (args: unknown) => {
+          itemLookups.push(args);
+          return { id: "item_1", venueId: "venue_1", sectionId: "section_1", name: "Risotto" };
+        },
+        update: async (args: unknown) => {
+          updates.push(args);
+          return { id: "item_1", ...(args as any).data };
+        },
+        create: async () => assert.fail("must not create duplicate item")
+      }
+    });
+
+    const result = await service.importCsv(auth as never, "venue_1", {
+      csv:
+        "section,name,description,price,dietary_tags,allergens,available\n" +
+        "Mains, Risotto ,Wild mushroom risotto,GBP 16,vegetarian,milk,true"
+    });
+
+    assert.equal(result.importedCount, 1);
+    assert.deepEqual(itemLookups[0], {
+      where: {
+        venueId: "venue_1",
+        sectionId: "section_1",
+        name: "Risotto"
+      }
+    });
+    assert.deepEqual(updates[0], {
+      where: {
+        id: "item_1"
+      },
+      data: {
+        name: "Risotto",
+        description: "Wild mushroom risotto",
+        priceLabel: "GBP 16",
+        dietaryTags: ["vegetarian"],
+        allergens: ["milk"],
+        available: true
+      }
+    });
   });
 
   it("throws when CSV import has no valid rows", async () => {
