@@ -22,7 +22,8 @@ export class MenuService {
   ) {}
 
   async getMenu(auth: AuthContext, venueId: string) {
-    await this.getVenueInWorkspace(auth, venueId);
+    const venue = await this.getVenueInWorkspace(auth, venueId);
+    this.venueAccess.assertCanReadVenue(auth, { workspaceId: venue.workspaceId, venueId: venue.id });
 
     const sections = await this.prisma.menuSection.findMany({
       where: {

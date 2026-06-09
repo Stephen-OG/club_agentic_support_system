@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
+import { VenueAccessService } from "../venues/access.service";
 import { MenuService } from "./menu.service";
 
-function createService(prisma: unknown, venueAccess: unknown = { assertCanManageVenue: () => undefined }) {
+function createService(
+  prisma: unknown,
+  venueAccess: unknown = {
+    assertCanManageVenue: () => undefined,
+    assertCanReadVenue: () => undefined
+  }
+) {
   return new MenuService(prisma as never, venueAccess as never);
 }
 
@@ -34,6 +41,38 @@ describe("MenuService", () => {
 
     assert.equal((calls[0] as any).where.workspaceId, "workspace_1");
     assert.deepEqual(result.sections[0]!.items[0]!.dietaryTags, ["vegetarian"]);
+  });
+
+  it("rejects same-workspace menu reads when the user cannot read the venue", async () => {
+    let menuQueried = false;
+    const service = createService(
+      {
+        venue: {
+          findFirst: async () => ({ id: "venue_1", workspaceId: "workspace_1" })
+        },
+        menuSection: {
+          findMany: async () => {
+            menuQueried = true;
+            return [];
+          }
+        }
+      },
+      new VenueAccessService()
+    );
+
+    await assert.rejects(
+      service.getMenu(
+        {
+          role: "staff",
+          staffProfileId: "staff_1",
+          workspaceId: "workspace_1",
+          venueId: "venue_2"
+        } as never,
+        "venue_1"
+      ),
+      ForbiddenException
+    );
+    assert.equal(menuQueried, false);
   });
 
   it("creates a section after venue authorization", async () => {
