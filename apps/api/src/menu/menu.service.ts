@@ -181,62 +181,68 @@ export class MenuService {
       throw new BadRequestException("No valid menu rows to import");
     }
 
-    const sectionsByName = new Map<string, { id: string; name: string }>();
-    const importedItems = [];
+    const importedItems = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("select pg_advisory_xact_lock(hashtext($1))", `menu-import:${venueId}`);
 
-    for (const row of parsed.rows) {
-      let section = sectionsByName.get(row.section);
+      const sectionsByName = new Map<string, { id: string; name: string }>();
+      const appliedItems = [];
 
-      if (!section) {
-        section =
-          (await this.prisma.menuSection.findFirst({
-            where: {
-              venueId,
-              name: row.section
-            }
-          })) ??
-          (await this.prisma.menuSection.create({
-            data: {
-              venueId,
-              name: row.section
-            }
-          }));
-        sectionsByName.set(row.section, section);
-      }
+      for (const row of parsed.rows) {
+        let section = sectionsByName.get(row.section);
 
-      const data = {
-        name: row.name,
-        description: row.description,
-        priceLabel: row.priceLabel,
-        dietaryTags: row.dietaryTags,
-        allergens: row.allergens,
-        available: row.available
-      };
-      const existingItem = await this.prisma.menuItem.findFirst({
-        where: {
-          venueId,
-          sectionId: section.id,
-          name: row.name
-        }
-      });
-
-      importedItems.push(
-        existingItem
-          ? await this.prisma.menuItem.update({
+        if (!section) {
+          section =
+            (await tx.menuSection.findFirst({
               where: {
-                id: existingItem.id
-              },
-              data
-            })
-          : await this.prisma.menuItem.create({
+                venueId,
+                name: row.section
+              }
+            })) ??
+            (await tx.menuSection.create({
               data: {
                 venueId,
-                sectionId: section.id,
-                ...data
+                name: row.section
               }
-            })
-      );
-    }
+            }));
+          sectionsByName.set(row.section, section);
+        }
+
+        const data = {
+          name: row.name,
+          description: row.description,
+          priceLabel: row.priceLabel,
+          dietaryTags: row.dietaryTags,
+          allergens: row.allergens,
+          available: row.available
+        };
+        const existingItem = await tx.menuItem.findFirst({
+          where: {
+            venueId,
+            sectionId: section.id,
+            name: row.name
+          }
+        });
+
+        appliedItems.push(
+          existingItem
+            ? await tx.menuItem.update({
+                where: {
+                  id: existingItem.id
+                },
+                data
+              })
+            : await tx.menuItem.create({
+                data: {
+                  venueId,
+                  sectionId: section.id,
+                  ...data
+                }
+              })
+        );
+      }
+
+      return appliedItems;
+    });
 
     return {
       importedCount: importedItems.length,

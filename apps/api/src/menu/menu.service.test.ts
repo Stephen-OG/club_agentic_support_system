@@ -343,7 +343,7 @@ describe("MenuService", () => {
   it("imports valid CSV rows and reports skipped rows", async () => {
     const createdSections: string[] = [];
     const createdItems: string[] = [];
-    const service = createService({
+    const prisma = {
       venue: { findFirst: async () => ({ id: "venue_1", workspaceId: "workspace_1" }) },
       menuSection: {
         findFirst: async () => null,
@@ -359,6 +359,11 @@ describe("MenuService", () => {
           return { id: `item_${createdItems.length}`, ...args.data };
         }
       }
+    };
+    const service = createService({
+      ...prisma,
+      $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({ ...prisma, $executeRawUnsafe: async () => undefined })
     });
 
     const result = await service.importCsv(auth as never, "venue_1", {
@@ -374,10 +379,57 @@ describe("MenuService", () => {
     assert.deepEqual(createdItems, ["Risotto"]);
   });
 
+  it("serializes CSV import work with a venue advisory transaction lock", async () => {
+    const calls: string[] = [];
+    const tx = {
+      $executeRawUnsafe: async (sql: string, key: string) => {
+        calls.push(`lock:${sql}:${key}`);
+      },
+      menuSection: {
+        findFirst: async () => {
+          calls.push("section.findFirst");
+          return { id: "section_1", name: "Mains" };
+        },
+        create: async () => assert.fail("must not create section")
+      },
+      menuItem: {
+        findFirst: async () => {
+          calls.push("item.findFirst");
+          return null;
+        },
+        create: async () => {
+          calls.push("item.create");
+          return { id: "item_1", name: "Risotto" };
+        }
+      }
+    };
+    const service = createService({
+      venue: { findFirst: async () => ({ id: "venue_1", workspaceId: "workspace_1" }) },
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => {
+        calls.push("transaction");
+        return callback(tx);
+      },
+      menuSection: tx.menuSection,
+      menuItem: tx.menuItem
+    });
+
+    await service.importCsv(auth as never, "venue_1", {
+      csv: "section,name,description,price,dietary_tags,allergens,available\nMains,Risotto,,GBP 16,vegetarian,milk,true"
+    });
+
+    assert.deepEqual(calls, [
+      "transaction",
+      "lock:select pg_advisory_xact_lock(hashtext($1)):menu-import:venue_1",
+      "section.findFirst",
+      "item.findFirst",
+      "item.create"
+    ]);
+  });
+
   it("updates existing items during CSV import instead of creating duplicates", async () => {
     const itemLookups: unknown[] = [];
     const updates: unknown[] = [];
-    const service = createService({
+    const prisma = {
       venue: { findFirst: async () => ({ id: "venue_1", workspaceId: "workspace_1" }) },
       menuSection: {
         findFirst: async () => ({ id: "section_1", name: "Mains" }),
@@ -394,6 +446,11 @@ describe("MenuService", () => {
         },
         create: async () => assert.fail("must not create duplicate item")
       }
+    };
+    const service = createService({
+      ...prisma,
+      $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({ ...prisma, $executeRawUnsafe: async () => undefined })
     });
 
     const result = await service.importCsv(auth as never, "venue_1", {
