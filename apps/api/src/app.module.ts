@@ -13,6 +13,7 @@ import { HealthModule } from "./health/health.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
 import { JobsModule } from "./jobs/jobs.module";
 import { LoggerModule } from "./common/logger/logger.module";
+import { MenuModule } from "./menu/menu.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { RequestsModule } from "./requests/requests.module";
@@ -42,6 +43,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     ConversationsModule,
     RealtimeModule,
     RequestsModule,
+    MenuModule,
     TriageModule,
     NotificationsModule,
     WebhooksModule,
