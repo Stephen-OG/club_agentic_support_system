@@ -4,8 +4,8 @@ create table if not exists "MenuSection" (
   "name" text not null,
   "sortOrder" integer not null default 0,
   "isActive" boolean not null default true,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now(),
+  "createdAt" timestamp(3) not null default current_timestamp,
+  "updatedAt" timestamp(3) not null default current_timestamp,
   constraint "MenuSection_venueId_name_key" unique ("venueId", "name")
 );
 
@@ -20,8 +20,8 @@ create table if not exists "MenuItem" (
   "allergens" text[] not null default array[]::text[],
   "available" boolean not null default true,
   "sortOrder" integer not null default 0,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
+  "createdAt" timestamp(3) not null default current_timestamp,
+  "updatedAt" timestamp(3) not null default current_timestamp
 );
 
 create index if not exists "MenuSection_venueId_isActive_sortOrder_idx"
