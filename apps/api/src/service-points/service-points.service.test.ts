@@ -13,7 +13,9 @@ function createService(
   priorityClassifier: ConstructorParameters<typeof ServicePointsService>[3],
   prisma: ConstructorParameters<typeof ServicePointsService>[4],
   venueAccess: ConstructorParameters<typeof ServicePointsService>[5],
-  events?: ConstructorParameters<typeof ServicePointsService>[6]
+  events?: ConstructorParameters<typeof ServicePointsService>[6],
+  menuService?: ConstructorParameters<typeof ServicePointsService>[7],
+  menuAssistant?: ConstructorParameters<typeof ServicePointsService>[8]
 ) {
   const triageService =
     aiTriage && typeof (aiTriage as { triage?: unknown }).triage === "function"
@@ -29,7 +31,7 @@ function createService(
 
   const queue = { add: async () => ({ id: "mock-job-id" }) } as never;
 
-  return new ServicePointsService(triageService, cache, queue, priorityClassifier, prisma, venueAccess, events);
+  return new ServicePointsService(triageService, cache, queue, priorityClassifier, prisma, venueAccess, events, menuService, menuAssistant);
 }
 
 type PublicGuestMessageResult = {
@@ -41,6 +43,161 @@ type PublicGuestMessageResult = {
 };
 
 describe("ServicePointsService public QR workflow", () => {
+  it("answers public QR menu questions without creating a support request", async () => {
+    const servicePoint = {
+      id: "sp_1",
+      venueId: "venue_1",
+      label: "Patio",
+      qrToken: "qr_1",
+      isActive: true,
+      venue: { id: "venue_1", name: "Blue Note", slug: "blue-note", timezone: "Europe/London", openingHours: [] }
+    };
+    const conversation = { id: "conversation_1", venueId: "venue_1", servicePointId: "sp_1" };
+    const storedMessages = [
+      { id: "guest_1", conversationId: "conversation_1", sender: SenderType.GUEST, body: "What vegan mains do you have?", requestId: null },
+      { id: "assistant_1", conversationId: "conversation_1", sender: SenderType.ASSISTANT, body: "The Roasted Cauliflower Bowl is vegan.", requestId: null }
+    ];
+    let requestCreated = false;
+    const tx = {
+      conversation: { create: async () => conversation },
+      message: { create: async () => ({}), findMany: async () => storedMessages }
+    };
+    const service = createService(
+      {} as never,
+      { classifyOrDefault: () => "normal" } as never,
+      {
+        servicePoint: { findFirst: async () => servicePoint },
+        conversation: tx.conversation,
+        supportRequest: {
+          create: async () => {
+            requestCreated = true;
+          }
+        },
+        message: tx.message,
+        $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
+      } as never,
+      {} as never,
+      undefined,
+      {
+        listAvailableItemsForVenue: async () => [
+          {
+            id: "item_1",
+            name: "Roasted Cauliflower Bowl",
+            category: "Mains",
+            dietaryTags: ["vegan"],
+            allergens: [],
+            available: true
+          }
+        ]
+      } as never,
+      {
+        escalationReason: () => null,
+        answer: async () => ({
+          handled: true,
+          agenticFramework: "menu_concierge",
+          matchedItemIds: ["item_1"],
+          reply: "The Roasted Cauliflower Bowl is vegan.",
+          usedAi: false
+        })
+      } as never
+    );
+
+    const result = await service.createGuestMessage("qr_1", { message: "What vegan mains do you have?", sessionId: "session_1" });
+
+    assert.equal((result as any).replyPending, false);
+    assert.equal((result as any).request, null);
+    assert.equal(requestCreated, false);
+  });
+
+  it("adds menu escalation metadata when public QR menu requests need staff", async () => {
+    const servicePoint = {
+      id: "sp_menu_escalation",
+      venueId: "venue_1",
+      label: "Patio",
+      qrToken: "qr_menu_escalation",
+      isActive: true,
+      venue: { id: "venue_1", name: "Blue Note", slug: "blue-note", timezone: "Europe/London", openingHours: [] }
+    };
+    const conversation = { id: "conversation_menu_escalation", venueId: "venue_1", servicePointId: servicePoint.id };
+    const supportRequest = {
+      id: "request_menu_escalation",
+      venueId: servicePoint.venueId,
+      servicePointId: servicePoint.id,
+      conversationId: conversation.id,
+      title: "Guest support request",
+      category: "general",
+      summary: "Can someone confirm if the risotto is safe for my nut allergy?",
+      priority: RequestPriority.NORMAL,
+      deterministicPriority: RequestPriority.NORMAL,
+      status: RequestStatus.NEW
+    };
+    const storedMessages = [
+      {
+        id: "message_guest_menu_escalation",
+        conversationId: conversation.id,
+        requestId: supportRequest.id,
+        sender: SenderType.GUEST,
+        body: "Can someone confirm if the risotto is safe for my nut allergy?"
+      }
+    ];
+    const calls: Array<{ model: string; args: any }> = [];
+    const tx = {
+      conversation: { create: async () => conversation },
+      supportRequest: {
+        create: async (args: any) => {
+          calls.push({ model: "supportRequest.create", args });
+          return supportRequest;
+        }
+      },
+      message: {
+        create: async (args: any) => {
+          calls.push({ model: "message.create", args });
+          return args;
+        },
+        findMany: async () => storedMessages
+      },
+      requestEvent: {
+        create: async (args: any) => {
+          calls.push({ model: "requestEvent.create", args });
+          return args;
+        }
+      }
+    };
+    const service = createService(
+      {} as never,
+      { classifyOrDefault: () => "normal" } as never,
+      {
+        servicePoint: { findFirst: async () => servicePoint },
+        conversation: tx.conversation,
+        supportRequest: tx.supportRequest,
+        message: tx.message,
+        requestEvent: tx.requestEvent,
+        $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
+      } as never,
+      {} as never,
+      undefined,
+      { listAvailableItemsForVenue: async () => [] } as never,
+      { escalationReason: () => "allergen_confirmation", answer: async () => ({ handled: false, reason: "not_menu_request" }) } as never
+    );
+
+    const result = await service.createGuestMessage("qr_menu_escalation", {
+      message: "Can someone confirm if the risotto is safe for my nut allergy?",
+      sessionId: "session_1"
+    });
+
+    assert.deepEqual((result as any).request, supportRequest);
+    const guestMessage = calls.find((call) => call.model === "message.create" && call.args.data.sender === SenderType.GUEST);
+    assert.deepEqual(guestMessage?.args.data.metadata, {
+      source: "public_qr",
+      qrToken: "qr_menu_escalation",
+      agenticFramework: "menu_concierge",
+      menuEscalationReason: "allergen_confirmation"
+    });
+    const event = calls.find((call) => call.model === "requestEvent.create");
+    assert.equal(event?.args.data.metadata.agenticFramework, "menu_concierge");
+    assert.equal(event?.args.data.metadata.menuEscalationReason, "allergen_confirmation");
+  });
+
   it("persists a public QR guest message and returns conversation state", async () => {
     const servicePoint = {
       id: "sp_1",

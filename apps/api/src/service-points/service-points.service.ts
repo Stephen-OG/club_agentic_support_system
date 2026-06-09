@@ -14,6 +14,8 @@ import { decryptMessageBody, decryptMessageRecords, encryptMessageCreateData } f
 import type { TriageReplyJobData } from "../jobs/triage-reply.processor";
 import { DomainEventsService, type DomainEventType } from "../realtime/domain-events.service";
 import { determineAssignmentRoute, type AssignmentRoute } from "../requests/assignment-routing.service";
+import { MenuAssistantService, type MenuAssistantResult } from "../menu/menu-assistant.service";
+import { MenuService } from "../menu/menu.service";
 import { CreateServicePointDto } from "./dto/create-service-point.dto";
 import type { CreateVenueLocationDto } from "./dto/create-venue-location.dto";
 import { CreateVenueDto } from "./dto/create-venue.dto";
@@ -73,7 +75,9 @@ export class ServicePointsService {
     private readonly priorityClassifier: PriorityClassifierService,
     private readonly prisma: PrismaService,
     private readonly venueAccess: VenueAccessService,
-    @Optional() private readonly events?: DomainEventsService
+    @Optional() private readonly events?: DomainEventsService,
+    @Optional() private readonly menuService?: MenuService,
+    @Optional() private readonly menuAssistant?: MenuAssistantService
   ) {}
 
   createQrToken(label: string) {
@@ -564,6 +568,101 @@ export class ServicePointsService {
     return this.aiTriage.triage(input);
   }
 
+  private async tryCreateMenuAssistantReply(input: {
+    message: string;
+    servicePoint: { id: string; venueId: string; label: string };
+    venue: { id: string; name: string };
+  }) {
+    if (!this.menuService || !this.menuAssistant) {
+      return null;
+    }
+
+    const escalationReason = this.menuAssistant.escalationReason(input.message);
+    if (escalationReason) {
+      return { escalate: true as const, escalationReason };
+    }
+
+    const menu = await this.menuService.listAvailableItemsForVenue(input.venue.id);
+    const answer = await this.menuAssistant.answer({
+      menu,
+      message: input.message,
+      venueName: input.venue.name
+    });
+
+    if (!answer.handled) {
+      return null;
+    }
+
+    return { escalate: false as const, answer };
+  }
+
+  private async createMenuAssistantConversationResponse(input: {
+    existingConversation?: { id: string } | null;
+    guestMessageMetadata: Record<string, unknown>;
+    guestSessionId?: string | null;
+    message: string;
+    servicePoint: { id: string; venueId: string };
+    venue: { id: string; name: string; slug: string };
+    answer: Extract<MenuAssistantResult, { handled: true }>;
+    conversationData?: Record<string, unknown>;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const conversation =
+        input.existingConversation ??
+        (await tx.conversation.create({
+          data: {
+            ...(input.conversationData ?? {}),
+            guestSessionId: input.guestSessionId || null,
+            servicePointId: input.servicePoint.id,
+            venueId: input.servicePoint.venueId
+          }
+        }));
+
+      await tx.message.create({
+        data: encryptMessageCreateData({
+          venueId: input.servicePoint.venueId,
+          servicePointId: input.servicePoint.id,
+          conversationId: conversation.id,
+          requestId: null,
+          sender: SenderType.GUEST,
+          body: input.message,
+          metadata: {
+            ...input.guestMessageMetadata,
+            intent: "menu_concierge",
+            agenticFramework: "menu_concierge"
+          }
+        })
+      });
+
+      await tx.message.create({
+        data: encryptMessageCreateData({
+          venueId: input.servicePoint.venueId,
+          servicePointId: input.servicePoint.id,
+          conversationId: conversation.id,
+          requestId: null,
+          sender: SenderType.ASSISTANT,
+          body: input.answer.reply,
+          metadata: {
+            ...input.guestMessageMetadata,
+            intent: "menu_concierge",
+            agenticFramework: "menu_concierge",
+            menuMatchedItemIds: input.answer.matchedItemIds,
+            menuUsedAi: input.answer.usedAi
+          }
+        })
+      });
+
+      const messages = await tx.message.findMany({
+        where: { conversationId: conversation.id },
+        orderBy: { createdAt: "asc" }
+      });
+
+      return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), input.servicePoint, input.venue, {
+        replyPending: false
+      });
+    });
+  }
+
   private publicConversationMessages<T extends { body?: unknown }>(messages: T[]) {
     return decryptMessageRecords([...messages].reverse());
   }
@@ -752,6 +851,32 @@ export class ServicePointsService {
       ? this.nonRequestReply(input.message, venue?.name || servicePoint.label)
       : null;
     const shouldHandleGreeting = this.isGreetingMessage(input.message) && !hasOpenPreflightRequest;
+    const menuPreflight = !hasOpenPreflightRequest
+      ? await this.tryCreateMenuAssistantReply({
+          message: input.message,
+          servicePoint,
+          venue
+        })
+      : null;
+    const menuEscalationMetadata =
+      menuPreflight?.escalate === true
+        ? {
+            agenticFramework: "menu_concierge",
+            menuEscalationReason: menuPreflight.escalationReason
+          }
+        : {};
+
+    if (menuPreflight?.escalate === false) {
+      return this.createMenuAssistantConversationResponse({
+        existingConversation,
+        guestMessageMetadata: { source: "public_qr", qrToken: token },
+        guestSessionId: input.sessionId,
+        message: input.message,
+        servicePoint,
+        venue,
+        answer: menuPreflight.answer
+      });
+    }
 
     // --- Synchronous path: non-request messages (greetings, info questions) ---
     if (nonRequestReply && !hasOpenPreflightRequest) {
@@ -892,7 +1017,7 @@ export class ServicePointsService {
           requestId: supportRequest.id,
           sender: SenderType.GUEST,
           body: input.message,
-          metadata: { source: "public_qr", qrToken: token }
+          metadata: { source: "public_qr", qrToken: token, ...menuEscalationMetadata }
         })
       });
 
@@ -904,7 +1029,7 @@ export class ServicePointsService {
           requestId: supportRequest.id,
           sender: SenderType.ASSISTANT,
           body: this.requestAcknowledgementReply(deterministicPriority, servicePoint.label),
-          metadata: { source: "public_qr", qrToken: token, intent: "request_acknowledgement" }
+          metadata: { source: "public_qr", qrToken: token, intent: "request_acknowledgement", ...menuEscalationMetadata }
         })
       });
 
@@ -914,7 +1039,7 @@ export class ServicePointsService {
           requestId: supportRequest.id,
           type: "request.created",
           toStatus: supportRequest.status,
-          metadata: { source: "public_qr", qrToken: token, assignmentRouting: assignmentRoute }
+          metadata: { source: "public_qr", qrToken: token, assignmentRouting: assignmentRoute, ...menuEscalationMetadata }
         }
       });
 
@@ -1013,6 +1138,41 @@ export class ServicePointsService {
     const hasOpenRequest = latestPreflightRequest ? this.isActiveRequestStatus(latestPreflightRequest.status) : false;
     const nonRequestReply = !hasOpenRequest && !input.quickAction ? this.nonRequestReply(input.message, venue.name) : null;
     const locationLabel = input.locationLabel?.trim() || null;
+    const venueMenuPreflight = !hasOpenRequest
+      ? await this.tryCreateMenuAssistantReply({
+          message: input.message,
+          servicePoint,
+          venue
+        })
+      : null;
+    const venueMenuEscalationMetadata =
+      venueMenuPreflight?.escalate === true
+        ? {
+            agenticFramework: "menu_concierge",
+            menuEscalationReason: venueMenuPreflight.escalationReason
+          }
+        : {};
+
+    if (venueMenuPreflight?.escalate === false) {
+      return this.createMenuAssistantConversationResponse({
+        existingConversation,
+        guestMessageMetadata: {
+          locationLabel,
+          quickAction: input.quickAction || null,
+          source: "public_venue_qr",
+          venueSlug
+        },
+        guestSessionId: input.sessionId,
+        message: input.message,
+        servicePoint,
+        venue,
+        answer: venueMenuPreflight.answer,
+        conversationData: {
+          guestLocationLabel: locationLabel,
+          guestLocationSource: locationLabel ? "guest" : null
+        }
+      });
+    }
 
     // --- Synchronous path: handle location-less first message for venue chat ---
     if (nonRequestReply && !hasOpenRequest) {
@@ -1036,7 +1196,8 @@ export class ServicePointsService {
             metadata: {
               quickAction: input.quickAction || null,
               source: "public_venue_qr",
-              venueSlug
+              venueSlug,
+              ...venueMenuEscalationMetadata
             },
             requestId: null,
             sender: SenderType.GUEST,
@@ -1102,7 +1263,8 @@ export class ServicePointsService {
             metadata: {
               quickAction: input.quickAction || null,
               source: "public_venue_qr",
-              venueSlug
+              venueSlug,
+              ...venueMenuEscalationMetadata
             },
             requestId: null,
             sender: SenderType.GUEST,
@@ -1204,7 +1366,8 @@ export class ServicePointsService {
             quickAction: input.quickAction || null,
             assignmentRouting: assignmentRoute,
             source: "public_venue_qr",
-            venueSlug
+            venueSlug,
+            ...venueMenuEscalationMetadata
           },
           requestId: supportRequest.id,
           sender: SenderType.GUEST,
@@ -1219,7 +1382,8 @@ export class ServicePointsService {
             locationLabel,
             quickAction: input.quickAction || null,
             source: "public_venue_qr",
-            venueSlug
+            venueSlug,
+            ...venueMenuEscalationMetadata
           },
           requestId: supportRequest.id,
           toStatus: supportRequest.status,
