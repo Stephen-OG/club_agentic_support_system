@@ -28,6 +28,7 @@ export type MenuAssistantResult =
     }
   | {
       handled: true;
+      agenticFramework: "menu_concierge";
       matchedItemIds: string[];
       reply: string;
       usedAi: boolean;
@@ -94,10 +95,27 @@ export class MenuAssistantService {
 
     return {
       handled: true,
+      agenticFramework: "menu_concierge",
       matchedItemIds: parsed.matchedItemIds.filter((id) => relevantItems.some((item) => item.id === id)),
       reply: parsed.reply,
       usedAi: true
     };
+  }
+
+  escalationReason(message: string): "allergen_confirmation" | "ordering_help" | "staff_action_requested" | null {
+    if (/\b(allerg|anaphyl|severe|safe|confirm)\b/i.test(message) && /\b(confirm|safe|allerg|nut|gluten|dairy|sesame)\b/i.test(message)) {
+      return "allergen_confirmation";
+    }
+
+    if (/\b(order|buy|bring|get me|can i have)\b/i.test(message)) {
+      return "ordering_help";
+    }
+
+    if (/\b(someone|staff|waiter|server|team|come over|help me)\b/i.test(message)) {
+      return "staff_action_requested";
+    }
+
+    return null;
   }
 
   private isMenuRequest(message: string) {
@@ -167,6 +185,7 @@ export class MenuAssistantService {
     const names = items.slice(0, 3).map((item) => item.name).join(", ");
     return {
       handled: true,
+      agenticFramework: "menu_concierge",
       matchedItemIds: items.map((item) => item.id),
       reply: `I found these menu options that may match: ${names}. Please ask the team to confirm allergens before ordering.`,
       usedAi: false

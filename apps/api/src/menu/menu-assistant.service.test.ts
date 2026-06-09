@@ -87,4 +87,41 @@ describe("MenuAssistantService", () => {
     assert.match(capturedBody.input, /Mushroom Risotto/);
     assert.doesNotMatch(capturedBody.input, /House Beef Burger/);
   });
+
+  it("marks staff-action menu requests for escalation", () => {
+    const service = new MenuAssistantService({
+      get(key: string) {
+        if (key === "MENU_ASSISTANT_ENABLED") return "true";
+        return undefined;
+      }
+    } as never);
+
+    assert.equal(
+      service.escalationReason("Can someone come over and confirm if the risotto is safe for my nut allergy?"),
+      "allergen_confirmation"
+    );
+    assert.equal(service.escalationReason("Can I order the burger please?"), "ordering_help");
+    assert.equal(service.escalationReason("What vegan mains do you have?"), null);
+  });
+
+  it("returns framework metadata for handled replies", async () => {
+    const service = new MenuAssistantService({
+      get(key: string) {
+        if (key === "MENU_ASSISTANT_ENABLED") return "true";
+        return undefined;
+      }
+    } as never);
+
+    const result = await service.answer({
+      menu,
+      message: "What vegan mains do you have?",
+      venueName: "Blue Note"
+    });
+
+    assert.equal(result.handled, true);
+    if (result.handled) {
+      assert.equal(result.agenticFramework, "menu_concierge");
+      assert.equal(result.usedAi, false);
+    }
+  });
 });
