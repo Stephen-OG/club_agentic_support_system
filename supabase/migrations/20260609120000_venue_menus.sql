@@ -27,6 +27,9 @@ create table if not exists "MenuItem" (
     foreign key ("sectionId", "venueId") references "MenuSection"("id", "venueId") on delete cascade
 );
 
+alter table public."MenuSection" enable row level security;
+alter table public."MenuItem" enable row level security;
+
 create index if not exists "MenuSection_venueId_isActive_sortOrder_idx"
   on "MenuSection" ("venueId", "isActive", "sortOrder");
 
