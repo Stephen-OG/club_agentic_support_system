@@ -87,6 +87,8 @@ model Venue {
   timezone               String                 @default("Europe/London")
   locations              VenueLocation[]
   openingHours           VenueOpeningHour[]
+  menuSections           MenuSection[]
+  menuItems              MenuItem[]
   servicePoints          ServicePoint[]
   staffMemberships       StaffMembership[]
   conversations          Conversation[]
@@ -121,6 +123,41 @@ model VenueOpeningHour {
 
   @@unique([venueId, dayOfWeek])
   @@index([venueId])
+}
+
+model MenuSection {
+  id        String     @id @default(uuid()) @db.Uuid
+  venueId   String     @db.Uuid
+  venue     Venue      @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  items     MenuItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([venueId, name])
+  @@index([venueId, isActive, sortOrder])
+}
+
+model MenuItem {
+  id          String      @id @default(uuid()) @db.Uuid
+  venueId     String      @db.Uuid
+  venue       Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  sectionId   String      @db.Uuid
+  section     MenuSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  priceLabel  String?
+  dietaryTags String[]    @default([])
+  allergens   String[]    @default([])
+  available   Boolean     @default(true)
+  sortOrder   Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([venueId, available, sortOrder])
+  @@index([sectionId, sortOrder])
 }
 
 model VenueLocation {
