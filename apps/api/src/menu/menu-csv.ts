@@ -49,7 +49,11 @@ export function parseMenuCsv(csv: string): { rows: ParsedMenuCsvRow[]; invalidRo
 }
 
 function normalizeHeader(header: string) {
-  return header.trim().toLowerCase().replace(/\s+/g, "_");
+  return header
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
 function nullableText(value: string | undefined) {

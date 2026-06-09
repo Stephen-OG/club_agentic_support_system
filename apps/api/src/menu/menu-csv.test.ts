@@ -5,7 +5,7 @@ import { parseMenuCsv } from "./menu-csv";
 describe("parseMenuCsv", () => {
   it("normalizes valid menu rows", () => {
     const result = parseMenuCsv(
-      "section,name,description,price,dietary_tags,allergens,available\n" +
+      "section,name,description,price-label,dietary_tags,allergens,available\n" +
         "Mains,Roasted Cauliflower Bowl,Herbs and tahini,GBP 14,vegan|gluten-free,sesame,yes\n"
     );
 
@@ -27,6 +27,7 @@ describe("parseMenuCsv", () => {
     const result = parseMenuCsv(
       "section,name,description,price,dietary_tags,allergens,available\n" +
         ",Nameless Section,,,,,\n" +
+        "Sides,,,GBP 5,,,\n" +
         "Desserts,Lemon Tart,,GBP 8,vegetarian,gluten|milk,no\n"
     );
 
@@ -34,6 +35,10 @@ describe("parseMenuCsv", () => {
     assert.deepEqual(result.invalidRows, [
       {
         rowNumber: 2,
+        reason: "section and name are required"
+      },
+      {
+        rowNumber: 3,
         reason: "section and name are required"
       }
     ]);
