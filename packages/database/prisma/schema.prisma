@@ -137,6 +137,7 @@ model MenuSection {
   updatedAt DateTime   @updatedAt
 
   @@unique([venueId, name])
+  @@unique([id, venueId])
   @@index([venueId, isActive, sortOrder])
 }
 
@@ -145,7 +146,7 @@ model MenuItem {
   venueId     String      @db.Uuid
   venue       Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
   sectionId   String      @db.Uuid
-  section     MenuSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  section     MenuSection @relation(fields: [sectionId, venueId], references: [id, venueId], onDelete: Cascade)
   name        String
   description String?
   priceLabel  String?

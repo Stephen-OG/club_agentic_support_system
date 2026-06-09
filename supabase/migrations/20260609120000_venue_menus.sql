@@ -6,13 +6,14 @@ create table if not exists "MenuSection" (
   "isActive" boolean not null default true,
   "createdAt" timestamp(3) not null default current_timestamp,
   "updatedAt" timestamp(3) not null default current_timestamp,
-  constraint "MenuSection_venueId_name_key" unique ("venueId", "name")
+  constraint "MenuSection_venueId_name_key" unique ("venueId", "name"),
+  constraint "MenuSection_id_venueId_key" unique ("id", "venueId")
 );
 
 create table if not exists "MenuItem" (
   "id" uuid primary key default gen_random_uuid(),
   "venueId" uuid not null references "Venue"("id") on delete cascade,
-  "sectionId" uuid not null references "MenuSection"("id") on delete cascade,
+  "sectionId" uuid not null,
   "name" text not null,
   "description" text,
   "priceLabel" text,
@@ -21,7 +22,9 @@ create table if not exists "MenuItem" (
   "available" boolean not null default true,
   "sortOrder" integer not null default 0,
   "createdAt" timestamp(3) not null default current_timestamp,
-  "updatedAt" timestamp(3) not null default current_timestamp
+  "updatedAt" timestamp(3) not null default current_timestamp,
+  constraint "MenuItem_sectionId_venueId_fkey"
+    foreign key ("sectionId", "venueId") references "MenuSection"("id", "venueId") on delete cascade
 );
 
 create index if not exists "MenuSection_venueId_isActive_sortOrder_idx"
