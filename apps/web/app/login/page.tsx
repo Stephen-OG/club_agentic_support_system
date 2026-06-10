@@ -4,17 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoginPanel } from "../login-panel";
 import { PasswordChangePanel } from "../password-change-panel";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 import { apiRequest } from "@/lib/api/client";
 import { getSignedInRouteAction, mustChangePassword } from "@/lib/auth/session-route-policy";
 import type { CommandUser } from "@/lib/auth/types";
-import { useSupabaseSession } from "@/lib/supabase/use-session";
+import { useAuthSession } from "@/lib/app-auth/use-session";
 import { safeReplace } from "@/lib/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const session = useSupabaseSession();
+  const authClient = useMemo(() => createBrowserAuthClient(), []);
+  const session = useAuthSession();
   const [isChecking, setIsChecking] = useState(false);
   const [sessionValidated, setSessionValidated] = useState<boolean | null>(null);
 
@@ -34,7 +34,7 @@ export default function LoginPage() {
       return;
     }
 
-    if (!supabase) {
+    if (!authClient) {
       setSessionValidated(false);
       return;
     }
@@ -42,7 +42,7 @@ export default function LoginPage() {
     let cancelled = false;
     setIsChecking(true);
 
-    void apiRequest<CommandUser>(supabase, "/me")
+    void apiRequest<CommandUser>(authClient, "/me")
       .then((user) => {
         if (cancelled) {
           return;
@@ -76,7 +76,7 @@ export default function LoginPage() {
     return () => {
       cancelled = true;
     };
-  }, [router, session, supabase]);
+  }, [router, session, authClient]);
 
   if (session && mustChangePassword(session.user)) {
     return <PasswordChangePanel />;

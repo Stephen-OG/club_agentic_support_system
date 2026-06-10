@@ -13,7 +13,7 @@ import type { CommandView } from "@/lib/auth/role-policy";
 import { getCommandViewHref, getPrimaryMembership, getRoleDashboardMode, getVisibleCommandViews, resolveCommandView } from "@/lib/auth/role-policy";
 import type { CommandUser } from "@/lib/auth/types";
 import { getNextVisitedCommandViews } from "@/lib/command-tabs";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 
 const iconByView: Record<CommandView, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -28,7 +28,7 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const authClient = useMemo(() => createBrowserAuthClient(), []);
   const defaultView = getRoleDashboardMode(currentUser) === "staff" ? "operations" : "dashboard";
   const visibleViews = useMemo(() => getVisibleCommandViews(currentUser), [currentUser]);
   const requestedView = searchParams.get("view");
@@ -38,12 +38,12 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
   const primaryMembership = getPrimaryMembership(currentUser);
 
   async function signOut() {
-    if (!supabase) {
+    if (!authClient) {
       window.location.reload();
       return;
     }
 
-    await supabase.auth.signOut();
+    await authClient.auth.signOut();
     window.location.reload();
   }
 

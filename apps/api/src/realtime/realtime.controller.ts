@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { map, Observable } from "rxjs";
 import type { AuthContext } from "../auth/auth-context";
 import { CurrentAuth } from "../auth/auth-context.decorator";
-import { SupabaseAuthGuard } from "../auth/supabase-auth.guard";
+import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { PrismaService } from "../database/prisma.service";
 import { VenueAccessService } from "../venues/access.service";
 import { DomainEvent, DomainEventsService } from "./domain-events.service";
@@ -30,7 +30,7 @@ export class RealtimeController {
   ) {}
 
   @Sse("venues/:venueId/events")
-  @UseGuards(SupabaseAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @ApiBearerAuth()
   @ApiOkResponse({ description: "Streams venue request and message events" })
   async streamVenueEvents(@CurrentAuth() auth: AuthContext, @Param("venueId") venueId: string): Promise<Observable<SseMessage>> {

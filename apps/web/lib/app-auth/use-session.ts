@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
-import { createBrowserSupabaseClient } from "./browser";
+import type { AppAuthSession } from "./browser";
+import { createBrowserAuthClient } from "./browser";
 
-type Subscriber = (session: Session | null | undefined) => void;
+type Subscriber = (session: AppAuthSession | null | undefined) => void;
 
 const sessionState: {
-  session: Session | null | undefined;
+  session: AppAuthSession | null | undefined;
   initialized: boolean;
   subscribers: Subscriber[];
   subscription: { unsubscribe: () => void } | null;
@@ -18,8 +18,7 @@ const sessionState: {
   subscription: null
 };
 
-function notifySubscribers(nextSession: Session | null | undefined) {
-  // Deduplicate: skip if the session hasn't changed (same access_token)
+function notifySubscribers(nextSession: AppAuthSession | null | undefined) {
   const prev = sessionState.session;
 
   if (!shouldNotifySessionChange(prev, nextSession)) {
@@ -30,7 +29,7 @@ function notifySubscribers(nextSession: Session | null | undefined) {
   sessionState.subscribers.forEach((subscriber) => subscriber(nextSession));
 }
 
-export function shouldNotifySessionChange(previous: Session | null | undefined, next: Session | null | undefined) {
+export function shouldNotifySessionChange(previous: AppAuthSession | null | undefined, next: AppAuthSession | null | undefined) {
   if (previous === undefined) {
     return true;
   }
@@ -41,41 +40,29 @@ export function shouldNotifySessionChange(previous: Session | null | undefined, 
   return prevToken !== nextToken || previous?.user?.id !== next?.user?.id;
 }
 
-export function getCachedSupabaseSession() {
+export function getCachedAuthSession() {
   return sessionState.session;
 }
 
 function initSession() {
-  const supabase = createBrowserSupabaseClient();
+  const auth = createBrowserAuthClient();
 
-  if (!supabase) {
-    notifySubscribers(null);
-    return;
-  }
-
-  // Fall back to null if getSession takes longer than 15 s
-  const timeout = window.setTimeout(() => {
-    notifySubscribers(null);
-  }, 15_000);
-
-  void supabase.auth.getSession().then(({ data }) => {
-    window.clearTimeout(timeout);
+  void auth.auth.getSession().then(({ data }) => {
     notifySubscribers(data.session ?? null);
   }).catch(() => {
-    window.clearTimeout(timeout);
     notifySubscribers(null);
   });
 
   if (!sessionState.subscription) {
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = auth.auth.onAuthStateChange((_event, nextSession) => {
       notifySubscribers(nextSession ?? null);
     });
     sessionState.subscription = data.subscription;
   }
 }
 
-export function useSupabaseSession() {
-  const [session, setSession] = useState<Session | null | undefined>(() => sessionState.session);
+export function useAuthSession() {
+  const [session, setSession] = useState<AppAuthSession | null | undefined>(() => sessionState.session);
 
   useEffect(() => {
     sessionState.subscribers.push(setSession);

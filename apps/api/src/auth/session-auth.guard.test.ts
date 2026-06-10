@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ExecutionContext, UnauthorizedException } from "@nestjs/common";
-import { SupabaseAuthGuard } from "./supabase-auth.guard";
+import { SessionAuthGuard } from "./session-auth.guard";
 
 function contextWithAuthHeader(value?: string): ExecutionContext {
   const request = {
@@ -15,16 +15,18 @@ function contextWithAuthHeader(value?: string): ExecutionContext {
   } as ExecutionContext;
 }
 
-describe("SupabaseAuthGuard", () => {
-  it("creates auth context from a Supabase user linked to active membership", async () => {
-    const guard = new SupabaseAuthGuard(
+describe("SessionAuthGuard", () => {
+  it("creates auth context from an app session linked to active membership", async () => {
+    const guard = new SessionAuthGuard(
       {
-        auth: {
-          getUser: async (token: string) => ({
-            data: { user: { id: token, email: "admin@example.com", user_metadata: { mustChangePassword: false } } },
-            error: null
-          })
-        }
+        verifyBearerToken: async (token: string) => ({
+          user: {
+            id: token,
+            email: "admin@example.com",
+            displayName: "Admin User",
+            mustChangePassword: false
+          }
+        })
       } as any,
       {
         staffProfile: {
@@ -59,7 +61,7 @@ describe("SupabaseAuthGuard", () => {
   });
 
   it("rejects requests without bearer tokens", async () => {
-    const guard = new SupabaseAuthGuard({} as any, {} as any);
+    const guard = new SessionAuthGuard({} as any, {} as any);
     await assert.rejects(() => guard.canActivate(contextWithAuthHeader()), UnauthorizedException);
   });
 });

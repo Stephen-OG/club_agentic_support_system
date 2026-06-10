@@ -3,7 +3,7 @@ import { SkipThrottle, Throttle } from "@nestjs/throttler";
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import type { AuthContext } from "../auth/auth-context";
 import { CurrentAuth } from "../auth/auth-context.decorator";
-import { SupabaseAuthGuard } from "../auth/supabase-auth.guard";
+import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { GuestRequestActionDto } from "./dto/guest-request-action.dto";
 import { ListVenueRequestsDto } from "./dto/list-venue-requests.dto";
 import { UpdateRequestStatusDto } from "./dto/update-request-status.dto";
@@ -11,7 +11,7 @@ import { RequestsService } from "./requests.service";
 
 @ApiTags("requests")
 @ApiBearerAuth()
-@UseGuards(SupabaseAuthGuard)
+@UseGuards(SessionAuthGuard)
 @Controller()
 export class RequestsController {
   constructor(private readonly requests: RequestsService) {}

@@ -3,8 +3,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, ChevronRight, Globe, Hash, Loader2, MapPinned, User, Users } from "lucide-react";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-import { useSupabaseSession } from "@/lib/supabase/use-session";
+import { createBrowserAuthClient } from "@/lib/app-auth/browser";
+import { useAuthSession } from "@/lib/app-auth/use-session";
 import { mustChangePassword } from "@/lib/auth/session-route-policy";
 import { getSignupSlugError, normalizeSignupSlug } from "@/lib/auth/signup-flow";
 import { apiBaseUrl, createApiUnreachableError } from "@/lib/api/client";
@@ -14,8 +14,8 @@ type Step = "welcome" | "workspace" | "venue" | "creating";
 
 export default function SetupPage() {
   const router = useRouter();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const session = useSupabaseSession();
+  const authClient = useMemo(() => createBrowserAuthClient(), []);
+  const session = useAuthSession();
   const [step, setStep] = useState<Step>("welcome");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -146,7 +146,7 @@ export default function SetupPage() {
     setWorkspaceSlug(nextWorkspaceSlug);
     setVenueSlug(nextVenueSlug);
 
-    if (!session || !supabase) {
+    if (!session || !authClient) {
       setError("Session expired. Please sign in again.");
       return;
     }

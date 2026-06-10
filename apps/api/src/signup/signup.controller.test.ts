@@ -13,7 +13,7 @@ const setupInput = {
 };
 
 describe("SetupController", () => {
-  it("requires a verified Supabase email before workspace setup", async () => {
+  it("requires a verified app auth email before workspace setup", async () => {
     const controller = new SetupController(
       {
         initialize: async () => {
@@ -21,17 +21,11 @@ describe("SetupController", () => {
         }
       } as never,
       {
-        getClient: () => ({
-          auth: {
-            getUser: async () => ({
-              data: {
-                user: {
-                  email: setupInput.email,
-                  email_confirmed_at: null
-                }
-              },
-              error: null
-            })
+        verifyBearerToken: async () => ({
+          user: {
+            id: "auth-1",
+            email: setupInput.email,
+            emailVerifiedAt: null
           }
         })
       } as never

@@ -865,6 +865,12 @@ button {
   grid-column: 2;
 }
 
+.form-success {
+  color: var(--success);
+  font-size: 13px;
+  grid-column: 2;
+}
+
 .chat {
   display: grid;
   grid-template-rows: auto minmax(420px, 1fr) auto;

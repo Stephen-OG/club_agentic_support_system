@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { CurrentAuth } from "../auth/auth-context.decorator";
-import { SupabaseAuthGuard } from "../auth/supabase-auth.guard";
+import { SessionAuthGuard } from "../auth/session-auth.guard";
 import type { AuthContext } from "../auth/auth-context";
 import { CreateServicePointDto } from "./dto/create-service-point.dto";
 import { CreateVenueLocationDto } from "./dto/create-venue-location.dto";
@@ -12,7 +12,7 @@ import { ServicePointsService } from "./service-points.service";
 
 @ApiTags("admin venues")
 @ApiBearerAuth()
-@UseGuards(SupabaseAuthGuard)
+@UseGuards(SessionAuthGuard)
 @Controller("admin")
 export class AdminVenuesController {
   constructor(private readonly servicePoints: ServicePointsService) {}

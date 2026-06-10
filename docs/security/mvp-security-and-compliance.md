@@ -46,15 +46,18 @@ Keep this key in the hosting provider secret manager. Do not commit it to Git or
 
 ### Security Misconfiguration
 
-- Production startup fails if launch-critical API configuration is missing, including `DATABASE_URL`, Supabase admin credentials, `OPENAI_API_KEY`, `MESSAGE_ENCRYPTION_KEY`, `REDIS_URL`, and `CORS_ORIGINS`.
-- Production startup fails if `NEXT_PUBLIC_SUPABASE_URL` or `CORS_ORIGINS` are not public HTTPS URLs.
+- Production startup fails if launch-critical API configuration is missing, including `DATABASE_URL`, `OPENAI_API_KEY`, `MESSAGE_ENCRYPTION_KEY`, `AUTH_JWT_SECRET`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, `REDIS_URL`, and `CORS_ORIGINS`.
+- Production startup fails if `CORS_ORIGINS` are not public HTTPS URLs.
 - CORS is allow-list based via `CORS_ORIGINS`.
 - API security headers include no-sniff, frame denial, strict referrer policy, and restricted permissions policy.
 - Swagger docs are disabled by default in production.
 
 ### Identification And Authentication Failures
 
-- Supabase session handling gates admin/staff screens.
+- App-issued JWT access tokens and rotating hashed refresh tokens gate admin/staff screens.
+- Refresh token reuse revokes active refresh sessions for the affected user.
+- Password changes and resets increment token version so older access tokens are rejected.
+- Email verification, password reset, and staff invitation links use hashed, expiring, single-use tokens.
 - Route guards should keep returning users to login instead of hanging on loading shells.
 - Production must disable dev auth shortcuts if any local-only guard is enabled in development.
 
@@ -77,10 +80,10 @@ Keep this key in the hosting provider secret manager. Do not commit it to Git or
 - Set `CORS_ORIGINS` to the production web URL only.
 - Set `REDIS_URL`; production startup intentionally fails without it.
 - Keep `ENABLE_API_DOCS` unset unless temporarily debugging a private environment.
-- Verify Supabase RLS/auth policies for any direct client-side Supabase access.
+- Verify API authorization tests for staff, venue, and workspace access.
 - Run database migrations before switching traffic.
-- Confirm backups are enabled for Supabase Postgres.
-- Confirm logs do not include raw guest messages, Supabase service keys, OpenAI keys, or encryption keys.
+- Confirm backups are enabled for Postgres.
+- Confirm logs do not include raw guest messages, bearer tokens, OpenAI keys, or encryption keys.
 - Confirm public conversation URLs do not include `sessionId` query parameters.
 
 ## Recommended Next Controls

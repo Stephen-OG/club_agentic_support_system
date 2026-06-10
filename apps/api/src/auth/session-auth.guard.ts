@@ -1,7 +1,7 @@
-import { CanActivate, ExecutionContext, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import type { RequestWithAuth } from "./auth-context";
-import { SUPABASE_ADMIN_CLIENT, type SupabaseAdminClient } from "./supabase-admin.service";
+import { AppAuthService } from "./app-auth.service";
 
 type AuthRole = "owner" | "manager" | "admin" | "staff" | "security" | "read_only";
 
@@ -41,9 +41,9 @@ const authRoleRank: Record<AuthRole, number> = {
 };
 
 @Injectable()
-export class SupabaseAuthGuard implements CanActivate {
+export class SessionAuthGuard implements CanActivate {
   constructor(
-    @Inject(SUPABASE_ADMIN_CLIENT) private readonly supabase: SupabaseAdminClient,
+    private readonly appAuth: AppAuthService,
     private readonly prisma: PrismaService
   ) {}
 
@@ -55,14 +55,9 @@ export class SupabaseAuthGuard implements CanActivate {
       throw new UnauthorizedException("Missing bearer token");
     }
 
-    const { data, error } = await this.supabase.auth.getUser(token);
-
-    if (error || !data.user) {
-      throw new UnauthorizedException("Invalid session");
-    }
-
+    const session = await this.appAuth.verifyBearerToken(token);
     const profile = await this.prisma.staffProfile.findUnique({
-      where: { authUserId: data.user.id },
+      where: { authUserId: session.user.id },
       include: {
         memberships: {
           where: { isActive: true },
@@ -86,10 +81,10 @@ export class SupabaseAuthGuard implements CanActivate {
       role: membership.role
     };
     request.currentUser = {
-      authUserId: data.user.id,
-      email: data.user.email ?? profile.email ?? null,
+      authUserId: session.user.id,
+      email: session.user.email ?? profile.email ?? null,
       displayName: profile.displayName,
-      mustChangePassword: data.user.user_metadata?.mustChangePassword === true,
+      mustChangePassword: session.user.mustChangePassword,
       memberships: memberships.map((item) => ({
         id: item.id,
         workspaceId: item.workspaceId,

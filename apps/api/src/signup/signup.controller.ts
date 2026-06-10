@@ -1,7 +1,7 @@
 import { Body, Controller, Headers, Post, UnauthorizedException } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import { ApiCreatedResponse, ApiTags } from "@nestjs/swagger";
-import { SupabaseAdminService } from "../auth/supabase-admin.service";
+import { AppAuthService } from "../auth/app-auth.service";
 import { SetupRequestDto } from "./dto/signup-request.dto";
 import type { SetupResponseDto } from "./dto/signup-response.dto";
 import { SetupService } from "./signup.service";
@@ -11,7 +11,7 @@ import { SetupService } from "./signup.service";
 export class SetupController {
   constructor(
     private readonly signupService: SetupService,
-    private readonly supabaseAdmin: SupabaseAdminService
+    private readonly appAuth: AppAuthService
   ) {}
 
   @Post()
@@ -21,22 +21,17 @@ export class SetupController {
     @Body() input: SetupRequestDto,
     @Headers("authorization") authorization?: string
   ): Promise<SetupResponseDto> {
-    // Verify the user has a valid Supabase session
     const token = authorization?.replace(/^Bearer\s+/i, "");
     if (!token) {
       throw new UnauthorizedException("Missing authorization token");
     }
 
-    const { data: { user }, error } = await this.supabaseAdmin.getClient().auth.getUser(token);
-    if (error || !user) {
-      throw new UnauthorizedException("Invalid session");
-    }
+    const { user } = await this.appAuth.verifyBearerToken(token);
 
-    if (!user.email_confirmed_at && !user.confirmed_at) {
+    if (!user.emailVerifiedAt) {
       throw new UnauthorizedException("Email must be verified before workspace setup");
     }
 
-    // Ensure the email matches the authenticated user
     if (user.email?.toLowerCase() !== input.email.trim().toLowerCase()) {
       throw new UnauthorizedException("Email must match your authenticated session");
     }

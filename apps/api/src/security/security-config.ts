@@ -98,18 +98,15 @@ export function assertProductionSecurityConfig(env: EnvMap = process.env) {
   }
 
   assertRequiredProductionEnv(env, "DATABASE_URL");
-  assertRequiredProductionEnv(env, "NEXT_PUBLIC_SUPABASE_URL");
-  assertRequiredProductionEnv(env, "SUPABASE_SERVICE_ROLE_KEY");
   assertRequiredProductionEnv(env, "OPENAI_API_KEY");
   assertRequiredProductionEnv(env, "MESSAGE_ENCRYPTION_KEY");
+  assertRequiredProductionEnv(env, "AUTH_JWT_SECRET");
+  assertRequiredProductionEnv(env, "SMTP_USER", "SMTP_USER is required in production for Google SMTP authentication");
+  assertRequiredProductionEnv(env, "SMTP_PASSWORD", "SMTP_PASSWORD is required in production for Google SMTP authentication");
+  assertRequiredProductionEnv(env, "MAIL_FROM");
   assertValidMessageEncryptionKey(env.MESSAGE_ENCRYPTION_KEY || "");
   assertRequiredProductionEnv(env, "REDIS_URL", "REDIS_URL is required in production for shared rate limits, cache, and background jobs");
   assertRequiredProductionEnv(env, "CORS_ORIGINS");
-
-  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
-  if (!supabaseUrl.startsWith("https://")) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL must be a public HTTPS URL in production");
-  }
 
   const origins = parseCorsOrigins(env.CORS_ORIGINS);
   if (origins.some((origin) => !origin.startsWith("https://"))) {

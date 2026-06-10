@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { shouldNotifySessionChange } from "./use-session";
 
-describe("Supabase session cache", () => {
+describe("app auth session cache", () => {
   it("notifies subscribers when the initial unknown session resolves to signed out", () => {
     assert.equal(shouldNotifySessionChange(undefined, null), true);
   });

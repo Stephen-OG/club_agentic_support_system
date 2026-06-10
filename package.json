@@ -15,11 +15,9 @@
     "test": "npm run test --workspaces --if-present",
     "prisma:generate": "npm run prisma:generate -w @madupe/database",
     "prisma:migrate": "npm run prisma:migrate -w @madupe/database",
-    "seed": "npm run seed -w @madupe/database",
-    "supabase": "supabase"
+    "seed": "npm run seed -w @madupe/database"
   },
   "devDependencies": {
-    "supabase": "^2.98.2",
     "typescript": "^5.7.2"
   },
   "overrides": {

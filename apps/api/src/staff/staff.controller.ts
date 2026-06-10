@@ -2,13 +2,13 @@ import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { CurrentAuth } from "../auth/auth-context.decorator";
 import type { AuthContext } from "../auth/auth-context";
-import { SupabaseAuthGuard } from "../auth/supabase-auth.guard";
+import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { CreateStaffUserDto } from "./dto/create-staff-user.dto";
 import { StaffService } from "./staff.service";
 
 @ApiTags("staff")
 @ApiBearerAuth()
-@UseGuards(SupabaseAuthGuard)
+@UseGuards(SessionAuthGuard)
 @Controller()
 export class StaffController {
   constructor(private readonly staff: StaffService) {}
@@ -26,7 +26,7 @@ export class StaffController {
   }
 
   @Post("team")
-  @ApiCreatedResponse({ description: "Creates a Supabase Auth user and staff membership" })
+  @ApiCreatedResponse({ description: "Creates an app auth user and staff membership" })
   createStaffUser(@CurrentAuth() auth: AuthContext, @Body() input: CreateStaffUserDto) {
     return this.staff.createStaffUser(auth, input);
   }

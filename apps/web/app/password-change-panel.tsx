@@ -3,10 +3,10 @@
 import { FormEvent, useState } from "react";
 import { Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { validatePasswordChange } from "@/lib/account-security";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 
 export function PasswordChangePanel() {
-  const supabase = createBrowserSupabaseClient();
+  const authClient = createBrowserAuthClient();
   const [oldPassword, setOldPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -17,8 +17,8 @@ export function PasswordChangePanel() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!supabase) {
-      setError("Supabase is not configured for this environment.");
+    if (!authClient) {
+      setError("app auth is not configured for this environment.");
       return;
     }
 
@@ -31,26 +31,7 @@ export function PasswordChangePanel() {
     setLoading(true);
     setError(null);
 
-    const userResult = await supabase.auth.getUser();
-    const email = userResult.data.user?.email;
-
-    if (!email) {
-      setLoading(false);
-      setError("Could not confirm the signed-in email.");
-      return;
-    }
-
-    const signInResult = await supabase.auth.signInWithPassword({ email, password: oldPassword });
-    if (signInResult.error) {
-      setLoading(false);
-      setError("Old password is incorrect.");
-      return;
-    }
-
-    const result = await supabase.auth.updateUser({
-      password,
-      data: { mustChangePassword: false }
-    });
+    const result = await authClient.auth.updatePassword({ oldPassword, password });
 
     setLoading(false);
 

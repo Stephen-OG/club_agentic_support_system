@@ -1,5 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { getCachedSupabaseSession } from "./supabase/use-session";
+import type { AppAuthClient } from "./app-auth/browser";
+import { getCachedAuthSession } from "./app-auth/use-session";
 
 const realtimeApiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
 
@@ -18,7 +18,7 @@ type ConnectOptions = {
 };
 
 type StaffConnectOptions = ConnectOptions & {
-  supabase: SupabaseClient;
+  authClient: AppAuthClient;
   venueId: string;
 };
 
@@ -60,8 +60,8 @@ export function connectStaffVenueEvents(options: StaffConnectOptions) {
   const abortController = new AbortController();
 
   void (async () => {
-    const cachedSession = getCachedSupabaseSession();
-    const token = cachedSession?.access_token ?? (await options.supabase.auth.getSession()).data.session?.access_token;
+    const cachedSession = getCachedAuthSession();
+    const token = cachedSession?.access_token ?? (await options.authClient.auth.getSession()).data.session?.access_token;
 
     if (!token) {
       options.onError?.();

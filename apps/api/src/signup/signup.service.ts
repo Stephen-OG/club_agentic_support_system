@@ -1,6 +1,5 @@
 import { ConflictException, Injectable, InternalServerErrorException } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
-import { SupabaseAdminService } from "../auth/supabase-admin.service";
 import { StructuredLogger } from "../common/logger/structured-logger.service";
 import type { SetupRequestDto } from "./dto/signup-request.dto";
 import type { SetupResponseDto } from "./dto/signup-response.dto";
@@ -18,7 +17,6 @@ function defaultOpeningHours() {
 export class SetupService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly supabaseAdmin: SupabaseAdminService,
     private readonly logger: StructuredLogger
   ) {}
 
@@ -54,14 +52,12 @@ export class SetupService {
       throw new ConflictException(`Venue slug "${input.venueSlug}" is already taken.`);
     }
 
-    // Look up the Supabase user by email to get their authUserId
-    const { data: users } = await this.supabaseAdmin.getClient().auth.admin.listUsers();
-    const authUser = users?.users?.find((u) => u.email === email);
+    const authUser = await this.prisma.authUser.findUnique({ where: { email } });
 
     if (!authUser) {
-      this.logger.error(`Setup failed: no Supabase auth user found for ${email}`, undefined, "SetupService");
+      this.logger.error(`Setup failed: no app auth user found for ${email}`, undefined, "SetupService");
       throw new InternalServerErrorException(
-        "No Supabase auth user found for this email. Please sign up first."
+        "No app auth user found for this email. Please sign up first."
       );
     }
 

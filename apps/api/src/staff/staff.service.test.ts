@@ -9,7 +9,7 @@ const ownerAuth = { staffProfileId: "owner-1", workspaceId: "workspace-1", venue
 const managerAuth = { staffProfileId: "manager-1", workspaceId: "workspace-1", venueId: "venue-1", role: "manager" as const };
 
 describe("StaffService", () => {
-  it("creates a Supabase auth user, staff profile, and membership for admins", async () => {
+  it("creates an app auth user, staff profile, and membership for admins", async () => {
     const service = new StaffService(
       {
         staffProfile: {
@@ -44,6 +44,52 @@ describe("StaffService", () => {
     assert.equal(result.staff.email, "sam@example.com");
     assert.equal(result.membership.role, "STAFF");
     assert.match(result.temporaryPassword, /^Madupe-/);
+  });
+
+  it("sends a staff invitation email after creating app auth credentials", async () => {
+    const invitations: unknown[] = [];
+    const service = new StaffService(
+      {
+        staffProfile: {
+          findUnique: async () => null
+        },
+        venue: {
+          findFirst: async () => ({ id: "venue-1", workspaceId: "workspace-1" })
+        },
+        $transaction: async (operation: any) =>
+          operation({
+            staffProfile: {
+              create: async ({ data }: any) => ({ id: "profile-1", ...data })
+            },
+            staffMembership: {
+              create: async ({ data }: any) => ({ id: "membership-1", ...data })
+            }
+          })
+      } as any,
+      {
+        createTemporaryPasswordUser: async () => ({ id: "auth-1", email: "sam@example.com" }),
+        sendStaffInvitationEmail: async (input: unknown) => {
+          invitations.push(input);
+        }
+      } as any
+    );
+
+    await service.createStaffUser(adminAuth, {
+      email: "sam@example.com",
+      displayName: "Sam Service",
+      role: "staff",
+      temporaryPassword: "Madupe-temporary-1!",
+      venueId: "venue-1"
+    });
+
+    assert.deepEqual(invitations, [
+      {
+        authUserId: "auth-1",
+        email: "sam@example.com",
+        displayName: "Sam Service",
+        temporaryPassword: "Madupe-temporary-1!"
+      }
+    ]);
   });
 
   it("stores venue owners as venue-scoped memberships", async () => {
@@ -266,7 +312,7 @@ describe("StaffService", () => {
     assert.equal(createdAuthUser, false);
   });
 
-  it("deletes the temporary Supabase auth user when staff profile persistence fails", async () => {
+  it("deletes the temporary app auth user when staff profile persistence fails", async () => {
     const deletedAuthUserIds: string[] = [];
     const service = new StaffService(
       {

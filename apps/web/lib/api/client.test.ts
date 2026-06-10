@@ -14,7 +14,7 @@ describe("apiRequest", () => {
       throw new TypeError("Failed to fetch");
     };
 
-    const supabase = {
+    const authClient = {
       auth: {
         getSession: async () => ({
           data: {
@@ -26,12 +26,12 @@ describe("apiRequest", () => {
       }
     };
 
-    await assert.rejects(() => apiRequest(supabase as unknown as Parameters<typeof apiRequest>[0], "/team"), /API server is unreachable/);
+    await assert.rejects(() => apiRequest(authClient as unknown as Parameters<typeof apiRequest>[0], "/team"), /API server is unreachable/);
   });
 });
 
 describe("publicApiRequest", () => {
-  it("does not require a Supabase session for public QR endpoints", async () => {
+  it("does not require an app auth session for public QR endpoints", async () => {
     globalThis.fetch = async (input, init) => {
       assert.equal(input, "http://127.0.0.1:4000/public/qr/token/messages");
       assert.deepEqual(init?.headers, { "Content-Type": "application/json" });

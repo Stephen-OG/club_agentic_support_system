@@ -5,7 +5,7 @@ import Image from "next/image";
 import { Check, Copy, Download, Edit3, MapPinned, Plus, QrCode, RefreshCw, Trash2, X } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import type { CommandServicePoint, CommandVenue, CommandVenueLocation } from "@/lib/auth/types";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 import { generateQrCodeDataUrl } from "@/lib/qr";
 import {
   createLocationPayload,
@@ -32,7 +32,7 @@ type LocationDraft = {
 };
 
 export function VenuesCommand() {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const authClient = useMemo(() => createBrowserAuthClient(), []);
   const [venues, setVenues] = useState<CommandVenue[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,8 +47,8 @@ export function VenuesCommand() {
   const [deletingPointId, setDeletingPointId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!supabase) {
-      setError("Supabase is not configured.");
+    if (!authClient) {
+      setError("app auth is not configured.");
       setLoading(false);
       return;
     }
@@ -57,13 +57,13 @@ export function VenuesCommand() {
     setLoading(true);
 
     try {
-      setVenues(await apiRequest<CommandVenue[]>(supabase, "/admin/venues"));
+      setVenues(await apiRequest<CommandVenue[]>(authClient, "/admin/venues"));
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not load venues");
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [authClient]);
 
   const handleGenerateQr = useCallback(async (url: string, label: string) => {
     setQrLoading(true);
@@ -124,8 +124,8 @@ export function VenuesCommand() {
   async function createServicePoint(event: FormEvent<HTMLFormElement>, venue: CommandVenue) {
     event.preventDefault();
 
-    if (!supabase) {
-      setError("Supabase is not configured.");
+    if (!authClient) {
+      setError("app auth is not configured.");
       return;
     }
 
@@ -134,7 +134,7 @@ export function VenuesCommand() {
 
     try {
       const draft = servicePointDrafts[venue.id] ?? { label: "", locationId: "" };
-      const point = await apiRequest<CommandServicePoint>(supabase, `/admin/venues/${venue.id}/service-points`, {
+      const point = await apiRequest<CommandServicePoint>(authClient, `/admin/venues/${venue.id}/service-points`, {
         method: "POST",
         body: JSON.stringify(createServicePointPayload(draft))
       });
@@ -159,8 +159,8 @@ export function VenuesCommand() {
   async function createVenueLocation(event: FormEvent<HTMLFormElement>, venue: CommandVenue) {
     event.preventDefault();
 
-    if (!supabase) {
-      setError("Supabase is not configured.");
+    if (!authClient) {
+      setError("app auth is not configured.");
       return;
     }
 
@@ -169,7 +169,7 @@ export function VenuesCommand() {
 
     try {
       const draft = locationDrafts[venue.id] ?? { name: "" };
-      const location = await apiRequest<CommandVenueLocation>(supabase, `/admin/venues/${venue.id}/locations`, {
+      const location = await apiRequest<CommandVenueLocation>(authClient, `/admin/venues/${venue.id}/locations`, {
         method: "POST",
         body: JSON.stringify(createLocationPayload(draft))
       });
@@ -192,8 +192,8 @@ export function VenuesCommand() {
   }
 
   async function updateServicePoint(venue: CommandVenue, point: CommandServicePoint) {
-    if (!supabase) {
-      setError("Supabase is not configured.");
+    if (!authClient) {
+      setError("app auth is not configured.");
       return;
     }
 
@@ -202,7 +202,7 @@ export function VenuesCommand() {
     setError(null);
 
     try {
-      const updated = await apiRequest<CommandServicePoint>(supabase, `/admin/venues/${venue.id}/service-points/${point.id}`, {
+      const updated = await apiRequest<CommandServicePoint>(authClient, `/admin/venues/${venue.id}/service-points/${point.id}`, {
         method: "PATCH",
         body: JSON.stringify(createServicePointUpdatePayload(draft))
       });
@@ -231,8 +231,8 @@ export function VenuesCommand() {
   }
 
   async function deleteServicePoint(venue: CommandVenue, point: CommandServicePoint) {
-    if (!supabase) {
-      setError("Supabase is not configured.");
+    if (!authClient) {
+      setError("app auth is not configured.");
       return;
     }
 
@@ -240,7 +240,7 @@ export function VenuesCommand() {
     setError(null);
 
     try {
-      await apiRequest<CommandServicePoint>(supabase, `/admin/venues/${venue.id}/service-points/${point.id}`, {
+      await apiRequest<CommandServicePoint>(authClient, `/admin/venues/${venue.id}/service-points/${point.id}`, {
         method: "DELETE"
       });
       setVenues((current) =>
@@ -537,7 +537,7 @@ export function VenuesCommand() {
           <div className="empty-state">
             <MapPinned size={28} />
             <h2>No venues returned</h2>
-            <p>Create or seed venues in Supabase, then refresh this surface.</p>
+            <p>Create or seed venues in app auth, then refresh this surface.</p>
           </div>
         </div>
       ) : null}

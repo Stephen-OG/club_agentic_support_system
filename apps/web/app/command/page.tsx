@@ -4,26 +4,26 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CommandCenterPage } from "../command-center-page";
 import { apiRequest } from "@/lib/api/client";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 import { hasCommandDashboardAccess } from "@/lib/auth/role-policy";
 import type { CommandUser } from "@/lib/auth/types";
-import { useSupabaseSession } from "@/lib/supabase/use-session";
+import { useAuthSession } from "@/lib/app-auth/use-session";
 import { safeReplace } from "@/lib/navigation";
 
 export default function CommandPage() {
   const router = useRouter();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const session = useSupabaseSession();
+  const authClient = useMemo(() => createBrowserAuthClient(), []);
+  const session = useAuthSession();
   const [currentUser, setCurrentUser] = useState<CommandUser | null | undefined>(undefined);
 
   useEffect(() => {
-    if (!supabase || !session || session.user.user_metadata?.mustChangePassword === true) {
+    if (!authClient || !session || session.user.user_metadata?.mustChangePassword === true) {
       setCurrentUser(null);
       return;
     }
 
     let cancelled = false;
-    void apiRequest<CommandUser>(supabase, "/me")
+    void apiRequest<CommandUser>(authClient, "/me")
       .then((user) => {
         if (!cancelled) {
           setCurrentUser(user);
@@ -38,7 +38,7 @@ export default function CommandPage() {
     return () => {
       cancelled = true;
     };
-  }, [session, supabase]);
+  }, [session, authClient]);
 
   useEffect(() => {
     if (session === undefined || currentUser === undefined) {

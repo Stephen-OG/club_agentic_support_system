@@ -41,7 +41,7 @@ import {
   isRequestNotificationSupported,
   requestRequestNotificationPermission
 } from "@/lib/request-notification-alerts";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 
 function sharedStatus(status: CommandRequestStatus) {
   return status.toLowerCase() as Lowercase<CommandRequestStatus>;
@@ -104,7 +104,7 @@ function toggleValue<TValue extends string>(values: TValue[], value: TValue) {
 }
 
 export function OperationsCommand({ currentUser }: { currentUser: CommandUser }) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const authClient = useMemo(() => createBrowserAuthClient(), []);
   const primaryRole = getPrimaryRole(currentUser);
   const primaryMembership = getPrimaryMembership(currentUser);
   const primaryVenueId = primaryMembership?.venueId;
@@ -137,8 +137,8 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
   }, []);
 
   const loadVenues = useCallback(async () => {
-    if (!supabase) {
-      setError("Supabase is not configured.");
+    if (!authClient) {
+      setError("app auth is not configured.");
       setLoading(false);
       return [];
     }
@@ -148,11 +148,11 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
       return [];
     }
 
-    const nextVenues = await apiRequest<CommandVenue[]>(supabase, "/admin/venues");
+    const nextVenues = await apiRequest<CommandVenue[]>(authClient, "/admin/venues");
     setVenues(nextVenues);
     setSelectedVenueId((current) => current || primaryVenueId || nextVenues[0]?.id || "");
     return nextVenues;
-  }, [canSwitchVenues, primaryVenueId, supabase]);
+  }, [canSwitchVenues, primaryVenueId, authClient]);
 
   const notifyForNewRequests = useCallback((nextRequests: CommandSupportRequest[]) => {
     if (!hasLoadedRequestsRef.current) {
@@ -168,13 +168,13 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
   }, []);
 
   const loadRequests = useCallback(async (venueId: string) => {
-    if (!supabase || !venueId) {
+    if (!authClient || !venueId) {
       setRequests([]);
       return;
     }
 
     try {
-      const nextRequests = await apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venueId}/requests`);
+      const nextRequests = await apiRequest<CommandSupportRequest[]>(authClient, `/venues/${venueId}/requests`);
       notifyForNewRequests(nextRequests);
       setRequests(nextRequests);
       setLastUpdatedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
@@ -182,7 +182,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
       // Poll failures are expected when the session token rotates;
       // the manual Refresh button still surfaces errors to the user.
     }
-  }, [notifyForNewRequests, supabase]);
+  }, [notifyForNewRequests, authClient]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -200,12 +200,12 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
   }, [loadRequests, loadVenues, primaryVenueId, selectedVenueId, venues]);
 
   async function patchRequestStatus(request: CommandSupportRequest, status: CommandRequestStatus) {
-    if (!supabase) {
-      setError("Supabase is not configured.");
+    if (!authClient) {
+      setError("app auth is not configured.");
       return null;
     }
 
-    const updated = await apiRequest<CommandSupportRequest>(supabase, `/requests/${request.id}/status`, {
+    const updated = await apiRequest<CommandSupportRequest>(authClient, `/requests/${request.id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status: sharedStatus(status) })
     });
@@ -260,9 +260,9 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
     const intervalId = window.setInterval(() => {
       void loadRequests(selectedVenueId);
     }, operationsPollIntervalMs);
-    const disconnectRealtime = supabase
+    const disconnectRealtime = authClient
       ? connectStaffVenueEvents({
-          supabase,
+          authClient,
           venueId: selectedVenueId,
           onEvent: () => {
             void loadRequests(selectedVenueId);
@@ -274,7 +274,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
       disconnectRealtime();
       window.clearInterval(intervalId);
     };
-  }, [loadRequests, selectedVenueId, supabase]);
+  }, [loadRequests, selectedVenueId, authClient]);
 
   async function enableNotifications() {
     if (!isRequestNotificationSupported()) {

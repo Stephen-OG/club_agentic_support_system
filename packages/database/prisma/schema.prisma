@@ -67,6 +67,12 @@ enum IntegrationProvider {
   EMAIL      @map("email")
 }
 
+enum AuthEmailTokenType {
+  EMAIL_VERIFICATION @map("email_verification")
+  PASSWORD_RESET     @map("password_reset")
+  STAFF_INVITATION   @map("staff_invitation")
+}
+
 model Workspace {
   id               String            @id @default(uuid()) @db.Uuid
   name             String
@@ -76,6 +82,51 @@ model Workspace {
   billingAccount   BillingAccount?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+}
+
+model AuthUser {
+  id                 String        @id @default(uuid()) @db.Uuid
+  email              String        @unique
+  passwordHash       String
+  displayName        String
+  emailVerifiedAt    DateTime?
+  mustChangePassword Boolean       @default(false)
+  tokenVersion       Int           @default(1)
+  sessions           AuthSession[]
+  emailTokens        AuthEmailToken[]
+  staffProfile       StaffProfile?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([email])
+}
+
+model AuthEmailToken {
+  id         String             @id @default(uuid()) @db.Uuid
+  authUserId String             @db.Uuid
+  authUser   AuthUser           @relation(fields: [authUserId], references: [id], onDelete: Cascade)
+  type       AuthEmailTokenType
+  tokenHash  String             @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime           @default(now())
+
+  @@index([authUserId, type, expiresAt])
+  @@index([usedAt])
+}
+
+model AuthSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  authUserId       String    @db.Uuid
+  authUser         AuthUser  @relation(fields: [authUserId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique
+  tokenVersion     Int
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([authUserId, expiresAt])
+  @@index([revokedAt])
 }
 
 model Venue {
@@ -160,7 +211,8 @@ model ServicePoint {
 
 model StaffProfile {
   id                         String              @id @default(uuid()) @db.Uuid
-  authUserId                 String?             @unique
+  authUserId                 String?             @unique @db.Uuid
+  authUser                   AuthUser?           @relation(fields: [authUserId], references: [id], onDelete: SetNull)
   email                      String?             @unique
   displayName                String
   memberships                StaffMembership[]

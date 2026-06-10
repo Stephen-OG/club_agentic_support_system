@@ -8,10 +8,7 @@ const { merged, publicEnv } = loadWorkspaceEnv({ appDir, repoRoot });
 
 for (const key of [
   "DATABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "OPENAI_API_KEY",
-  "SUPABASE_SERVICE_ROLE_KEY"
+  "OPENAI_API_KEY"
 ]) {
   if (!process.env[key] && merged[key]) {
     process.env[key] = merged[key];

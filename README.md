@@ -42,9 +42,9 @@ This is a TypeScript monorepo with:
 - A NestJS API skeleton in `apps/api`
 - Shared request classification and schemas in `packages/shared`
 - Database/Prisma setup in `packages/database`
-- Supabase migrations in `supabase`
+- Prisma migrations in `packages/database/prisma/migrations`
 
-The backend uses Prisma models for workspaces, venues, service points, conversations, messages, staff, memberships, and support requests. Legacy club/table Supabase SQL has been removed from the active implementation.
+The backend uses Prisma models for app auth users, sessions, workspaces, venues, service points, conversations, messages, staff, memberships, and support requests.
 
 ## Useful Mental Model
 

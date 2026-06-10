@@ -107,14 +107,6 @@ describe("security config", () => {
       () =>
         assertProductionSecurityConfig({
           ...validProductionEnv(),
-          NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321"
-        }),
-      /SUPABASE_URL.*HTTPS/
-    );
-    assert.throws(
-      () =>
-        assertProductionSecurityConfig({
-          ...validProductionEnv(),
           MESSAGE_ENCRYPTION_KEY: "not-a-32-byte-key"
         }),
       /32 bytes/
@@ -155,10 +147,13 @@ function validProductionEnv() {
   return {
     NODE_ENV: "production",
     DATABASE_URL: "postgresql://postgres:postgres@db.example.com:5432/postgres",
-    NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
     OPENAI_API_KEY: "openai-key",
     MESSAGE_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000",
+    AUTH_JWT_SECRET: "production-jwt-secret-with-at-least-32-bytes",
+    SMTP_HOST: "smtp.gmail.com",
+    SMTP_USER: "support@madupe.com",
+    SMTP_PASSWORD: "google-app-password",
+    MAIL_FROM: "Madupe <support@madupe.com>",
     REDIS_URL: "rediss://default:secret@redis.example.com:6379",
     CORS_ORIGINS: "https://app.example.com"
   };

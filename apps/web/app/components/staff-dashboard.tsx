@@ -16,7 +16,7 @@ import {
   summarizeStaffQueueBuckets,
   type StaffQueueBucket
 } from "@/lib/staff-workflow";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 
 function label(value: string) {
   return value.toLowerCase().replace("_", " ");
@@ -31,7 +31,7 @@ function canAct(user: CommandUser) {
 }
 
 export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const authClient = useMemo(() => createBrowserAuthClient(), []);
   const membership = getPrimaryMembership(currentUser);
   const venueId = membership?.venueId ?? "";
   const venueName = membership?.venue?.name || "Assigned venue";
@@ -62,7 +62,7 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
   }, []);
 
   async function refresh() {
-    if (!supabase || !venueId) {
+    if (!authClient || !venueId) {
       setLoading(false);
       return;
     }
@@ -71,7 +71,7 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
     setError(null);
 
     try {
-      const nextRequests = await apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venueId}/requests`);
+      const nextRequests = await apiRequest<CommandSupportRequest[]>(authClient, `/venues/${venueId}/requests`);
       notifyForNewRequests(nextRequests);
       setRequests(nextRequests);
     } catch (nextError) {
@@ -82,7 +82,7 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
   }
 
   async function updateRequest(request: CommandSupportRequest, status: CommandRequestStatus) {
-    if (!supabase || !canUpdateRequests) {
+    if (!authClient || !canUpdateRequests) {
       return;
     }
 
@@ -90,7 +90,7 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
     setError(null);
 
     try {
-      const updated = await apiRequest<CommandSupportRequest>(supabase, `/requests/${request.id}/status`, {
+      const updated = await apiRequest<CommandSupportRequest>(authClient, `/requests/${request.id}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status: sharedStatus(status) })
       });
@@ -103,17 +103,17 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
   }
 
   async function signOut() {
-    await supabase?.auth.signOut();
+    await authClient?.auth.signOut();
     window.location.reload();
   }
 
   useEffect(() => {
-    if (!supabase || !venueId) {
+    if (!authClient || !venueId) {
       setLoading(false);
       return;
     }
 
-    const client = supabase;
+    const client = authClient;
     let cancelled = false;
     async function loadQueue(options: { showLoading: boolean }) {
       if (options.showLoading) {
@@ -143,7 +143,7 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
       void loadQueue({ showLoading: false });
     }, staffQueuePollIntervalMs);
     const disconnectRealtime = connectStaffVenueEvents({
-      supabase: client,
+      authClient: client,
       venueId,
       onEvent: () => {
         void loadQueue({ showLoading: false });
@@ -155,7 +155,7 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
       disconnectRealtime();
       window.clearInterval(intervalId);
     };
-  }, [notifyForNewRequests, supabase, venueId]);
+  }, [notifyForNewRequests, authClient, venueId]);
 
   const bucketSummary = summarizeStaffQueueBuckets(requests);
   const activeRequests = requests.filter((request) => getStaffQueueBucket(request.status) === "active");

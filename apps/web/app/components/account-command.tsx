@@ -12,7 +12,7 @@ import {
   isRequestNotificationSupported,
   requestRequestNotificationPermission
 } from "@/lib/request-notification-alerts";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 import {
   copyMondayHoursToWeekdays,
   createOpeningHoursPayload,
@@ -32,7 +32,7 @@ const settingsSections: Array<{ id: SettingsSection; label: string; icon: Lucide
 ];
 
 export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const authClient = useMemo(() => createBrowserAuthClient(), []);
   const primaryMembership = getPrimaryMembership(currentUser);
   const canManageVenueSettings = hasCommandDashboardAccess(currentUser);
   const [activeSection, setActiveSection] = useState<SettingsSection>("workspace");
@@ -62,8 +62,8 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
       return;
     }
 
-    if (!supabase) {
-      setSettingsError("Supabase is not configured.");
+    if (!authClient) {
+      setSettingsError("app auth is not configured.");
       return;
     }
 
@@ -71,7 +71,7 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
     setSettingsError(null);
 
     try {
-      const nextVenues = await apiRequest<CommandVenue[]>(supabase, "/admin/venues");
+      const nextVenues = await apiRequest<CommandVenue[]>(authClient, "/admin/venues");
       setVenues(nextVenues);
       setSelectedVenueId((current) => current || nextVenues[0]?.id || "");
       setHourDrafts((current) => {
@@ -86,7 +86,7 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
     } finally {
       setVenuesLoading(false);
     }
-  }, [canManageVenueSettings, setSelectedVenueId, supabase]);
+  }, [canManageVenueSettings, setSelectedVenueId, authClient]);
 
   useEffect(() => {
     const permission = getRequestNotificationPermission();
@@ -117,8 +117,8 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
   }
 
   async function saveOpeningHours(venue: CommandVenue) {
-    if (!supabase) {
-      setSettingsError("Supabase is not configured.");
+    if (!authClient) {
+      setSettingsError("app auth is not configured.");
       return;
     }
 
@@ -127,7 +127,7 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
 
     try {
       const openingHours = hourDrafts[venue.id] ?? normalizeOpeningHours(venue.openingHours);
-      const updated = await apiRequest<CommandVenue>(supabase, `/admin/venues/${venue.id}/opening-hours`, {
+      const updated = await apiRequest<CommandVenue>(authClient, `/admin/venues/${venue.id}/opening-hours`, {
         method: "PATCH",
         body: JSON.stringify(createOpeningHoursPayload(openingHours))
       });
@@ -156,8 +156,8 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!supabase) {
-      setMessage("Supabase is not configured.");
+    if (!authClient) {
+      setMessage("app auth is not configured.");
       return;
     }
 
@@ -171,21 +171,7 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
     setMessage(null);
 
     try {
-      const userResult = await supabase.auth.getUser();
-      const email = userResult.data.user?.email;
-
-      if (!email) {
-        setMessage("Could not confirm the signed-in email.");
-        return;
-      }
-
-      const signInResult = await supabase.auth.signInWithPassword({ email, password: oldPassword });
-      if (signInResult.error) {
-        setMessage("Old password is incorrect.");
-        return;
-      }
-
-      const result = await supabase.auth.updateUser({ password: newPassword });
+      const result = await authClient.auth.updatePassword({ oldPassword, password: newPassword });
       setMessage(result.error ? result.error.message : "Password updated.");
       if (!result.error) {
         setOldPassword("");
@@ -198,7 +184,7 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
   }
 
   async function signOut() {
-    await supabase?.auth.signOut();
+    await authClient?.auth.signOut();
     window.location.reload();
   }
 

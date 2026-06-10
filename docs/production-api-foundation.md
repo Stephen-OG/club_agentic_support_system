@@ -1,10 +1,12 @@
 # Production API Foundation
 
-The production foundation keeps business logic in the NestJS API while Supabase provides Auth and Postgres. The API owns venue access checks, QR intake, request lifecycle updates, message encryption, cache invalidation, rate limiting, and background job wiring.
+The production foundation keeps business logic, authentication, and authorization in the NestJS API backed by Postgres. The API owns venue access checks, QR intake, request lifecycle updates, message encryption, cache invalidation, rate limiting, and background job wiring.
 
 ## Authentication
 
-Protected API endpoints use Supabase bearer tokens in production. The `SupabaseAuthGuard` loads the authenticated user, active staff profile, workspace, venue membership, and role before protected handlers run.
+Protected API endpoints use app-issued bearer JWT access tokens in production. Access tokens are short-lived, while refresh tokens are long-lived, rotating, and stored only as hashes in Postgres. The `SessionAuthGuard` verifies the access token, loads the authenticated user, active staff profile, workspace, venue membership, and role before protected handlers run.
+
+Refresh token reuse revokes the user's active refresh sessions. Password resets and password changes increment the auth user's token version, which invalidates older access tokens and refresh sessions.
 
 Development auth headers may still be used by local-only development paths, but they must not be enabled for public production deployments.
 
@@ -43,11 +45,13 @@ Protected endpoints enforce workspace and venue access in the NestJS API.
 ## Production Requirements
 
 - `DATABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
 - `OPENAI_API_KEY`
 - `MESSAGE_ENCRYPTION_KEY`
+- `AUTH_JWT_SECRET`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
+- `MAIL_FROM`
 - `REDIS_URL`
 - `CORS_ORIGINS`
 
-Production startup fails fast without `MESSAGE_ENCRYPTION_KEY`, `REDIS_URL`, or `DATABASE_URL`.
+Production startup fails fast without `MESSAGE_ENCRYPTION_KEY`, `AUTH_JWT_SECRET`, `REDIS_URL`, or `DATABASE_URL`.

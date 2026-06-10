@@ -16,6 +16,9 @@ describe("SetupService", () => {
     let membershipData: Record<string, unknown> | null = null;
     const service = new SetupService(
       {
+        authUser: {
+          findUnique: async () => ({ id: "auth-1", email: "owner@example.com" })
+        },
         staffProfile: {
           findUnique: async () => null
         },
@@ -43,19 +46,6 @@ describe("SetupService", () => {
               }
             }
           })
-      } as any,
-      {
-        getClient: () => ({
-          auth: {
-            admin: {
-              listUsers: async () => ({
-                data: {
-                  users: [{ id: "auth-1", email: "owner@example.com" }]
-                }
-              })
-            }
-          }
-        })
       } as any,
       {
         error: () => undefined,

@@ -20,11 +20,17 @@ Set these values in the platform secret manager, not in the image:
 - `HOST=0.0.0.0`
 - `PORT=4000`
 - `DATABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
 - `OPENAI_API_KEY`
 - `OPENAI_TRIAGE_MODEL`
 - `MESSAGE_ENCRYPTION_KEY`
+- `AUTH_JWT_SECRET`
+- `SMTP_HOST=smtp.gmail.com`
+- `SMTP_PORT=587`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
+- `SMTP_SECURE=false`
+- `MAIL_FROM`
+- `PUBLIC_API_URL`
 - `REDIS_URL`
 - `CORS_ORIGINS`
 
@@ -34,7 +40,23 @@ Set these values in the platform secret manager, not in the image:
 openssl rand -base64 32
 ```
 
+`AUTH_JWT_SECRET` signs short-lived staff/admin access tokens. Generate it with:
+
+```bash
+openssl rand -base64 48
+```
+
 `REDIS_URL` is required in production because rate limits, cache, and background jobs need shared state across API instances.
+
+`SMTP_HOST=smtp.gmail.com` and `SMTP_PORT=587` use Gmail/Google Workspace SMTP with STARTTLS. `SMTP_USER` should be the full Google Workspace/Gmail sender address, and `SMTP_PASSWORD` should be an app password for that account. Google also supports SSL on port `465`; set `SMTP_PORT=465` and `SMTP_SECURE=true` for that mode. `MAIL_FROM` should be a branded sender such as `Madupe <support@madupe.com>`. `PUBLIC_API_URL` is used for verification links that must hit the API before redirecting users back to the web app.
+
+## Transactional Email Templates
+
+The API owns transactional email rendering in `apps/api/src/mail/email-templates.ts`.
+
+- `email_verification`: confirms a new account email before workspace setup.
+- `password_reset`: sends a secure password reset link.
+- `staff_invitation`: sends staff their command-center invite and temporary credential.
 
 ## Pre-Deploy Checks
 
@@ -51,21 +73,14 @@ npm run prisma:generate -w @madupe/database
 Run migrations against the target database before switching traffic:
 
 ```bash
-supabase db push
+npm run prisma:migrate -w @madupe/database
 ```
 
-This repo keeps production SQL migrations in `supabase/migrations`. Prisma owns the application schema and generated client, but this project does not currently use Prisma migration history for the existing Supabase database. Do not use `prisma migrate dev` against production.
+This repo keeps production SQL migrations in `packages/database/prisma/migrations`. Prisma owns the application schema and generated client.
 
-If the Supabase CLI is not linked locally, run:
+## Postgres Pooling
 
-```bash
-supabase link --project-ref <project-ref>
-supabase db push
-```
-
-## Supabase/Postgres Pooling
-
-Render can run more than one API process during deploys or scaling, and Prisma opens a pool per process. If Supabase reports `EMAXCONNSESSION` or `max clients reached in session mode`, cap the Prisma pool in `DATABASE_URL`.
+Render can run more than one API process during deploys or scaling, and Prisma opens a pool per process. If Postgres reports max connection errors, cap the Prisma pool in `DATABASE_URL`.
 
 For a small MVP deployment, start with:
 
@@ -73,11 +88,11 @@ For a small MVP deployment, start with:
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/postgres?connection_limit=3&pool_timeout=30"
 ```
 
-If you run multiple API instances, multiply `connection_limit` by the instance count and keep it below the Supabase pool size. If the database is already at its limit, lower the instance count first, then increase the Supabase pool size only after confirming the app is stable.
+If you run multiple API instances, multiply `connection_limit` by the instance count and keep it below the database pool size. If the database is already at its limit, lower the instance count first, then increase the pool size only after confirming the app is stable.
 
 ## Health And Rollback
 
 - Health checks should call `GET /health`.
 - Keep one previous image available for rollback.
-- If startup fails with `MESSAGE_ENCRYPTION_KEY`, `REDIS_URL`, or `DATABASE_URL`, fix secrets before retrying. The API intentionally fails fast instead of starting in an unsafe mode.
+- If startup fails with `MESSAGE_ENCRYPTION_KEY`, `AUTH_JWT_SECRET`, `REDIS_URL`, or `DATABASE_URL`, fix secrets before retrying. The API intentionally fails fast instead of starting in an unsafe mode.
 - If a Prisma migration fails, stop deployment and follow [DB Migration Rollback](../runbooks/db-migration-rollback.md).

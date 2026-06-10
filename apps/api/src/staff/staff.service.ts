@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { ConflictException, ForbiddenException, Injectable } from "@nestjs/common";
 import { StaffRole } from "@prisma/client";
 import type { AuthContext } from "../auth/auth-context";
-import { SupabaseAdminService } from "../auth/supabase-admin.service";
+import { AppAuthService } from "../auth/app-auth.service";
 import { PrismaService } from "../database/prisma.service";
 import type { CreateStaffUserDto } from "./dto/create-staff-user.dto";
 
@@ -30,7 +30,7 @@ const venueManagerCreatableRoles = new Set<CreateStaffUserDto["role"]>(["manager
 export class StaffService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly supabaseAdmin: SupabaseAdminService
+    private readonly appAuth: AppAuthService
   ) {}
 
   async getCurrentUser(auth: AuthContext) {
@@ -109,7 +109,7 @@ export class StaffService {
     }
 
     const temporaryPassword = input.temporaryPassword || this.generateTemporaryPassword();
-    const authUser = await this.supabaseAdmin.createTemporaryPasswordUser({
+    const authUser = await this.appAuth.createTemporaryPasswordUser({
       email,
       password: temporaryPassword,
       displayName: input.displayName.trim()
@@ -142,9 +142,16 @@ export class StaffService {
         return { staff, membership };
       });
     } catch (error) {
-      await this.supabaseAdmin.deleteUser(authUser.id);
+      await this.appAuth.deleteUser(authUser.id);
       throw error;
     }
+
+    await this.appAuth.sendStaffInvitationEmail?.({
+      authUserId: authUser.id,
+      email,
+      displayName: input.displayName.trim(),
+      temporaryPassword
+    });
 
     return {
       staff: result.staff,

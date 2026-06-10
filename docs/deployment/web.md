@@ -16,29 +16,11 @@ Set these values in the web hosting project:
 
 - `NEXT_PUBLIC_API_URL`
 - `NEXT_PUBLIC_APP_URL=https://madupe.com`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
 - `LOG_LEVEL`
 
-Only `NEXT_PUBLIC_*` values are exposed to the browser. Keep `SUPABASE_SERVICE_ROLE_KEY` server-side only; it is used by server components and API-adjacent web code and must never be sent to client components.
+Only `NEXT_PUBLIC_*` values are exposed to the browser. Authentication requests go through the Nest API and use app-issued bearer tokens stored by the web client.
 
 `NEXT_PUBLIC_APP_URL` is the canonical guest-facing base URL used for generated QR codes and venue links. Set it to the production domain so QR codes encode `https://madupe.com/qr/:token` even if an admin opens the command center from a Vercel preview URL.
-
-## Supabase Auth Email Templates
-
-Install the Madupe templates from `supabase/email-templates` before production signup tests:
-
-- Supabase Auth Site URL: `https://madupe.com`
-- Supabase Auth redirect allow list: include `https://madupe.com/signup`, `https://madupe.com/login`, and any intentional preview URLs.
-- Confirm sign up subject: `Confirm your Madupe account`
-- Magic Link / OTP subject: `Your Madupe sign-in link`
-- Reset password subject: `Reset your Madupe password`
-- Invite user subject: `You have been invited to Madupe`
-- Change email address subject: `Confirm your new Madupe email address`
-- Reauthentication subject: `Your Madupe verification code`
-
-Keep Supabase template variables such as `{{ .ConfirmationURL }}`, `{{ .Token }}`, `{{ .SiteURL }}`, `{{ .RedirectTo }}`, `{{ .Email }}`, and `{{ .NewEmail }}` unchanged when copying the templates.
 
 ## Pre-Deploy Checks
 
@@ -54,10 +36,11 @@ npm run build --workspaces --if-present
 After deployment:
 
 1. Open `/login` and confirm the page renders without loading-shell stalls.
-2. Sign in with a verified user and confirm `/me` returns the expected role.
-3. Open `/admin` as owner/admin/manager and confirm venue controls are clickable.
-4. Open `/staff` as staff/security/read-only and confirm the queue loads.
-5. Scan or open one `/qr/:token` and one `/venue/:slug` link and confirm guest chat loads without `sessionId` in the URL.
+2. Create an account and confirm the verification email arrives before signing in.
+3. Sign in with a verified user and confirm `/me` returns the expected role.
+4. Open `/admin` as owner/admin/manager and confirm venue controls are clickable.
+5. Open `/staff` as staff/security/read-only and confirm the queue loads.
+6. Scan or open one `/qr/:token` and one `/venue/:slug` link and confirm guest chat loads without `sessionId` in the URL.
 
 ## CORS
 

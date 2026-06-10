@@ -1,12 +1,15 @@
 import { Module } from "@nestjs/common";
 import { DatabaseModule } from "../database/database.module";
+import { MailModule } from "../mail/mail.module";
+import { AppAuthService } from "./app-auth.service";
+import { AuthController } from "./auth.controller";
 import { DevAuthGuard } from "./dev-auth.guard";
-import { SupabaseAdminService, supabaseAdminProvider } from "./supabase-admin.service";
-import { SupabaseAuthGuard } from "./supabase-auth.guard";
+import { SessionAuthGuard } from "./session-auth.guard";
 
 @Module({
-  imports: [DatabaseModule],
-  exports: [DevAuthGuard, SupabaseAuthGuard, SupabaseAdminService, supabaseAdminProvider],
-  providers: [DevAuthGuard, SupabaseAuthGuard, SupabaseAdminService, supabaseAdminProvider]
+  imports: [DatabaseModule, MailModule],
+  controllers: [AuthController],
+  exports: [AppAuthService, DevAuthGuard, SessionAuthGuard, MailModule],
+  providers: [AppAuthService, DevAuthGuard, SessionAuthGuard]
 })
 export class AuthModule {}

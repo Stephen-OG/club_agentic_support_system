@@ -6,7 +6,7 @@ import { apiRequest } from "@/lib/api/client";
 import type { CommandSupportRequest, CommandUser, CommandVenue, OnboardingStatus } from "@/lib/auth/types";
 import { type DashboardVolumeWindow, calculateAdminDashboardControls, calculateDashboardAnalytics, getRequestVolumeSeries } from "@/lib/dashboard-analytics";
 import { getDashboardExperience } from "@/lib/dashboard-experience";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 
 function formatMinutes(value: number | null) {
   if (value === null) {
@@ -43,7 +43,7 @@ function riskLabel(risk: "breached" | "soon", minutesUntilBreach: number) {
 }
 
 export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUser }) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const authClient = useMemo(() => createBrowserAuthClient(), []);
   const experience = useMemo(() => getDashboardExperience(currentUser), [currentUser]);
   const [venues, setVenues] = useState<CommandVenue[]>([]);
   const [requests, setRequests] = useState<CommandSupportRequest[]>([]);
@@ -54,8 +54,8 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
   const [volumeWindow, setVolumeWindow] = useState<DashboardVolumeWindow>("hourly");
 
   const refresh = useCallback(async () => {
-    if (!supabase) {
-      setError("Supabase is not configured.");
+    if (!authClient) {
+      setError("app auth is not configured.");
       setLoading(false);
       return;
     }
@@ -64,12 +64,12 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
     setLoading(true);
 
     try {
-      const nextVenues = await apiRequest<CommandVenue[]>(supabase, "/admin/venues");
+      const nextVenues = await apiRequest<CommandVenue[]>(authClient, "/admin/venues");
       const visibleVenues = experience.scopeVenueIds ? nextVenues.filter((venue) => experience.scopeVenueIds?.includes(venue.id)) : nextVenues;
       const requestGroups = await Promise.all(
-        visibleVenues.map((venue) => apiRequest<CommandSupportRequest[]>(supabase, `/venues/${venue.id}/requests`).catch(() => []))
+        visibleVenues.map((venue) => apiRequest<CommandSupportRequest[]>(authClient, `/venues/${venue.id}/requests`).catch(() => []))
       );
-      const nextOnboarding = experience.showLaunchChecklist ? await apiRequest<OnboardingStatus>(supabase, "/onboarding/status").catch(() => null) : null;
+      const nextOnboarding = experience.showLaunchChecklist ? await apiRequest<OnboardingStatus>(authClient, "/onboarding/status").catch(() => null) : null;
       const scopedRequests = experience.scopeVenueIds ? requestGroups.flat().filter((request) => experience.scopeVenueIds?.includes(request.venueId)) : requestGroups.flat();
       setVenues(visibleVenues);
       setRequests(scopedRequests);
@@ -80,7 +80,7 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
     } finally {
       setLoading(false);
     }
-  }, [experience.scopeVenueIds, experience.showLaunchChecklist, supabase]);
+  }, [experience.scopeVenueIds, experience.showLaunchChecklist, authClient]);
 
   useEffect(() => {
     void refresh();

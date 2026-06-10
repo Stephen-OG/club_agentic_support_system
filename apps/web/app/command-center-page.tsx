@@ -7,24 +7,24 @@ import { LoginPanel } from "./login-panel";
 import { PasswordChangePanel } from "./password-change-panel";
 import { apiRequest } from "@/lib/api/client";
 import type { CommandUser } from "@/lib/auth/types";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-import { useSupabaseSession } from "@/lib/supabase/use-session";
+import { createBrowserAuthClient } from "@/lib/app-auth/browser";
+import { useAuthSession } from "@/lib/app-auth/use-session";
 
 export function CommandCenterPage({ initialView }: { initialView?: CommandView }) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const session = useSupabaseSession();
+  const authClient = useMemo(() => createBrowserAuthClient(), []);
+  const session = useAuthSession();
   const [currentUser, setCurrentUser] = useState<CommandUser | null | undefined>(undefined);
   const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!supabase || !session || session.user.user_metadata?.mustChangePassword === true) {
+    if (!authClient || !session || session.user.user_metadata?.mustChangePassword === true) {
       setCurrentUser(null);
       return;
     }
 
     let cancelled = false;
 
-    void apiRequest<CommandUser>(supabase, "/me")
+    void apiRequest<CommandUser>(authClient, "/me")
       .then((user) => {
         if (!cancelled) {
           setCurrentUser(user);
@@ -40,7 +40,7 @@ export function CommandCenterPage({ initialView }: { initialView?: CommandView }
     return () => {
       cancelled = true;
     };
-  }, [session, supabase]);
+  }, [session, authClient]);
 
   if (session === undefined) {
     return <main aria-busy="true" className="auth-screen" />;
@@ -67,7 +67,7 @@ export function CommandCenterPage({ initialView }: { initialView?: CommandView }
             <h1>Staff profile unavailable</h1>
             <p className="muted">{profileError || "This login is not linked to an active staff profile."}</p>
           </div>
-          <button className="command-button primary" onClick={() => void supabase?.auth.signOut().then(() => window.location.reload())} type="button">
+          <button className="command-button primary" onClick={() => void authClient?.auth.signOut().then(() => window.location.reload())} type="button">
             Sign out
           </button>
         </div>

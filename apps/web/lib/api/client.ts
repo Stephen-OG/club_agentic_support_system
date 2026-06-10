@@ -1,5 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { getCachedSupabaseSession } from "@/lib/supabase/use-session";
+import type { AppAuthClient } from "@/lib/app-auth/browser";
+import { getCachedAuthSession } from "@/lib/app-auth/use-session";
 
 export const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
 
@@ -34,9 +34,9 @@ export function createApiUnreachableError() {
   return new Error(`API server is unreachable at ${apiBaseUrl}. Start it with npm run dev:api or set NEXT_PUBLIC_API_URL.`);
 }
 
-export async function apiRequest<T>(supabase: SupabaseClient, path: string, init: ApiRequestInit = {}) {
-  const cachedSession = getCachedSupabaseSession();
-  const token = init.accessToken ?? cachedSession?.access_token ?? (await supabase.auth.getSession()).data.session?.access_token;
+export async function apiRequest<T>(authClient: AppAuthClient, path: string, init: ApiRequestInit = {}) {
+  const cachedSession = getCachedAuthSession();
+  const token = init.accessToken ?? cachedSession?.access_token ?? (await authClient.auth.getSession()).data.session?.access_token;
 
   if (!token) {
     throw new Error("You are not signed in");

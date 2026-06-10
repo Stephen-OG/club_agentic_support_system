@@ -2,12 +2,12 @@ import { Controller, Get, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import type { AuthContext } from "../auth/auth-context";
 import { CurrentAuth } from "../auth/auth-context.decorator";
-import { SupabaseAuthGuard } from "../auth/supabase-auth.guard";
+import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { OnboardingService } from "./onboarding.service";
 
 @ApiTags("onboarding")
 @ApiBearerAuth()
-@UseGuards(SupabaseAuthGuard)
+@UseGuards(SessionAuthGuard)
 @Controller("onboarding")
 export class OnboardingController {
   constructor(private readonly onboarding: OnboardingService) {}

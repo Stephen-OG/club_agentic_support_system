@@ -5,7 +5,7 @@ import { Copy, RefreshCw, UserPlus } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
 import type { CommandRole, CommandTeamMember, CommandUser, CommandVenue, CreatedStaffCredential } from "@/lib/auth/types";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 
 const roles: Array<{ label: string; value: CommandRole }> = [
   { label: "Staff", value: "staff" },
@@ -21,7 +21,7 @@ function roleRequiresVenue(role: CommandRole) {
 }
 
 export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const authClient = useMemo(() => createBrowserAuthClient(), []);
   const primaryRole = getPrimaryRole(currentUser);
   const primaryMembership = getPrimaryMembership(currentUser);
   const canCreatePlatformRoles = primaryRole === "admin";
@@ -43,8 +43,8 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!supabase) {
-      setListError("Supabase is not configured.");
+    if (!authClient) {
+      setListError("app auth is not configured.");
       return;
     }
 
@@ -53,8 +53,8 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
 
     try {
       const [nextTeam, nextVenues] = await Promise.all([
-        apiRequest<CommandTeamMember[]>(supabase, "/team"),
-        apiRequest<CommandVenue[]>(supabase, "/admin/venues")
+        apiRequest<CommandTeamMember[]>(authClient, "/team"),
+        apiRequest<CommandVenue[]>(authClient, "/admin/venues")
       ]);
       setTeam(nextTeam);
       setVenues(nextVenues);
@@ -64,7 +64,7 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
     } finally {
       setRefreshing(false);
     }
-  }, [primaryMembership?.venueId, supabase]);
+  }, [primaryMembership?.venueId, authClient]);
 
   useEffect(() => {
     if (!availableRoles.some((item) => item.value === role)) {
@@ -79,8 +79,8 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!supabase) {
-      setError("Supabase is not configured.");
+    if (!authClient) {
+      setError("app auth is not configured.");
       return;
     }
 
@@ -95,7 +95,7 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
     }
 
     try {
-      const result = await apiRequest<CreatedStaffCredential>(supabase, "/team", {
+      const result = await apiRequest<CreatedStaffCredential>(authClient, "/team", {
         method: "POST",
         body: JSON.stringify({
           email,
