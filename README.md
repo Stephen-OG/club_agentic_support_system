@@ -59,3 +59,13 @@ Think of this project as a hospitality support queue powered by QR chat:
 - Web deployment guide: `docs/deployment/web.md`
 - Security checklist: `docs/security/mvp-security-and-compliance.md`
 - Runbooks: `docs/runbooks/`
+
+## Local Database Setup
+
+After pulling schema/auth changes, make sure your `DATABASE_URL` points at the local database you want to use, then sync Prisma before starting the API:
+
+```bash
+npx prisma db push --schema packages/database/prisma/schema.prisma
+```
+
+If signup fails with `The table public.AuthUser does not exist`, the API is running against a database that has not been synced. Check the `DATABASE_URL` used by that API process and run the command above against that same database.
