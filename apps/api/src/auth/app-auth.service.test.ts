@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { UnauthorizedException } from "@nestjs/common";
+import { ConflictException, UnauthorizedException } from "@nestjs/common";
 import { AppAuthService } from "./app-auth.service";
 
 describe("AppAuthService", () => {
@@ -115,6 +115,88 @@ describe("AppAuthService", () => {
     assert.equal(createdTokens[0].type, "EMAIL_VERIFICATION");
     assert.equal(sentEmails[0].template, "email_verification");
     assert.equal(sentEmails[0].to, "alex@example.com");
+  });
+
+  it("changes an unverified signup email and sends a fresh verification link", async () => {
+    const user = {
+      id: "auth-1",
+      email: "wrong@example.com",
+      displayName: "Alex",
+      emailVerifiedAt: null,
+      mustChangePassword: false,
+      tokenVersion: 1
+    };
+    const updates: any[] = [];
+    const tokenUpdates: any[] = [];
+    const createdTokens: any[] = [];
+    const sentEmails: any[] = [];
+    const service = new AppAuthService(
+      {
+        authUser: {
+          findUnique: async ({ where }: any) => {
+            if (where.email === "wrong@example.com") {
+              return user;
+            }
+            return null;
+          },
+          update: async ({ where, data }: any) => {
+            updates.push({ where, data });
+            return { ...user, ...data };
+          }
+        },
+        authEmailToken: {
+          updateMany: async ({ where, data }: any) => {
+            tokenUpdates.push({ where, data });
+            return { count: 1 };
+          },
+          create: async ({ data }: any) => {
+            createdTokens.push(data);
+            return { id: "token-2", ...data };
+          }
+        }
+      } as any,
+      {
+        sendTemplate: async (message: any) => {
+          sentEmails.push(message);
+        }
+      } as any
+    );
+
+    const result = await service.changeUnverifiedEmail({
+      currentEmail: "wrong@example.com",
+      newEmail: "right@example.com"
+    });
+
+    assert.equal(result.user.email, "right@example.com");
+    assert.equal(updates[0].where.id, "auth-1");
+    assert.equal(updates[0].data.email, "right@example.com");
+    assert.equal(tokenUpdates[0].where.authUserId, "auth-1");
+    assert.equal(tokenUpdates[0].where.type, "EMAIL_VERIFICATION");
+    assert.ok(tokenUpdates[0].data.usedAt);
+    assert.equal(createdTokens[0].type, "EMAIL_VERIFICATION");
+    assert.equal(sentEmails[0].template, "email_verification");
+    assert.equal(sentEmails[0].to, "right@example.com");
+  });
+
+  it("rejects unverified email changes when the new email is already registered", async () => {
+    const service = new AppAuthService({
+      authUser: {
+        findUnique: async ({ where }: any) => {
+          if (where.email === "wrong@example.com") {
+            return { id: "auth-1", email: "wrong@example.com", emailVerifiedAt: null };
+          }
+          if (where.email === "taken@example.com") {
+            return { id: "auth-2", email: "taken@example.com", emailVerifiedAt: new Date() };
+          }
+          return null;
+        }
+      }
+    } as any);
+
+    await assert.rejects(
+      () => service.changeUnverifiedEmail({ currentEmail: "wrong@example.com", newEmail: "taken@example.com" }),
+      ConflictException
+    );
   });
 
   it("signs in with a short-lived JWT access token and hashed refresh token", async () => {
@@ -282,5 +364,63 @@ describe("AppAuthService", () => {
     assert.equal(sessionUpdates[0].where.authUserId, "auth-1");
     assert.equal(sessionUpdates[0].where.revokedAt, null);
     assert.ok(sessionUpdates[0].data.revokedAt);
+  });
+
+  it("returns a fresh session after password changes invalidate existing tokens", async () => {
+    const restore = withJwtSecret();
+    const createdSessions: any[] = [];
+    const sessionUpdates: any[] = [];
+    const serviceForHash = new AppAuthService({} as any);
+    const originalUser = {
+      id: "auth-1",
+      email: "sam@example.com",
+      displayName: "Sam Service",
+      emailVerifiedAt: new Date(),
+      mustChangePassword: true,
+      tokenVersion: 1,
+      passwordHash: await (serviceForHash as any).hashPassword("old-password")
+    };
+    const updatedUser = {
+      ...originalUser,
+      mustChangePassword: false,
+      tokenVersion: 2,
+      passwordHash: "new-password-hash"
+    };
+    const service = new AppAuthService({
+      authUser: {
+        findUnique: async () => originalUser,
+        update: async ({ data }: any) => {
+          assert.deepEqual(data.tokenVersion, { increment: 1 });
+          return updatedUser;
+        }
+      },
+      authSession: {
+        updateMany: async ({ where, data }: any) => {
+          sessionUpdates.push({ where, data });
+          return { count: 1 };
+        },
+        create: async ({ data }: any) => {
+          createdSessions.push(data);
+          return { id: "session-2", ...data };
+        }
+      }
+    } as any);
+
+    try {
+      const oldAccessToken = (service as any).signAccessToken(originalUser);
+      const nextSession = (await service.changePassword(oldAccessToken, {
+        oldPassword: "old-password",
+        password: "new-secure-password"
+      })) as any;
+
+      assert.match(nextSession.accessToken, /^[^.]+\.[^.]+\.[^.]+$/);
+      assert.equal(nextSession.user.mustChangePassword, false);
+      assert.equal(nextSession.user.tokenVersion, 2);
+      assert.equal(createdSessions[0].authUserId, "auth-1");
+      assert.equal(createdSessions[0].tokenVersion, 2);
+      assert.equal(sessionUpdates[0].where.authUserId, "auth-1");
+    } finally {
+      restore();
+    }
   });
 });

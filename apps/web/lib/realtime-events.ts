@@ -1,5 +1,5 @@
+import { getValidAccessToken } from "./api/client";
 import type { AppAuthClient } from "./app-auth/browser";
-import { getCachedAuthSession } from "./app-auth/use-session";
 
 const realtimeApiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
 
@@ -60,8 +60,7 @@ export function connectStaffVenueEvents(options: StaffConnectOptions) {
   const abortController = new AbortController();
 
   void (async () => {
-    const cachedSession = getCachedAuthSession();
-    const token = cachedSession?.access_token ?? (await options.authClient.auth.getSession()).data.session?.access_token;
+    const token = await getValidAccessToken(options.authClient);
 
     if (!token) {
       options.onError?.();

@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
-import { ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { AuthEmailTokenType } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service";
 import { MailService } from "../mail/mail.service";
@@ -67,6 +67,47 @@ export class AppAuthService {
     return {
       session: null,
       user: this.serializeUser(user)
+    };
+  }
+
+  async changeUnverifiedEmail(input: { currentEmail: string; newEmail: string }) {
+    const currentEmail = this.normalizeEmail(input.currentEmail);
+    const newEmail = this.normalizeEmail(input.newEmail);
+
+    if (currentEmail === newEmail) {
+      throw new BadRequestException("Enter a different email address");
+    }
+
+    const currentUser = await this.prisma.authUser.findUnique({ where: { email: currentEmail } });
+    if (!currentUser || currentUser.emailVerifiedAt) {
+      throw new BadRequestException("Email can only be changed before verification");
+    }
+
+    const existingNewEmailUser = await this.prisma.authUser.findUnique({ where: { email: newEmail } });
+    if (existingNewEmailUser) {
+      throw new ConflictException("An account already exists for this email");
+    }
+
+    await this.prisma.authEmailToken.updateMany({
+      where: {
+        authUserId: currentUser.id,
+        type: AuthEmailTokenType.EMAIL_VERIFICATION,
+        usedAt: null
+      },
+      data: {
+        usedAt: new Date()
+      }
+    });
+
+    const updated = await this.prisma.authUser.update({
+      where: { id: currentUser.id },
+      data: { email: newEmail }
+    });
+    await this.sendEmailVerification(updated);
+
+    return {
+      session: null,
+      user: this.serializeUser(updated)
     };
   }
 
@@ -188,7 +229,7 @@ export class AppAuthService {
     });
     await this.revokeUserRefreshSessions(user.id);
 
-    return this.serializeUser(updated);
+    return this.createSession(updated);
   }
 
   async requestPasswordReset(input: { email: string }) {

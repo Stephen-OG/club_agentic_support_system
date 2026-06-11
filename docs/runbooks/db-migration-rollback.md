@@ -11,7 +11,7 @@
 1. Stop the deployment and keep the previous API image serving traffic if possible.
 2. Do not run additional migrations until the failed migration state is understood.
 3. Capture the migration name, database error, and deployment commit SHA.
-4. Check Supabase/Postgres backups and point-in-time recovery availability.
+4. Check Postgres backups and point-in-time recovery availability with the database provider.
 
 ## Recovery Options
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { apiRequest, publicApiRequest } from "./client";
+import { apiRequest, getValidAccessToken, publicApiRequest } from "./client";
 
 const originalFetch = globalThis.fetch;
 
@@ -9,6 +9,42 @@ afterEach(() => {
 });
 
 describe("apiRequest", () => {
+  it("resolves protected request tokens through the refresh-aware auth session", async () => {
+    let getSessionCalls = 0;
+    const authClient = {
+      auth: {
+        getSession: async () => {
+          getSessionCalls++;
+          return {
+            data: {
+              session: {
+                access_token: "fresh-token"
+              }
+            }
+          };
+        }
+      }
+    };
+
+    assert.equal(await getValidAccessToken(authClient as unknown as Parameters<typeof getValidAccessToken>[0]), "fresh-token");
+    assert.equal(getSessionCalls, 1);
+  });
+
+  it("uses explicit access tokens without refreshing the stored session", async () => {
+    let getSessionCalls = 0;
+    const authClient = {
+      auth: {
+        getSession: async () => {
+          getSessionCalls++;
+          return { data: { session: { access_token: "stored-token" } } };
+        }
+      }
+    };
+
+    assert.equal(await getValidAccessToken(authClient as unknown as Parameters<typeof getValidAccessToken>[0], "explicit-token"), "explicit-token");
+    assert.equal(getSessionCalls, 0);
+  });
+
   it("explains when the production API cannot be reached", async () => {
     globalThis.fetch = async () => {
       throw new TypeError("Failed to fetch");

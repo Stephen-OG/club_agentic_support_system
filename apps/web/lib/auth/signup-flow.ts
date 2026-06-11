@@ -1,4 +1,5 @@
 export type SignupCompletionAction = { kind: "setup" } | { kind: "verify-email" };
+export type AuthEntry = "signin" | "signup";
 
 export function getSignupCompletionAction(input: { hasSession: boolean }): SignupCompletionAction {
   return input.hasSession ? { kind: "setup" } : { kind: "verify-email" };
@@ -30,4 +31,12 @@ export function getSignupSlugError(label: string, slug: string) {
 
 export function getSignupEmailRedirectTo(origin: string) {
   return `${origin.replace(/\/$/, "")}/login`;
+}
+
+export function getAuthEntryHref(entry: AuthEntry) {
+  return entry === "signup" ? "/login?mode=signup" : "/login";
+}
+
+export function getLoginModeFromSearchParams(params: URLSearchParams): AuthEntry {
+  return params.get("mode") === "signup" ? "signup" : "signin";
 }

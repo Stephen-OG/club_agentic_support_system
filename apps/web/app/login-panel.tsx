@@ -1,12 +1,18 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LockKeyhole, Mail, Radar, UserPlus } from "lucide-react";
 import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 import { apiRequest } from "@/lib/api/client";
 import { getSignedInRouteAction, mustChangePassword } from "@/lib/auth/session-route-policy";
-import { getSignupCompletionAction, getSignupEmailRedirectTo } from "@/lib/auth/signup-flow";
+import {
+  getAuthEntryHref,
+  getLoginModeFromSearchParams,
+  getSignupCompletionAction,
+  getSignupEmailRedirectTo
+} from "@/lib/auth/signup-flow";
 import type { CommandUser } from "@/lib/auth/types";
 
 type LoginMode = "signin" | "signup" | "reset_request" | "reset_confirm";
@@ -14,7 +20,13 @@ type LoginMode = "signin" | "signup" | "reset_request" | "reset_confirm";
 export function LoginPanel() {
   const router = useRouter();
   const authClient = createBrowserAuthClient();
-  const [mode, setMode] = useState<LoginMode>("signin");
+  const [mode, setMode] = useState<LoginMode>(() => {
+    if (typeof window === "undefined") {
+      return "signin";
+    }
+
+    return getLoginModeFromSearchParams(new URLSearchParams(window.location.search));
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -22,6 +34,8 @@ export function LoginPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   const [resetToken, setResetToken] = useState("");
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+  const [changingVerificationEmail, setChangingVerificationEmail] = useState(false);
+  const [replacementEmail, setReplacementEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -38,10 +52,23 @@ export function LoginPanel() {
       return;
     }
 
+    setMode(getLoginModeFromSearchParams(params));
+
     if (params.get("verified") === "1") {
       setNotice("Email verified. You can sign in now.");
     }
   }, []);
+
+  function showAuthMode(nextMode: "signin" | "signup") {
+    setMode(nextMode);
+    setError(null);
+    setNotice(null);
+    setVerificationEmail(null);
+
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", getAuthEntryHref(nextMode));
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -128,6 +155,8 @@ export function LoginPanel() {
       }
 
       setVerificationEmail(email.trim().toLowerCase());
+      setChangingVerificationEmail(false);
+      setReplacementEmail("");
       setNotice(null);
       setPassword("");
       setConfirmPassword("");
@@ -174,6 +203,41 @@ export function LoginPanel() {
     }
   }
 
+  async function submitVerificationEmailChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!authClient || !verificationEmail) {
+      setError("app auth is not configured for this environment.");
+      return;
+    }
+
+    const nextEmail = replacementEmail.trim().toLowerCase();
+    if (!nextEmail || nextEmail === verificationEmail) {
+      setError("Enter a different email address.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+
+    const result = await authClient.auth.changeUnverifiedEmail({
+      currentEmail: verificationEmail,
+      newEmail: nextEmail
+    });
+
+    setLoading(false);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    setVerificationEmail(nextEmail);
+    setEmail(nextEmail);
+    setReplacementEmail("");
+    setChangingVerificationEmail(false);
+  }
+
   return (
     <main className="auth-screen">
       <section className="auth-hero" aria-label="Madupe command center">
@@ -205,19 +269,63 @@ export function LoginPanel() {
         </div>
 
         {verificationEmail ? (
-          <div className="auth-form">
-            <button
-              className="command-button primary"
-              onClick={() => {
-                setMode("signin");
-                setVerificationEmail(null);
-                setError(null);
-              }}
-              type="button"
-            >
-              Sign in after confirming
-            </button>
-          </div>
+          changingVerificationEmail ? (
+            <form className="auth-form" onSubmit={submitVerificationEmailChange}>
+              <label>
+                <span>New email</span>
+                <span className="input-shell">
+                  <Mail size={16} />
+                  <input
+                    autoComplete="email"
+                    onChange={(event) => setReplacementEmail(event.target.value.trim())}
+                    required
+                    type="email"
+                    value={replacementEmail}
+                  />
+                </span>
+              </label>
+              {notice ? <div className="form-success">{notice}</div> : null}
+              {error ? <div className="form-error">{error}</div> : null}
+              <button className="command-button primary" disabled={loading} type="submit">
+                {loading ? "Sending..." : "Send verification to new email"}
+              </button>
+              <button
+                className="link-button"
+                onClick={() => {
+                  setChangingVerificationEmail(false);
+                  setReplacementEmail("");
+                  setError(null);
+                }}
+                type="button"
+              >
+                Keep using {verificationEmail}
+              </button>
+            </form>
+          ) : (
+            <div className="auth-form">
+              {notice ? <div className="form-success">{notice}</div> : null}
+              {error ? <div className="form-error">{error}</div> : null}
+              <button
+                className="command-button primary"
+                onClick={() => showAuthMode("signin")}
+                type="button"
+              >
+                Sign in after confirming
+              </button>
+              <button
+                className="link-button"
+                onClick={() => {
+                  setChangingVerificationEmail(true);
+                  setReplacementEmail("");
+                  setError(null);
+                  setNotice(null);
+                }}
+                type="button"
+              >
+                Use a different email
+              </button>
+            </div>
+          )
         ) : (
         <form className="auth-form" onSubmit={submit}>
           {mode !== "reset_confirm" ? <label>
@@ -282,18 +390,18 @@ export function LoginPanel() {
             </p>
             <p>
               Don&apos;t have an account?{" "}
-              <button className="link-button" onClick={() => { setMode("signup"); setError(null); setVerificationEmail(null); }} type="button">
+              <Link className="link-button" href={getAuthEntryHref("signup")} onClick={() => showAuthMode("signup")}>
                 <UserPlus size={14} />
                 Create one
-              </button>
+              </Link>
             </p>
             </>
           ) : (
             <p>
               Already have an account?{" "}
-              <button className="link-button" onClick={() => { setMode("signin"); setError(null); setVerificationEmail(null); }} type="button">
+              <Link className="link-button" href={getAuthEntryHref("signin")} onClick={() => showAuthMode("signin")}>
                 Sign in
-              </button>
+              </Link>
             </p>
           )}
         </div> : null}

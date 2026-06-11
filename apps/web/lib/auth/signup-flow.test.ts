@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getSignupCompletionAction, getSignupEmailRedirectTo, getSignupSlugError, normalizeSignupSlug } from "./signup-flow";
+import {
+  getAuthEntryHref,
+  getLoginModeFromSearchParams,
+  getSignupCompletionAction,
+  getSignupEmailRedirectTo,
+  getSignupSlugError,
+  normalizeSignupSlug
+} from "./signup-flow";
 
 describe("signup flow", () => {
   it("sends signed-in new users to workspace setup", () => {
@@ -32,5 +39,12 @@ describe("signup flow", () => {
 
   it("redirects verification emails back to login", () => {
     assert.equal(getSignupEmailRedirectTo("https://app.example.com/"), "https://app.example.com/login");
+  });
+
+  it("points public signup entry to the create account mode on login", () => {
+    assert.equal(getAuthEntryHref("signin"), "/login");
+    assert.equal(getAuthEntryHref("signup"), "/login?mode=signup");
+    assert.equal(getLoginModeFromSearchParams(new URLSearchParams("mode=signup")), "signup");
+    assert.equal(getLoginModeFromSearchParams(new URLSearchParams("")), "signin");
   });
 });

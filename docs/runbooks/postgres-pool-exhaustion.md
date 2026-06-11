@@ -9,7 +9,7 @@
 ## Immediate Response
 
 1. Reduce API instance count to one while you recover.
-2. Check Supabase/Postgres active connections and pool size.
+2. Check Postgres active connections and provider pool size.
 3. Confirm the API is not running duplicate services, workers, or deploy previews against the same small database pool.
 4. Add Prisma pool limits to `DATABASE_URL`, for example:
 
@@ -29,6 +29,6 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/postgres?connection_limit=3&p
 ## Follow-Up
 
 - Keep `API instances * connection_limit` below the provider pool size.
-- Scale Supabase pool size only after the app is stable with explicit Prisma limits.
-- Add connection-count alerts in Supabase.
+- Scale provider pool size only after the app is stable with explicit Prisma limits.
+- Add provider-level connection-count alerts.
 - Avoid running migrations or seed scripts from every API instance.

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, LockKeyhole, MessageSquareText, QrCode, ShieldCheck, Sparkles, UsersRound } from "lucide-react";
+import { getAuthEntryHref } from "@/lib/auth/signup-flow";
 
 export const metadata: Metadata = {
   title: "Madupe | QR guest support for live venues",
@@ -75,10 +76,10 @@ export default function LandingPage() {
         </nav>
 
         <div className="landing-actions">
-          <Link className="landing-link-button" href="/login">
+          <Link className="landing-link-button" href={getAuthEntryHref("signin")}>
             Sign in
           </Link>
-          <Link className="landing-primary-button" href="/signup">
+          <Link className="landing-primary-button" href={getAuthEntryHref("signup")}>
             Create account
           </Link>
         </div>
@@ -92,11 +93,11 @@ export default function LandingPage() {
             guest-visible status updates.
           </p>
           <div className="landing-hero-actions">
-            <Link className="landing-primary-button large" href="/signup">
+            <Link className="landing-primary-button large" href={getAuthEntryHref("signup")}>
               Create account
               <ArrowRight size={18} />
             </Link>
-            <Link className="landing-secondary-button large" href="/login">
+            <Link className="landing-secondary-button large" href={getAuthEntryHref("signin")}>
               Sign in
             </Link>
           </div>
@@ -182,7 +183,7 @@ export default function LandingPage() {
             Priorities, assignments, guest-visible updates, ratings, opening hours, and QR service points sit together
             so managers can understand service pressure while staff keep moving.
           </p>
-          <Link className="landing-secondary-button" href="/login">
+          <Link className="landing-secondary-button" href={getAuthEntryHref("signin")}>
             Open command center
           </Link>
         </div>
@@ -234,8 +235,8 @@ export default function LandingPage() {
         </Link>
         <p>QR guest support and live venue operations.</p>
         <div>
-          <Link href="/login">Sign in</Link>
-          <Link href="/signup">Create account</Link>
+          <Link href={getAuthEntryHref("signin")}>Sign in</Link>
+          <Link href={getAuthEntryHref("signup")}>Create account</Link>
         </div>
       </footer>
     </main>

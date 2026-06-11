@@ -14,7 +14,10 @@
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "prisma:generate": "npm run prisma:generate -w @madupe/database",
-    "prisma:migrate": "npm run prisma:migrate -w @madupe/database",
+    "prisma:push": "npm run prisma:push -w @madupe/database",
+    "prisma:migrate": "npm run prisma:migrate:deploy -w @madupe/database",
+    "prisma:migrate:deploy": "npm run prisma:migrate:deploy -w @madupe/database",
+    "prisma:migrate:dev": "npm run prisma:migrate:dev -w @madupe/database",
     "seed": "npm run seed -w @madupe/database"
   },
   "devDependencies": {

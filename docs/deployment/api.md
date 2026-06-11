@@ -30,7 +30,7 @@ Set these values in the platform secret manager, not in the image:
 - `SMTP_PASSWORD`
 - `SMTP_SECURE=true`
 - `SMTP_TIMEOUT_MS=8000`
-- `SMTP_TLS_REJECT_UNAUTHORIZED=false`
+- `SMTP_TLS_REJECT_UNAUTHORIZED=true`
 - `MAIL_FROM`
 - `PUBLIC_API_URL`
 - `REDIS_URL`
@@ -50,7 +50,7 @@ openssl rand -base64 48
 
 `REDIS_URL` is required in production because rate limits, cache, and background jobs need shared state across API instances.
 
-`SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, and `SMTP_SECURE=true` use Gmail/Google Workspace SMTP over SSL. `SMTP_USER` should be the full Google Workspace/Gmail sender address, and `SMTP_PASSWORD` should be an app password for that account. `MAIL_FROM` should be a branded sender such as `Madupe <support@madupe.com>`. `SMTP_TIMEOUT_MS` keeps signup and password-reset requests from hanging on a bad SMTP connection. `SMTP_TLS_REJECT_UNAUTHORIZED=false` disables SMTP TLS certificate verification for environments that require it. `PUBLIC_API_URL` is used for verification links that must hit the API before redirecting users back to the web app.
+`SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, and `SMTP_SECURE=true` use Gmail/Google Workspace SMTP over SSL. `SMTP_USER` should be the full Google Workspace/Gmail sender address, and `SMTP_PASSWORD` should be an app password for that account. `MAIL_FROM` should be a branded sender such as `Madupe <support@madupe.com>`. `SMTP_TIMEOUT_MS` keeps signup and password-reset requests from hanging on a bad SMTP connection. Keep `SMTP_TLS_REJECT_UNAUTHORIZED=true` in production so SMTP certificates are verified; set it to `false` only as an explicit local or emergency provider workaround while you investigate the certificate chain. `PUBLIC_API_URL` is used for verification links that must hit the API before redirecting users back to the web app.
 
 ## Transactional Email Templates
 
@@ -75,10 +75,18 @@ npm run prisma:generate -w @madupe/database
 Run migrations against the target database before switching traffic:
 
 ```bash
-npm run prisma:migrate -w @madupe/database
+npm run prisma:migrate:deploy -w @madupe/database
 ```
 
 This repo keeps production SQL migrations in `packages/database/prisma/migrations`. Prisma owns the application schema and generated client.
+
+For a fresh local or shared development database during the first-party auth transition, sync the full Prisma schema before starting the API:
+
+```bash
+npm run prisma:push
+```
+
+Use `prisma:push` only as the transitional schema-sync command for development databases. Deployed environments should use `prisma:migrate:deploy` once a full production baseline migration exists for the current schema.
 
 ## Postgres Pooling
 

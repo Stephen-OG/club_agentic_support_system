@@ -38,6 +38,16 @@ export class AuthController {
     };
   }
 
+  @Post("signup/email")
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async changeSignupEmail(@Body() input: { currentEmail: string; newEmail: string }): Promise<SignupResponse> {
+    const result = await this.appAuth.changeUnverifiedEmail(input);
+    return {
+      session: null,
+      user: this.toUserResponse(result.user)
+    };
+  }
+
   @Post("signin")
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async signIn(@Body() input: { email: string; password: string }): Promise<AuthResponse> {
@@ -50,10 +60,10 @@ export class AuthController {
   async changePassword(
     @Body() input: { oldPassword: string; password: string },
     @Headers("authorization") authorization?: string
-  ) {
+  ): Promise<AuthResponse> {
     const token = this.getBearerToken(authorization);
-    await this.appAuth.changePassword(token, input);
-    return { ok: true };
+    const session = await this.appAuth.changePassword(token, input);
+    return this.toResponse(session);
   }
 
   @Post("password-reset/request")

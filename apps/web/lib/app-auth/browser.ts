@@ -33,6 +33,7 @@ export type AppAuthClient = {
       password: string;
       options?: { data?: { displayName?: string; [key: string]: unknown }; emailRedirectTo?: string };
     }) => Promise<{ data: { session: AppAuthSession | null }; error: Error | null }>;
+    changeUnverifiedEmail: (input: { currentEmail: string; newEmail: string }) => Promise<{ error: Error | null }>;
     updatePassword: (input: { oldPassword: string; password: string }) => Promise<{ error: Error | null }>;
     requestPasswordReset: (input: { email: string }) => Promise<{ error: Error | null }>;
     resetPassword: (input: { token: string; password: string }) => Promise<{ error: Error | null }>;
@@ -92,6 +93,7 @@ export function createBrowserAuthClient() {
       },
       signUp: async ({ email, password, options }) =>
         authRequest("/auth/signup", { email, password, displayName: options?.data?.displayName }),
+      changeUnverifiedEmail: async ({ currentEmail, newEmail }) => commandRequest("/auth/signup/email", { currentEmail, newEmail }),
       requestPasswordReset: async ({ email }) => commandRequest("/auth/password-reset/request", { email }),
       resetPassword: async ({ token, password }) => commandRequest("/auth/password-reset/confirm", { token, password }),
       updatePassword: async ({ oldPassword, password }) => {
@@ -116,16 +118,12 @@ export function createBrowserAuthClient() {
             return { error: new Error(body?.message || body?.error || "Password update failed") };
           }
 
-          const nextSession = {
-            ...session,
-            user: {
-              ...session.user,
-              user_metadata: {
-                ...session.user.user_metadata,
-                mustChangePassword: false
-              }
-            }
-          };
+          const nextSession = (await response.json().catch(() => null)) as AppAuthSession | null;
+          if (!nextSession?.access_token || !nextSession.refresh_token) {
+            writeSession(null, "SIGNED_OUT");
+            return { error: new Error("Password update did not return a new session") };
+          }
+
           writeSession(nextSession, "TOKEN_REFRESHED");
           return { error: null };
         } catch {
