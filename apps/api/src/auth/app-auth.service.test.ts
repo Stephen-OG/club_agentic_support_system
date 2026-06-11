@@ -6,6 +6,26 @@ import { AppAuthService } from "./app-auth.service";
 describe("AppAuthService", () => {
   const originalJwtSecret = process.env.AUTH_JWT_SECRET;
 
+  function withEnv(values: Record<string, string | undefined>) {
+    const previous = new Map(Object.keys(values).map((key) => [key, process.env[key]]));
+    for (const [key, value] of Object.entries(values)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    return () => {
+      for (const [key, value] of previous) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    };
+  }
+
   function withJwtSecret() {
     process.env.AUTH_JWT_SECRET = "test-jwt-secret-with-enough-entropy";
     return () => {
@@ -41,6 +61,7 @@ describe("AppAuthService", () => {
   });
 
   it("signs up an unverified user and sends a verification email token", async () => {
+    const restoreEnv = withEnv({ PUBLIC_API_URL: "https://api.madupe.com" });
     const createdTokens: any[] = [];
     const sentEmails: any[] = [];
     const service = new AppAuthService(
@@ -63,16 +84,22 @@ describe("AppAuthService", () => {
       } as any
     );
 
-    const result = await service.signUp({
-      email: "alex@example.com",
-      password: "temporary-secret",
-      displayName: "Alex"
-    });
+    try {
+      const result = await service.signUp({
+        email: "alex@example.com",
+        password: "temporary-secret",
+        displayName: "Alex"
+      });
 
-    assert.equal(result.session, null);
-    assert.equal(createdTokens[0].type, "EMAIL_VERIFICATION");
-    assert.equal(sentEmails[0].template, "email_verification");
-    assert.equal(sentEmails[0].to, "alex@example.com");
+      assert.equal(result.session, null);
+      assert.equal(createdTokens[0].type, "EMAIL_VERIFICATION");
+      assert.equal(sentEmails[0].template, "email_verification");
+      assert.equal(sentEmails[0].to, "alex@example.com");
+      assert.match(sentEmails[0].variables.actionUrl, /^https:\/\/api\.madupe\.com\/auth\/verify-email\?token=/);
+      assert.doesNotMatch(sentEmails[0].variables.actionUrl, /127\.0\.0\.1|localhost/);
+    } finally {
+      restoreEnv();
+    }
   });
 
   it("resends verification email when an unverified account signs up again", async () => {

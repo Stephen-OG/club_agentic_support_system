@@ -32,7 +32,8 @@ Set these values in the platform secret manager, not in the image:
 - `SMTP_TIMEOUT_MS=8000`
 - `SMTP_TLS_REJECT_UNAUTHORIZED=true`
 - `MAIL_FROM`
-- `PUBLIC_API_URL`
+- `NEXT_PUBLIC_APP_URL` (or `APP_URL`)
+- `PUBLIC_API_URL` (or `NEXT_PUBLIC_API_URL`)
 - `REDIS_URL`
 - `CORS_ORIGINS`
 
@@ -50,7 +51,7 @@ openssl rand -base64 48
 
 `REDIS_URL` is required in production because rate limits, cache, and background jobs need shared state across API instances.
 
-`SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, and `SMTP_SECURE=true` use Gmail/Google Workspace SMTP over SSL. `SMTP_USER` should be the full Google Workspace/Gmail sender address, and `SMTP_PASSWORD` should be an app password for that account. `MAIL_FROM` should be a branded sender such as `Madupe <support@madupe.com>`. `SMTP_TIMEOUT_MS` keeps signup and password-reset requests from hanging on a bad SMTP connection. Keep `SMTP_TLS_REJECT_UNAUTHORIZED=true` in production so SMTP certificates are verified; set it to `false` only as an explicit local or emergency provider workaround while you investigate the certificate chain. `PUBLIC_API_URL` is used for verification links that must hit the API before redirecting users back to the web app.
+`SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, and `SMTP_SECURE=true` use Gmail/Google Workspace SMTP over SSL. `SMTP_USER` should be the full Google Workspace/Gmail sender address, and `SMTP_PASSWORD` should be an app password for that account. `MAIL_FROM` should be a branded sender such as `Madupe <support@madupe.com>`. `SMTP_TIMEOUT_MS` keeps signup and password-reset requests from hanging on a bad SMTP connection. Keep `SMTP_TLS_REJECT_UNAUTHORIZED=true` in production so SMTP certificates are verified; set it to `false` only as an explicit local or emergency provider workaround while you investigate the certificate chain. `PUBLIC_API_URL` is used for verification links that must hit the API before redirecting users back to the web app, while `NEXT_PUBLIC_APP_URL` or `APP_URL` is used for password reset, staff invitation, and post-verification redirect links. In production, both public URLs must be public HTTPS origins, never localhost.
 
 ## Transactional Email Templates
 

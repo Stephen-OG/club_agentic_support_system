@@ -3,6 +3,7 @@ import { BadRequestException, ConflictException, Injectable, UnauthorizedExcepti
 import { AuthEmailTokenType } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service";
 import { MailService } from "../mail/mail.service";
+import { getPublicApiBaseUrl, getPublicAppBaseUrl } from "../security/security-config";
 
 const passwordHashParams = { keyLength: 64, cost: 16_384, blockSize: 8, parallelization: 1 };
 const accessTokenTtlSeconds = 60 * 15;
@@ -440,13 +441,11 @@ export class AppAuthService {
   }
 
   private buildAppUrl(path: string) {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "http://127.0.0.1:3001";
-    return new URL(path, baseUrl).toString();
+    return new URL(path, getPublicAppBaseUrl()).toString();
   }
 
   private buildApiUrl(path: string) {
-    const baseUrl = process.env.PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
-    return new URL(path, baseUrl).toString();
+    return new URL(path, getPublicApiBaseUrl()).toString();
   }
 
   private async hashPassword(password: string) {
