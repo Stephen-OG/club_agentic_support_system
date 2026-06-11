@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from "@nestjs/common";
+import { Inject, Injectable, InternalServerErrorException, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import nodemailer from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
@@ -14,12 +14,15 @@ type MailTransport = {
   }) => Promise<unknown>;
 };
 
+export const MAIL_TRANSPORT = Symbol("MAIL_TRANSPORT");
+
 @Injectable()
 export class MailService {
   private transport: MailTransport | null;
 
   constructor(
     private readonly config: ConfigService,
+    @Optional() @Inject(MAIL_TRANSPORT)
     transport?: MailTransport
   ) {
     this.transport = transport ?? null;
