@@ -92,6 +92,14 @@ export function getApiHost(env: EnvMap = process.env) {
   return env.HOST || (env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
 }
 
+export function getPublicAppBaseUrl(env: EnvMap = process.env) {
+  return getConfiguredBaseUrl(env, ["NEXT_PUBLIC_APP_URL", "APP_URL"], "http://127.0.0.1:3001", "NEXT_PUBLIC_APP_URL or APP_URL");
+}
+
+export function getPublicApiBaseUrl(env: EnvMap = process.env) {
+  return getConfiguredBaseUrl(env, ["PUBLIC_API_URL", "NEXT_PUBLIC_API_URL"], "http://127.0.0.1:4000", "PUBLIC_API_URL or NEXT_PUBLIC_API_URL");
+}
+
 export function assertProductionSecurityConfig(env: EnvMap = process.env) {
   if (env.NODE_ENV !== "production") {
     return;
@@ -104,13 +112,15 @@ export function assertProductionSecurityConfig(env: EnvMap = process.env) {
   assertRequiredProductionEnv(env, "SMTP_USER", "SMTP_USER is required in production for Google SMTP authentication");
   assertRequiredProductionEnv(env, "SMTP_PASSWORD", "SMTP_PASSWORD is required in production for Google SMTP authentication");
   assertRequiredProductionEnv(env, "MAIL_FROM");
+  getPublicAppBaseUrl(env);
+  getPublicApiBaseUrl(env);
   assertValidMessageEncryptionKey(env.MESSAGE_ENCRYPTION_KEY || "");
   assertRequiredProductionEnv(env, "REDIS_URL", "REDIS_URL is required in production for shared rate limits, cache, and background jobs");
   assertRequiredProductionEnv(env, "CORS_ORIGINS");
 
   const origins = parseCorsOrigins(env.CORS_ORIGINS);
-  if (origins.some((origin) => !origin.startsWith("https://"))) {
-    throw new Error("CORS_ORIGINS must contain public HTTPS origins in production");
+  for (const origin of origins) {
+    assertPublicHttpsUrl(origin, "CORS_ORIGINS");
   }
 }
 
@@ -130,6 +140,41 @@ export function applySecurityHeaders(app: INestApplication, env: EnvMap = proces
     }
     next();
   });
+}
+
+function getConfiguredBaseUrl(env: EnvMap, names: string[], localFallback: string, label: string) {
+  const configured = names.map((name) => env[name]?.trim()).find(Boolean);
+
+  if (!configured) {
+    if (env.NODE_ENV === "production") {
+      throw new Error(`${label} is required in production`);
+    }
+    return localFallback;
+  }
+
+  if (env.NODE_ENV === "production") {
+    assertPublicHttpsUrl(configured, label);
+  }
+
+  return configured;
+}
+
+function assertPublicHttpsUrl(value: string, label: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${label} must be a valid public HTTPS URL in production`);
+  }
+
+  if (parsed.protocol !== "https:" || isLocalHostname(parsed.hostname)) {
+    throw new Error(`${label} must be a public HTTPS URL in production`);
+  }
+}
+
+function isLocalHostname(hostname: string) {
+  const normalized = hostname.toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "0.0.0.0" || normalized === "::1";
 }
 
 function assertRequiredProductionEnv(env: EnvMap, name: string, message = `${name} is required in production`) {

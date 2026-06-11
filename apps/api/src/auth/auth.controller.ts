@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Headers, Post, Query, Redirect, UnauthorizedException } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
+import { getPublicAppBaseUrl } from "../security/security-config";
 import { AppAuthService } from "./app-auth.service";
 
 type AuthResponse = {
@@ -96,7 +97,7 @@ export class AuthController {
   async verifyEmail(@Query("token") token: string) {
     await this.appAuth.verifyEmail({ token });
     return {
-      url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "http://127.0.0.1:3001"}/login?verified=1`
+      url: new URL("/login?verified=1", getPublicAppBaseUrl()).toString()
     };
   }
 
