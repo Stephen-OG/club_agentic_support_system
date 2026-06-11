@@ -7,6 +7,7 @@ import { AppModule } from "./app.module";
 import { getApiPort } from "./bootstrap-config";
 import { StructuredLogger } from "./common/logger/structured-logger.service";
 import { HttpLoggingInterceptor } from "./common/logger/http-logging.interceptor";
+import { loadLocalEnvOverrides } from "./local-env";
 import {
   applySecurityHeaders,
   assertProductionSecurityConfig,
@@ -15,6 +16,8 @@ import {
   parseCorsOrigins,
   shouldExposeApiDocs
 } from "./security/security-config";
+
+loadLocalEnvOverrides();
 
 async function bootstrap() {
   assertProductionSecurityConfig(process.env);

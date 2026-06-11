@@ -25,10 +25,12 @@ Set these values in the platform secret manager, not in the image:
 - `MESSAGE_ENCRYPTION_KEY`
 - `AUTH_JWT_SECRET`
 - `SMTP_HOST=smtp.gmail.com`
-- `SMTP_PORT=587`
+- `SMTP_PORT=465`
 - `SMTP_USER`
 - `SMTP_PASSWORD`
-- `SMTP_SECURE=false`
+- `SMTP_SECURE=true`
+- `SMTP_TIMEOUT_MS=8000`
+- `SMTP_TLS_REJECT_UNAUTHORIZED=false`
 - `MAIL_FROM`
 - `PUBLIC_API_URL`
 - `REDIS_URL`
@@ -48,7 +50,7 @@ openssl rand -base64 48
 
 `REDIS_URL` is required in production because rate limits, cache, and background jobs need shared state across API instances.
 
-`SMTP_HOST=smtp.gmail.com` and `SMTP_PORT=587` use Gmail/Google Workspace SMTP with STARTTLS. `SMTP_USER` should be the full Google Workspace/Gmail sender address, and `SMTP_PASSWORD` should be an app password for that account. Google also supports SSL on port `465`; set `SMTP_PORT=465` and `SMTP_SECURE=true` for that mode. `MAIL_FROM` should be a branded sender such as `Madupe <support@madupe.com>`. `PUBLIC_API_URL` is used for verification links that must hit the API before redirecting users back to the web app.
+`SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, and `SMTP_SECURE=true` use Gmail/Google Workspace SMTP over SSL. `SMTP_USER` should be the full Google Workspace/Gmail sender address, and `SMTP_PASSWORD` should be an app password for that account. `MAIL_FROM` should be a branded sender such as `Madupe <support@madupe.com>`. `SMTP_TIMEOUT_MS` keeps signup and password-reset requests from hanging on a bad SMTP connection. `SMTP_TLS_REJECT_UNAUTHORIZED=false` disables SMTP TLS certificate verification for environments that require it. `PUBLIC_API_URL` is used for verification links that must hit the API before redirecting users back to the web app.
 
 ## Transactional Email Templates
 

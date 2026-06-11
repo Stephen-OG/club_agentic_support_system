@@ -1,4 +1,4 @@
-import { Inject, Injectable, InternalServerErrorException, Optional } from "@nestjs/common";
+import { Inject, Injectable, InternalServerErrorException, Optional, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import nodemailer from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
@@ -15,6 +15,30 @@ type MailTransport = {
 };
 
 export const MAIL_TRANSPORT = Symbol("MAIL_TRANSPORT");
+
+type MailConfig = Pick<ConfigService, "get">;
+
+export function buildSmtpOptions(config: MailConfig): SMTPTransport.Options {
+  const host = config.get<string>("SMTP_HOST") || "smtp.gmail.com";
+  const port = Number(config.get<string>("SMTP_PORT") || "465");
+  const timeout = Number(config.get<string>("SMTP_TIMEOUT_MS") || "8000");
+  const rejectUnauthorized =
+    config.get<string>("SMTP_TLS_REJECT_UNAUTHORIZED") ?? config.get<string>("SMTP_TLS_REJECT_UNAUTHORISED");
+
+  const user = config.get<string>("SMTP_USER");
+  const pass = config.get<string>("SMTP_PASSWORD");
+
+  return {
+    host,
+    port,
+    secure: config.get<string>("SMTP_SECURE") === "true" || port === 465,
+    auth: user && pass ? { user, pass } : undefined,
+    connectionTimeout: timeout,
+    greetingTimeout: timeout,
+    socketTimeout: timeout,
+    tls: rejectUnauthorized === "false" ? { rejectUnauthorized: false } : undefined
+  };
+}
 
 @Injectable()
 export class MailService {
@@ -46,28 +70,21 @@ export class MailService {
 
     const rendered = renderEmailTemplate(input.template, input.variables);
 
-    await this.getTransport().sendMail({
-      from,
-      to: input.to,
-      subject: rendered.subject,
-      text: rendered.text,
-      html: rendered.html
-    });
+    try {
+      await this.getTransport().sendMail({
+        from,
+        to: input.to,
+        subject: rendered.subject,
+        text: rendered.text,
+        html: rendered.html
+      });
+    } catch {
+      throw new ServiceUnavailableException("Email delivery failed. Please try again shortly.");
+    }
   }
 
   private getSmtpOptions(): SMTPTransport.Options {
-    const host = this.config.get<string>("SMTP_HOST") || "smtp.gmail.com";
-    const port = Number(this.config.get<string>("SMTP_PORT") || "587");
-
-    const user = this.config.get<string>("SMTP_USER");
-    const pass = this.config.get<string>("SMTP_PASSWORD");
-
-    return {
-      host,
-      port,
-      secure: this.config.get<string>("SMTP_SECURE") === "true" || port === 465,
-      auth: user && pass ? { user, pass } : undefined
-    };
+    return buildSmtpOptions(this.config);
   }
 
   private getTransport() {

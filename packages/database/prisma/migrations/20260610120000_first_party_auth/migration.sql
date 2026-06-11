@@ -55,34 +55,45 @@ ALTER TABLE "AuthEmailToken"
   ADD CONSTRAINT "AuthEmailToken_authUserId_fkey"
   FOREIGN KEY ("authUserId") REFERENCES "AuthUser"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
-INSERT INTO "AuthUser" (
-  "id",
-  "email",
-  "passwordHash",
-  "displayName",
-  "emailVerifiedAt",
-  "mustChangePassword",
-  "tokenVersion",
-  "createdAt",
-  "updatedAt"
-)
-SELECT
-  "authUserId"::uuid,
-  COALESCE("email", CONCAT("id"::text, '@migration.invalid')),
-  'disabled$legacy-provider-password-not-imported',
-  "displayName",
-  CURRENT_TIMESTAMP,
-  true,
-  1,
-  CURRENT_TIMESTAMP,
-  CURRENT_TIMESTAMP
-FROM "StaffProfile"
-WHERE "authUserId" IS NOT NULL
-ON CONFLICT ("id") DO NOTHING;
+DO $$
+BEGIN
+  IF to_regclass('public."StaffProfile"') IS NOT NULL THEN
+    INSERT INTO "AuthUser" (
+      "id",
+      "email",
+      "passwordHash",
+      "displayName",
+      "emailVerifiedAt",
+      "mustChangePassword",
+      "tokenVersion",
+      "createdAt",
+      "updatedAt"
+    )
+    SELECT
+      "authUserId"::uuid,
+      COALESCE("email", CONCAT("id"::text, '@migration.invalid')),
+      'disabled$legacy-provider-password-not-imported',
+      "displayName",
+      CURRENT_TIMESTAMP,
+      true,
+      1,
+      CURRENT_TIMESTAMP,
+      CURRENT_TIMESTAMP
+    FROM "StaffProfile"
+    WHERE "authUserId" IS NOT NULL
+    ON CONFLICT ("id") DO NOTHING;
 
-ALTER TABLE "StaffProfile"
-  ALTER COLUMN "authUserId" TYPE UUID USING "authUserId"::uuid;
+    ALTER TABLE "StaffProfile"
+      ALTER COLUMN "authUserId" TYPE UUID USING "authUserId"::uuid;
 
-ALTER TABLE "StaffProfile"
-  ADD CONSTRAINT "StaffProfile_authUserId_fkey"
-  FOREIGN KEY ("authUserId") REFERENCES "AuthUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'StaffProfile_authUserId_fkey'
+    ) THEN
+      ALTER TABLE "StaffProfile"
+        ADD CONSTRAINT "StaffProfile_authUserId_fkey"
+        FOREIGN KEY ("authUserId") REFERENCES "AuthUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+  END IF;
+END $$;
