@@ -46,8 +46,8 @@ Keep this key in the hosting provider secret manager. Do not commit it to Git or
 
 ### Security Misconfiguration
 
-- Production startup fails if launch-critical API configuration is missing, including `DATABASE_URL`, `OPENAI_API_KEY`, `MESSAGE_ENCRYPTION_KEY`, `AUTH_JWT_SECRET`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, `REDIS_URL`, and `CORS_ORIGINS`.
-- Production startup fails if `CORS_ORIGINS` are not public HTTPS URLs.
+- Production startup fails if launch-critical API configuration is missing, including `DATABASE_URL`, `OPENAI_API_KEY`, `MESSAGE_ENCRYPTION_KEY`, `AUTH_JWT_SECRET`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, `PUBLIC_API_URL` or `NEXT_PUBLIC_API_URL` or `RENDER_EXTERNAL_URL`, `REDIS_URL`, and `CORS_ORIGINS`.
+- Production startup fails if `CORS_ORIGINS` and the public API URL used in email links are not public HTTPS URLs; app-facing email links reuse existing app URL keys when present or fall back to the first public HTTPS `CORS_ORIGINS` value.
 - CORS is allow-list based via `CORS_ORIGINS`.
 - API security headers include no-sniff, frame denial, strict referrer policy, and restricted permissions policy.
 - Swagger docs are disabled by default in production.

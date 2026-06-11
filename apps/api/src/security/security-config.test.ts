@@ -5,6 +5,8 @@ import {
   defaultSecurityHeaders,
   getSecurityHeaders,
   getApiHost,
+  getPublicApiBaseUrl,
+  getPublicAppBaseUrl,
   getRateLimitConfig,
   isCorsOriginAllowed,
   parseCorsOrigins,
@@ -100,6 +102,32 @@ describe("security config", () => {
     assert.equal(getApiHost({ NODE_ENV: "production", HOST: "127.0.0.1" }), "127.0.0.1");
   });
 
+  it("resolves local URL defaults only outside production", () => {
+    assert.equal(getPublicAppBaseUrl({ NODE_ENV: "development" }), "http://127.0.0.1:3001");
+    assert.equal(getPublicApiBaseUrl({ NODE_ENV: "development" }), "http://127.0.0.1:4000");
+    assert.equal(getPublicAppBaseUrl({ NODE_ENV: "production", APP_URL: "https://madupe.com" }), "https://madupe.com");
+    assert.equal(getPublicAppBaseUrl({ NODE_ENV: "production", NEXT_PUBLIC_WEB_URL: "https://web.madupe.com" }), "https://web.madupe.com");
+    assert.equal(getPublicAppBaseUrl({ NODE_ENV: "production", CORS_ORIGINS: "https://app.madupe.com" }), "https://app.madupe.com");
+    assert.equal(getPublicApiBaseUrl({ NODE_ENV: "production", PUBLIC_API_URL: "https://api.madupe.com" }), "https://api.madupe.com");
+    assert.equal(getPublicApiBaseUrl({ NODE_ENV: "production", RENDER_EXTERNAL_URL: "https://api.onrender.com" }), "https://api.onrender.com");
+  });
+
+  it("rejects localhost email link bases in production", () => {
+    assert.throws(() => getPublicApiBaseUrl({ NODE_ENV: "production" }), /PUBLIC_API_URL, NEXT_PUBLIC_API_URL, or RENDER_EXTERNAL_URL/);
+    assert.throws(
+      () => getPublicApiBaseUrl({ NODE_ENV: "production", PUBLIC_API_URL: "http://127.0.0.1:4000" }),
+      /public HTTPS/
+    );
+    assert.throws(
+      () => getPublicAppBaseUrl({ NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "http://localhost:3001" }),
+      /public HTTPS/
+    );
+    assert.throws(
+      () => getPublicAppBaseUrl({ NODE_ENV: "production", CORS_ORIGINS: "http://localhost:3001" }),
+      /public HTTPS/
+    );
+  });
+
   it("requires launch-critical production configuration", () => {
     assert.doesNotThrow(() => assertProductionSecurityConfig({ NODE_ENV: "development" }));
     assert.throws(() => assertProductionSecurityConfig({ NODE_ENV: "production" }), /DATABASE_URL/);
@@ -154,6 +182,7 @@ function validProductionEnv() {
     SMTP_USER: "support@madupe.com",
     SMTP_PASSWORD: "google-app-password",
     MAIL_FROM: "Madupe <support@madupe.com>",
+    PUBLIC_API_URL: "https://api.example.com",
     REDIS_URL: "rediss://default:secret@redis.example.com:6379",
     CORS_ORIGINS: "https://app.example.com"
   };
