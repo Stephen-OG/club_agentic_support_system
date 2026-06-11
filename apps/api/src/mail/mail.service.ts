@@ -1,8 +1,26 @@
 import { Inject, Injectable, InternalServerErrorException, Optional, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import nodemailer from "nodemailer";
-import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import { type EmailTemplateKey, renderEmailTemplate } from "./email-templates";
+
+const nodemailer = require("nodemailer") as {
+  createTransport: (options: SmtpOptions) => MailTransport;
+};
+
+type SmtpOptions = {
+  host: string;
+  port: number;
+  secure: boolean;
+  auth?: {
+    user: string;
+    pass: string;
+  };
+  connectionTimeout: number;
+  greetingTimeout: number;
+  socketTimeout: number;
+  tls?: {
+    rejectUnauthorized: boolean;
+  };
+};
 
 type MailTransport = {
   sendMail: (message: {
@@ -18,7 +36,7 @@ export const MAIL_TRANSPORT = Symbol("MAIL_TRANSPORT");
 
 type MailConfig = Pick<ConfigService, "get">;
 
-export function buildSmtpOptions(config: MailConfig): SMTPTransport.Options {
+export function buildSmtpOptions(config: MailConfig): SmtpOptions {
   const host = config.get<string>("SMTP_HOST") || "smtp.gmail.com";
   const port = Number(config.get<string>("SMTP_PORT") || "465");
   const timeout = Number(config.get<string>("SMTP_TIMEOUT_MS") || "8000");
@@ -83,12 +101,15 @@ export class MailService {
     }
   }
 
-  private getSmtpOptions(): SMTPTransport.Options {
+  private getSmtpOptions(): SmtpOptions {
     return buildSmtpOptions(this.config);
   }
 
-  private getTransport() {
-    this.transport ??= nodemailer.createTransport(this.getSmtpOptions());
+  private getTransport(): MailTransport {
+    if (!this.transport) {
+      this.transport = nodemailer.createTransport(this.getSmtpOptions());
+    }
+
     return this.transport;
   }
 }
