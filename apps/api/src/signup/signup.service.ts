@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, InternalServerErrorException } from "@nestjs/common";
+import { ConflictException, Injectable, InternalServerErrorException, UnauthorizedException } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import { StructuredLogger } from "../common/logger/structured-logger.service";
 import type { SetupRequestDto } from "./dto/signup-request.dto";
@@ -20,7 +20,7 @@ export class SetupService {
     private readonly logger: StructuredLogger
   ) {}
 
-  async initialize(input: SetupRequestDto): Promise<SetupResponseDto> {
+  async initialize(input: SetupRequestDto, authUserId: string): Promise<SetupResponseDto> {
     const email = input.email.trim().toLowerCase();
 
     this.logger.logEvent("signup.started", {
@@ -52,13 +52,17 @@ export class SetupService {
       throw new ConflictException(`Venue slug "${input.venueSlug}" is already taken.`);
     }
 
-    const authUser = await this.prisma.authUser.findUnique({ where: { email } });
+    const authUser = await this.prisma.authUser.findUnique({ where: { id: authUserId } });
 
     if (!authUser) {
       this.logger.error(`Setup failed: no app auth user found for ${email}`, undefined, "SetupService");
       throw new InternalServerErrorException(
         "No app auth user found for this email. Please sign up first."
       );
+    }
+
+    if (authUser.email.toLowerCase() !== email || !authUser.emailVerifiedAt) {
+      throw new UnauthorizedException("Workspace setup must match your authenticated session");
     }
 
     const timezone = input.timezone || "Europe/London";

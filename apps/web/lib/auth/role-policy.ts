@@ -1,3 +1,4 @@
+import { getPrimaryStaffRole } from "@madupe/shared";
 import type { CommandMembership, CommandRole, CommandUser } from "./types";
 
 export type CommandView = "dashboard" | "operations" | "team" | "venues" | "staff" | "account";
@@ -12,15 +13,6 @@ export const commandViews: Array<{ id: CommandView; label: string }> = [
   { id: "account", label: "Settings" }
 ];
 
-const roleRank: Record<CommandRole, number> = {
-  admin: 6,
-  owner: 5,
-  manager: 4,
-  security: 3,
-  staff: 2,
-  read_only: 1
-};
-
 const visibleViewsByRole: Record<CommandRole, CommandView[]> = {
   owner: ["dashboard", "operations", "team", "venues", "account"],
   admin: ["dashboard", "operations", "team", "venues", "account"],
@@ -31,7 +23,7 @@ const visibleViewsByRole: Record<CommandRole, CommandView[]> = {
 };
 
 export function getPrimaryMembership(user: CommandUser): CommandMembership | null {
-  return [...user.memberships].sort((left, right) => roleRank[right.role] - roleRank[left.role])[0] ?? null;
+  return getPrimaryStaffRole(user.memberships);
 }
 
 export function getPrimaryRole(user: CommandUser): CommandRole {

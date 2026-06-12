@@ -250,13 +250,15 @@ describe("AppAuthService", () => {
   });
 
   it("changes an unverified signup email and sends a fresh verification code", async () => {
+    const serviceForHash = new AppAuthService({} as any);
     const user = {
       id: "auth-1",
       email: "wrong@example.com",
       displayName: "Alex",
       emailVerifiedAt: null,
       mustChangePassword: false,
-      tokenVersion: 1
+      tokenVersion: 1,
+      passwordHash: await (serviceForHash as any).hashPassword("signup-password")
     };
     const updates: any[] = [];
     const tokenUpdates: any[] = [];
@@ -296,7 +298,8 @@ describe("AppAuthService", () => {
 
     const result = await service.changeUnverifiedEmail({
       currentEmail: "wrong@example.com",
-      newEmail: "right@example.com"
+      newEmail: "right@example.com",
+      password: "signup-password"
     });
 
     assert.equal(result.user.email, "right@example.com");
@@ -310,12 +313,71 @@ describe("AppAuthService", () => {
     assert.equal(sentEmails[0].to, "right@example.com");
   });
 
+  it("rejects unverified signup email changes with the wrong signup password", async () => {
+    const serviceForHash = new AppAuthService({} as any);
+    const updates: any[] = [];
+    const tokenUpdates: any[] = [];
+    const service = new AppAuthService(
+      {
+        authUser: {
+          findUnique: async ({ where }: any) => {
+            if (where.email === "wrong@example.com") {
+              return {
+                id: "auth-1",
+                email: "wrong@example.com",
+                displayName: "Alex",
+                emailVerifiedAt: null,
+                mustChangePassword: false,
+                tokenVersion: 1,
+                passwordHash: await (serviceForHash as any).hashPassword("signup-password")
+              };
+            }
+            return null;
+          },
+          update: async ({ where, data }: any) => {
+            updates.push({ where, data });
+            return { id: where.id, ...data };
+          }
+        },
+        authEmailToken: {
+          updateMany: async ({ where, data }: any) => {
+            tokenUpdates.push({ where, data });
+            return { count: 1 };
+          }
+        }
+      } as any,
+      {
+        sendTemplate: async () => {
+          throw new Error("verification email should not be sent");
+        }
+      } as any
+    );
+
+    await assert.rejects(
+      () =>
+        service.changeUnverifiedEmail({
+          currentEmail: "wrong@example.com",
+          newEmail: "right@example.com",
+          password: "wrong-password"
+        }),
+      UnauthorizedException
+    );
+    assert.deepEqual(updates, []);
+    assert.deepEqual(tokenUpdates, []);
+  });
+
   it("rejects unverified email changes when the new email is already registered", async () => {
+    const serviceForHash = new AppAuthService({} as any);
     const service = new AppAuthService({
       authUser: {
         findUnique: async ({ where }: any) => {
           if (where.email === "wrong@example.com") {
-            return { id: "auth-1", email: "wrong@example.com", emailVerifiedAt: null };
+            return {
+              id: "auth-1",
+              email: "wrong@example.com",
+              emailVerifiedAt: null,
+              passwordHash: await (serviceForHash as any).hashPassword("signup-password")
+            };
           }
           if (where.email === "taken@example.com") {
             return { id: "auth-2", email: "taken@example.com", emailVerifiedAt: new Date() };
@@ -326,7 +388,7 @@ describe("AppAuthService", () => {
     } as any);
 
     await assert.rejects(
-      () => service.changeUnverifiedEmail({ currentEmail: "wrong@example.com", newEmail: "taken@example.com" }),
+      () => service.changeUnverifiedEmail({ currentEmail: "wrong@example.com", newEmail: "taken@example.com", password: "signup-password" }),
       ConflictException
     );
   });
@@ -379,10 +441,114 @@ describe("AppAuthService", () => {
     assert.equal(sentEmails[0].variables.actionUrl, undefined);
   });
 
-  it("resets a password with a one-time code", async () => {
+  it("does not send password reset codes for unverified emails", async () => {
+    const tokenUpdates: any[] = [];
+    const createdTokens: any[] = [];
+    const sentEmails: any[] = [];
+    const service = new AppAuthService(
+      {
+        authUser: {
+          findUnique: async ({ where }: any) =>
+            where.email === "alex@example.com"
+              ? {
+                  id: "auth-1",
+                  email: "alex@example.com",
+                  displayName: "Alex",
+                  emailVerifiedAt: null,
+                  mustChangePassword: false,
+                  tokenVersion: 1
+                }
+              : null
+        },
+        authEmailToken: {
+          updateMany: async ({ where, data }: any) => {
+            tokenUpdates.push({ where, data });
+            return { count: 1 };
+          },
+          create: async ({ data }: any) => {
+            createdTokens.push(data);
+            return { id: "token-1", ...data };
+          }
+        }
+      } as any,
+      {
+        sendTemplate: async (message: any) => {
+          sentEmails.push(message);
+        }
+      } as any
+    );
+
+    await service.requestPasswordReset({ email: "alex@example.com" });
+
+    assert.deepEqual(tokenUpdates, []);
+    assert.deepEqual(createdTokens, []);
+    assert.deepEqual(sentEmails, []);
+  });
+
+  it("rejects password reset codes for unverified users", async () => {
     const serviceForHash = new AppAuthService({} as any);
     const codeHash = (serviceForHash as any).hashToken("654321");
     const user = {
+      id: "auth-1",
+      email: "alex@example.com",
+      displayName: "Alex",
+      emailVerifiedAt: null,
+      mustChangePassword: false,
+      tokenVersion: 1,
+      passwordHash: await (serviceForHash as any).hashPassword("old-password")
+    };
+    const userUpdates: any[] = [];
+    const createdSessions: any[] = [];
+    const service = new AppAuthService({
+      authUser: {
+        findUnique: async ({ where }: any) => (where.email === "alex@example.com" ? user : null),
+        update: async ({ where, data }: any) => {
+          userUpdates.push({ where, data });
+          return { ...user, ...data };
+        }
+      },
+      authEmailToken: {
+        findUnique: async ({ where }: any) =>
+          where.tokenHash === codeHash
+            ? {
+                id: "token-1",
+                authUserId: user.id,
+                type: "PASSWORD_RESET",
+                tokenHash: codeHash,
+                usedAt: null,
+                expiresAt: new Date(Date.now() + 60_000)
+              }
+            : null,
+        update: async () => {
+          throw new Error("token should not be consumed for unverified users");
+        }
+      },
+      authSession: {
+        create: async ({ data }: any) => {
+          createdSessions.push(data);
+          return { id: "session-1", ...data };
+        }
+      }
+    } as any);
+
+    await assert.rejects(
+      () =>
+        service.resetPassword({
+          email: "alex@example.com",
+          code: "654321",
+          password: "new-secure-password"
+        }),
+      UnauthorizedException
+    );
+    assert.deepEqual(userUpdates, []);
+    assert.deepEqual(createdSessions, []);
+  });
+
+  it("resets a password with a one-time code", async () => {
+    const restore = withJwtSecret();
+    const serviceForHash = new AppAuthService({} as any);
+    const codeHash = (serviceForHash as any).hashToken("654321");
+    let user = {
       id: "auth-1",
       email: "alex@example.com",
       displayName: "Alex",
@@ -393,12 +559,18 @@ describe("AppAuthService", () => {
     };
     const tokenUpdates: any[] = [];
     const userUpdates: any[] = [];
+    const createdSessions: any[] = [];
     const service = new AppAuthService({
       authUser: {
         findUnique: async ({ where }: any) => (where.email === "alex@example.com" ? user : null),
         update: async ({ where, data }: any) => {
           userUpdates.push({ where, data });
-          return { ...user, ...data };
+          user = {
+            ...user,
+            ...data,
+            tokenVersion: data.tokenVersion?.increment ? user.tokenVersion + data.tokenVersion.increment : user.tokenVersion
+          };
+          return user;
         }
       },
       authEmailToken: {
@@ -420,20 +592,33 @@ describe("AppAuthService", () => {
         updateMany: async () => ({ count: 1 })
       },
       authSession: {
-        updateMany: async () => ({ count: 1 })
+        updateMany: async () => ({ count: 1 }),
+        create: async ({ data }: any) => {
+          createdSessions.push(data);
+          return { id: "session-1", ...data };
+        }
       }
     } as any);
 
-    await service.resetPassword({
-      email: "alex@example.com",
-      code: "654321",
-      password: "new-secure-password"
-    });
+    try {
+      const session = (await service.resetPassword({
+        email: "alex@example.com",
+        code: "654321",
+        password: "new-secure-password"
+      })) as any;
 
-    assert.equal(userUpdates[0].where.id, "auth-1");
-    assert.equal(await (serviceForHash as any).verifyPassword("new-secure-password", userUpdates[0].data.passwordHash), true);
-    assert.equal(tokenUpdates[0].where.id, "token-1");
-    assert.ok(tokenUpdates[0].data.usedAt);
+      assert.equal(userUpdates[0].where.id, "auth-1");
+      assert.equal(await (serviceForHash as any).verifyPassword("new-secure-password", userUpdates[0].data.passwordHash), true);
+      assert.equal(tokenUpdates[0].where.id, "token-1");
+      assert.ok(tokenUpdates[0].data.usedAt);
+      assert.match(session.accessToken, /^[^.]+\.[^.]+\.[^.]+$/);
+      assert.equal(typeof session.refreshToken, "string");
+      assert.equal(session.user.email, "alex@example.com");
+      assert.equal(createdSessions[0].authUserId, "auth-1");
+      assert.equal(createdSessions[0].tokenVersion, 2);
+    } finally {
+      restore();
+    }
   });
 
   it("signs in with a short-lived JWT access token and hashed refresh token", async () => {

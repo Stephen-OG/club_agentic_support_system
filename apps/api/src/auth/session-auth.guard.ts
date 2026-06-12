@@ -1,9 +1,10 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
+import { getPrimaryStaffRole, type StaffRole } from "@madupe/shared";
 import { PrismaService } from "../database/prisma.service";
 import type { RequestWithAuth } from "./auth-context";
 import { AppAuthService } from "./app-auth.service";
 
-type AuthRole = "owner" | "manager" | "admin" | "staff" | "security" | "read_only";
+type AuthRole = StaffRole;
 
 type RequestWithCurrentUser = RequestWithAuth & {
   currentUser?: {
@@ -31,15 +32,6 @@ const roleByPrismaRole: Record<string, AuthRole> = {
   SECURITY: "security",
   READ_ONLY: "read_only"
 };
-const authRoleRank: Record<AuthRole, number> = {
-  admin: 6,
-  owner: 5,
-  manager: 4,
-  security: 3,
-  staff: 2,
-  read_only: 1
-};
-
 @Injectable()
 export class SessionAuthGuard implements CanActivate {
   constructor(
@@ -56,6 +48,10 @@ export class SessionAuthGuard implements CanActivate {
     }
 
     const session = await this.appAuth.verifyBearerToken(token);
+    if (session.user.mustChangePassword) {
+      throw new UnauthorizedException("Password must be changed before continuing");
+    }
+
     const profile = await this.prisma.staffProfile.findUnique({
       where: { authUserId: session.user.id },
       include: {
@@ -68,7 +64,7 @@ export class SessionAuthGuard implements CanActivate {
     });
 
     const memberships = profile?.memberships.map((item) => ({ ...item, role: this.mapRole(item.role) })) ?? [];
-    const membership = [...memberships].sort((left, right) => authRoleRank[right.role] - authRoleRank[left.role])[0];
+    const membership = getPrimaryStaffRole(memberships);
 
     if (!profile || !membership) {
       throw new UnauthorizedException("Staff account is not configured");

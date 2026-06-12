@@ -79,7 +79,7 @@ export class AppAuthService {
     };
   }
 
-  async changeUnverifiedEmail(input: { currentEmail: string; newEmail: string }) {
+  async changeUnverifiedEmail(input: { currentEmail: string; newEmail: string; password: string }) {
     const currentEmail = this.normalizeEmail(input.currentEmail);
     const newEmail = this.normalizeEmail(input.newEmail);
 
@@ -90,6 +90,10 @@ export class AppAuthService {
     const currentUser = await this.prisma.authUser.findUnique({ where: { email: currentEmail } });
     if (!currentUser || currentUser.emailVerifiedAt) {
       throw new BadRequestException("Email can only be changed before verification");
+    }
+
+    if (!(await this.verifyPassword(input.password, currentUser.passwordHash))) {
+      throw new UnauthorizedException("Email or password is incorrect");
     }
 
     const existingNewEmailUser = await this.prisma.authUser.findUnique({ where: { email: newEmail } });
@@ -245,7 +249,7 @@ export class AppAuthService {
     const email = this.normalizeEmail(input.email);
     const user = await this.prisma.authUser.findUnique({ where: { email } });
 
-    if (!user || !this.mail) {
+    if (!user || !user.emailVerifiedAt || !this.mail) {
       return;
     }
 
@@ -286,7 +290,7 @@ export class AppAuthService {
     });
     await this.revokeUserRefreshSessions(token.authUserId);
 
-    return this.serializeUser(updated);
+    return this.createSession(updated);
   }
 
   async verifyEmail(input: { token: string }) {
@@ -541,7 +545,7 @@ export class AppAuthService {
     }
 
     const user = await this.prisma.authUser.findUnique({ where: { email } });
-    if (!user) {
+    if (!user || !user.emailVerifiedAt) {
       throw new UnauthorizedException("Invalid or expired code");
     }
 

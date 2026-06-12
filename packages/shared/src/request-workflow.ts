@@ -17,6 +17,23 @@ export type StaffRole = (typeof staffRoles)[number];
 export type RequestActor = "admin" | "manager" | "staff" | "guest" | "system";
 export type GuestRequestAction = "cancel" | "confirm_resolved" | "not_satisfied";
 
+export const staffRoleRank: Record<StaffRole, number> = {
+  admin: 6,
+  owner: 5,
+  manager: 4,
+  security: 3,
+  staff: 2,
+  read_only: 1
+};
+
+export function compareStaffRolesByAuthority(left: StaffRole, right: StaffRole) {
+  return staffRoleRank[right] - staffRoleRank[left];
+}
+
+export function getPrimaryStaffRole<T extends { role: StaffRole }>(memberships: T[]) {
+  return [...memberships].sort((left, right) => compareStaffRolesByAuthority(left.role, right.role))[0] ?? null;
+}
+
 const allowedTransitions: Record<RequestActor, Partial<Record<RequestStatus, RequestStatus[]>>> = {
   admin: {
     new: ["acknowledged", "assigned", "cancelled", "escalated"],

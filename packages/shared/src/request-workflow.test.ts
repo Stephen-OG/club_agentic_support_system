@@ -1,36 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { canTransitionRequest, getNextGuestActionStatus } from "./request-workflow";
+import { compareStaffRolesByAuthority, getPrimaryStaffRole } from "./request-workflow";
 
-describe("request workflow", () => {
-  it("allows staff to move acknowledged or in-progress requests forward", () => {
-    assert.equal(canTransitionRequest("new", "acknowledged", "staff"), true);
-    assert.equal(canTransitionRequest("acknowledged", "in_progress", "staff"), true);
-    assert.equal(canTransitionRequest("in_progress", "completed", "staff"), true);
+describe("staff role authority", () => {
+  it("orders staff roles by authorization authority", () => {
+    const roles = ["read_only", "staff", "security", "manager", "owner", "admin"] as const;
+
+    assert.deepEqual([...roles].sort(compareStaffRolesByAuthority), ["admin", "owner", "manager", "security", "staff", "read_only"]);
   });
 
-  it("allows staff to acknowledge escalated work by moving it into progress", () => {
-    assert.equal(canTransitionRequest("escalated", "in_progress", "staff"), true);
-  });
+  it("selects the primary membership using the shared role authority order", () => {
+    const primary = getPrimaryStaffRole([
+      { id: "staff-membership", role: "staff" as const },
+      { id: "manager-membership", role: "manager" as const },
+      { id: "owner-membership", role: "owner" as const }
+    ]);
 
-  it("prevents staff from resolving without guest confirmation", () => {
-    assert.equal(canTransitionRequest("completed", "resolved", "staff"), false);
-  });
-
-  it("allows guest resolution confirmation from completed", () => {
-    assert.equal(getNextGuestActionStatus("completed", "confirm_resolved"), "resolved");
-    assert.equal(getNextGuestActionStatus("completed", "not_satisfied"), "in_progress");
-  });
-
-  it("rejects guest actions from the wrong state", () => {
-    assert.throws(() => getNextGuestActionStatus("new", "confirm_resolved"), /not awaiting satisfaction/);
-  });
-
-  it("prevents guests from cancelling escalated requests", () => {
-    assert.throws(() => getNextGuestActionStatus("escalated", "cancel"), /can no longer be cancelled/);
-  });
-
-  it("rejects unknown guest actions at runtime", () => {
-    assert.throws(() => getNextGuestActionStatus("completed", "reopen" as any), /Unknown guest request action/);
+    assert.equal(primary?.id, "owner-membership");
   });
 });

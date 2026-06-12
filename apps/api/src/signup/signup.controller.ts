@@ -36,6 +36,6 @@ export class SetupController {
       throw new UnauthorizedException("Email must match your authenticated session");
     }
 
-    return this.signupService.initialize(input);
+    return this.signupService.initialize(input, user.id);
   }
 }

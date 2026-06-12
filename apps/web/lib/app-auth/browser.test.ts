@@ -120,7 +120,8 @@ describe("createBrowserAuthClient", () => {
       assert.deepEqual(init?.headers, { "Content-Type": "application/json" });
       assert.deepEqual(JSON.parse(String(init?.body)), {
         currentEmail: "wrong@example.com",
-        newEmail: "right@example.com"
+        newEmail: "right@example.com",
+        password: "signup-password"
       });
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     };
@@ -128,7 +129,8 @@ describe("createBrowserAuthClient", () => {
     const client = createBrowserAuthClient();
     const result = await client.auth.changeUnverifiedEmail({
       currentEmail: "wrong@example.com",
-      newEmail: "right@example.com"
+      newEmail: "right@example.com",
+      password: "signup-password"
     });
 
     assert.equal(result.error, null);
@@ -157,7 +159,24 @@ describe("createBrowserAuthClient", () => {
   });
 
   it("resets a password with an OTP code", async () => {
+    const storage = installWindowStorage();
     const { createBrowserAuthClient } = loadBrowserModule();
+    const freshSession = {
+      access_token: "reset-access-token",
+      refresh_token: "reset-refresh-token",
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      refresh_expires_at: new Date(Date.now() + 600_000).toISOString(),
+      user: {
+        id: "auth-1",
+        email: "alex@example.com",
+        email_confirmed_at: new Date().toISOString(),
+        confirmed_at: new Date().toISOString(),
+        user_metadata: {
+          displayName: "Alex",
+          mustChangePassword: false
+        }
+      }
+    };
 
     globalThis.fetch = async (input, init) => {
       assert.equal(input, "http://127.0.0.1:4000/auth/password-reset/confirm");
@@ -167,7 +186,7 @@ describe("createBrowserAuthClient", () => {
         code: "654321",
         password: "new-secure-password"
       });
-      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      return new Response(JSON.stringify(freshSession), { status: 200 });
     };
 
     const client = createBrowserAuthClient();
@@ -176,7 +195,10 @@ describe("createBrowserAuthClient", () => {
       code: "654321",
       password: "new-secure-password"
     });
+    const storedSession = JSON.parse(storage.get("madupe.auth.session") ?? "{}");
 
     assert.equal(result.error, null);
+    assert.equal(result.data.session?.access_token, "reset-access-token");
+    assert.equal(storedSession.access_token, "reset-access-token");
   });
 });

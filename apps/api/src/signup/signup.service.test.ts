@@ -17,7 +17,7 @@ describe("SetupService", () => {
     const service = new SetupService(
       {
         authUser: {
-          findUnique: async () => ({ id: "auth-1", email: "owner@example.com" })
+          findUnique: async ({ where }: any) => (where.id === "auth-1" ? { id: "auth-1", email: "owner@example.com", emailVerifiedAt: new Date() } : null)
         },
         staffProfile: {
           findUnique: async () => null
@@ -54,7 +54,7 @@ describe("SetupService", () => {
       } as any
     );
 
-    const result = await service.initialize(setupInput);
+    const result = await service.initialize(setupInput, "auth-1");
 
     assert.equal(result.venueId, "venue-1");
     assert.deepEqual(membershipData, {
@@ -63,5 +63,32 @@ describe("SetupService", () => {
       staffProfileId: "staff-1",
       role: "OWNER"
     });
+  });
+
+  it("requires setup to use the authenticated auth user id", async () => {
+    const service = new SetupService(
+      {
+        authUser: {
+          findUnique: async ({ where }: any) =>
+            where.id === "auth-2" ? { id: "auth-2", email: "other@example.com", emailVerifiedAt: new Date() } : null
+        },
+        staffProfile: {
+          findUnique: async () => null
+        },
+        workspace: {
+          findUnique: async () => null
+        },
+        venue: {
+          findFirst: async () => null
+        }
+      } as any,
+      {
+        error: () => undefined,
+        logEvent: () => undefined,
+        warn: () => undefined
+      } as any
+    );
+
+    await assert.rejects(() => service.initialize(setupInput, "auth-2"), /authenticated session/);
   });
 });

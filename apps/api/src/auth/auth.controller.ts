@@ -41,7 +41,7 @@ export class AuthController {
 
   @Post("signup/email")
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  async changeSignupEmail(@Body() input: { currentEmail: string; newEmail: string }): Promise<SignupResponse> {
+  async changeSignupEmail(@Body() input: { currentEmail: string; newEmail: string; password: string }): Promise<SignupResponse> {
     const result = await this.appAuth.changeUnverifiedEmail(input);
     return {
       session: null,
@@ -76,9 +76,9 @@ export class AuthController {
 
   @Post("password-reset/confirm")
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  async resetPassword(@Body() input: { token?: string; email?: string; code?: string; password: string }) {
-    await this.appAuth.resetPassword(input);
-    return { ok: true };
+  async resetPassword(@Body() input: { token?: string; email?: string; code?: string; password: string }): Promise<AuthResponse> {
+    const session = await this.appAuth.resetPassword(input);
+    return this.toResponse(session);
   }
 
   @Post("refresh")

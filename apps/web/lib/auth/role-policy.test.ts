@@ -1,6 +1,6 @@
 import type { CommandUser } from "./types";
 import assert from "node:assert/strict";
-import { getCommandViewHref, getRoleDashboardMode, getVisibleCommandViews, resolveCommandView } from "./role-policy";
+import { getCommandViewHref, getPrimaryMembership, getRoleDashboardMode, getVisibleCommandViews, resolveCommandView } from "./role-policy";
 
 const baseUser = (role: CommandUser["memberships"][number]["role"], venueId: string | null = "venue_1"): CommandUser => ({
   id: `user_${role}`,
@@ -37,3 +37,17 @@ assert.equal(resolveCommandView(baseUser("admin", null), "operations", "dashboar
 assert.equal(resolveCommandView(baseUser("staff"), "operations", "operations"), "operations");
 assert.equal(resolveCommandView(baseUser("manager"), "team", "dashboard"), "team");
 assert.equal(getCommandViewHref("/command", "operations"), "/command?view=operations");
+
+assert.equal(
+  getPrimaryMembership({
+    ...baseUser("staff"),
+    memberships: [
+      baseUser("staff").memberships[0],
+      {
+        ...baseUser("manager").memberships[0],
+        id: "membership_manager"
+      }
+    ]
+  })?.role,
+  "manager"
+);

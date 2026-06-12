@@ -38,6 +38,7 @@ export function LoginPanel() {
   const [verificationCode, setVerificationCode] = useState("");
   const [changingVerificationEmail, setChangingVerificationEmail] = useState(false);
   const [replacementEmail, setReplacementEmail] = useState("");
+  const [verificationEmailPassword, setVerificationEmailPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -130,6 +131,24 @@ export function LoginPanel() {
         setError(result.error.message);
         return;
       }
+
+      if (result.data.session) {
+        const accessToken = result.data.session.access_token;
+        try {
+          const user = await apiRequest<CommandUser>(authClient, "/me", { accessToken });
+          const action = getSignedInRouteAction({
+            user,
+            userMetadata: result.data.session.user.user_metadata
+          });
+          if (action.kind === "redirect") {
+            router.replace(action.path);
+          }
+        } catch {
+          router.replace("/signup");
+        }
+        return;
+      }
+
       setMode("signin");
       setPassword("");
       setConfirmPassword("");
@@ -238,13 +257,19 @@ export function LoginPanel() {
       return;
     }
 
+    if (!verificationEmailPassword) {
+      setError("Enter the password you used to create the account.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setNotice(null);
 
     const result = await authClient.auth.changeUnverifiedEmail({
       currentEmail: verificationEmail,
-      newEmail: nextEmail
+      newEmail: nextEmail,
+      password: verificationEmailPassword
     });
 
     setLoading(false);
@@ -257,6 +282,7 @@ export function LoginPanel() {
     setEmail(nextEmail);
     setVerificationCode("");
     setReplacementEmail("");
+    setVerificationEmailPassword("");
     setChangingVerificationEmail(false);
   }
 
@@ -343,6 +369,19 @@ export function LoginPanel() {
                   />
                 </span>
               </label>
+              <label>
+                <span>Account password</span>
+                <span className="input-shell">
+                  <LockKeyhole size={16} />
+                  <input
+                    autoComplete="current-password"
+                    onChange={(event) => setVerificationEmailPassword(event.target.value)}
+                    required
+                    type="password"
+                    value={verificationEmailPassword}
+                  />
+                </span>
+              </label>
               {notice ? <div className="form-success">{notice}</div> : null}
               {error ? <div className="form-error">{error}</div> : null}
               <button className="command-button primary" disabled={loading} type="submit">
@@ -353,6 +392,7 @@ export function LoginPanel() {
                 onClick={() => {
                   setChangingVerificationEmail(false);
                   setReplacementEmail("");
+                  setVerificationEmailPassword("");
                   setError(null);
                 }}
                 type="button"
