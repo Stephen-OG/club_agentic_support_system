@@ -7,6 +7,9 @@ import { AppAuthService } from "./app-auth.service";
 type AuthRole = StaffRole;
 
 type RequestWithCurrentUser = RequestWithAuth & {
+  user?: {
+    roles: AuthRole[];
+  };
   currentUser?: {
     authUserId: string;
     email: string | null;
@@ -70,12 +73,15 @@ export class SessionAuthGuard implements CanActivate {
       throw new UnauthorizedException("Staff account is not configured");
     }
 
+    const allRoles = memberships.map((item) => item.role);
+
     request.auth = {
       staffProfileId: profile.id,
       workspaceId: membership.workspaceId,
       venueId: membership.venueId ?? undefined,
       role: membership.role
     };
+    request.user = { roles: allRoles };
     request.currentUser = {
       authUserId: session.user.id,
       email: session.user.email ?? profile.email ?? null,

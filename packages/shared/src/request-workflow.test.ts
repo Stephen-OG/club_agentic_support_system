@@ -6,7 +6,7 @@ describe("staff role authority", () => {
   it("orders staff roles by authorization authority", () => {
     const roles = ["read_only", "staff", "security", "manager", "owner", "admin"] as const;
 
-    assert.deepEqual([...roles].sort(compareStaffRolesByAuthority), ["admin", "owner", "manager", "security", "staff", "read_only"]);
+    assert.deepEqual([...roles].sort(compareStaffRolesByAuthority), ["owner", "admin", "manager", "security", "staff", "read_only"]);
   });
 
   it("selects the primary membership using the shared role authority order", () => {

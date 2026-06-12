@@ -18,8 +18,8 @@ export type RequestActor = "admin" | "manager" | "staff" | "guest" | "system";
 export type GuestRequestAction = "cancel" | "confirm_resolved" | "not_satisfied";
 
 export const staffRoleRank: Record<StaffRole, number> = {
-  admin: 6,
-  owner: 5,
+  owner: 6,
+  admin: 5,
   manager: 4,
   security: 3,
   staff: 2,
