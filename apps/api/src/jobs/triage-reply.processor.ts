@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from "@nestjs/bullmq";
 import { Injectable, Logger, Optional } from "@nestjs/common";
 import type { Job } from "bullmq";
-import { SenderType } from "@prisma/client";
+import { RequestStatus as PrismaRequestStatus, SenderType } from "@prisma/client";
 import type { RequestPriority } from "@madupe/shared";
 import { PrismaService } from "../database/prisma.service";
 import { AiTriageService } from "../triage/ai-triage.service";
@@ -26,7 +26,7 @@ export type TriageReplyJobData = {
 };
 
 @Injectable()
-@Processor("triage-reply")
+@Processor("triage-reply", { concurrency: 5 })
 export class TriageReplyProcessor extends WorkerHost {
   private readonly logger = new Logger(TriageReplyProcessor.name);
 
@@ -56,6 +56,17 @@ export class TriageReplyProcessor extends WorkerHost {
       deterministicPriority
     } = job.data;
 
+    // Dedup check: skip if the last assistant message in this conversation was less than 1 second ago with the same body
+    const lastAssistantMessage = await this.prisma.message.findFirst({
+      where: { conversationId, sender: SenderType.ASSISTANT },
+      orderBy: { createdAt: "desc" },
+      select: { body: true, createdAt: true }
+    });
+    if (lastAssistantMessage && lastAssistantMessage.body === guestMessageBody && Date.now() - lastAssistantMessage.createdAt.getTime() < 1000) {
+      this.logger.warn(`Duplicate triage reply detected for conversation ${conversationId}, skipping`);
+      return;
+    }
+
     try {
       // 1. Run AI triage (the time-consuming part)
       const priority: RequestPriority = deterministicPriority ?? this.priorityClassifier.classifyOrDefault(guestMessageBody);
@@ -72,7 +83,11 @@ export class TriageReplyProcessor extends WorkerHost {
 
       // 2. Find and update the support request with triage metadata
       const request = await this.prisma.supportRequest.findFirst({
-        where: { conversationId },
+        where: { 
+          conversationId, 
+          venueId,
+          status: { notIn: [PrismaRequestStatus.DECLINED, PrismaRequestStatus.COMPLETED, PrismaRequestStatus.RESOLVED, PrismaRequestStatus.CANCELLED] }
+        },
         orderBy: { createdAt: "desc" },
         select: { id: true, title: true, category: true, agentPolicyVersion: true }
       });

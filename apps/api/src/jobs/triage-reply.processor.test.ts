@@ -40,6 +40,7 @@ describe("TriageReplyProcessor realtime events", () => {
           }
         },
         message: {
+          findFirst: async () => null,
           create: async (args: any) => {
             assert.equal(args.data.sender, SenderType.ASSISTANT);
             return message;

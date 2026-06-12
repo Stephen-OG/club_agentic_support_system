@@ -50,13 +50,13 @@ describe("AppAuthService", () => {
 
     const user = await service.createTemporaryPasswordUser({
       email: "SAM@example.com",
-      password: "temporary-secret",
+      password: "Temporary-Secret1",
       displayName: "Sam Service"
     });
 
     assert.equal(user.id, "auth-1");
     assert.equal(user.email, "sam@example.com");
-    assert.notEqual(createdUser?.passwordHash, "temporary-secret");
+    assert.notEqual(createdUser?.passwordHash, "Temporary-Secret1");
     assert.equal(createdUser?.mustChangePassword, true);
   });
 
@@ -88,7 +88,7 @@ describe("AppAuthService", () => {
     try {
       const result = await service.signUp({
         email: "alex@example.com",
-        password: "temporary-secret",
+        password: "Temporary-Secret1",
         displayName: "Alex"
       });
 
@@ -140,7 +140,7 @@ describe("AppAuthService", () => {
 
     const result = await service.signUp({
       email: "alex@example.com",
-      password: "ignored-secret",
+      password: "Ignored-Secret1",
       displayName: "Ignored Name"
     });
 
@@ -215,7 +215,7 @@ describe("AppAuthService", () => {
       emailVerifiedAt: null,
       mustChangePassword: false,
       tokenVersion: 1,
-      passwordHash: await (new AppAuthService({} as any) as any).hashPassword("old-signup-password")
+      passwordHash: await (new AppAuthService({} as any) as any).hashPassword("Old-Signup-Password1")
     };
     let updatedPasswordHash = "";
     const service = new AppAuthService(
@@ -239,14 +239,14 @@ describe("AppAuthService", () => {
 
     const result = await service.signUp({
       email: "alex@example.com",
-      password: "new-signup-password",
+      password: "New-Signup-Password1",
       displayName: "New Name"
     });
 
     assert.equal(result.session, null);
     assert.equal(result.user.id, "auth-1");
-    assert.equal(await (service as any).verifyPassword("new-signup-password", updatedPasswordHash), true);
-    assert.equal(await (service as any).verifyPassword("old-signup-password", updatedPasswordHash), false);
+    assert.equal(await (service as any).verifyPassword("New-Signup-Password1", updatedPasswordHash), true);
+    assert.equal(await (service as any).verifyPassword("Old-Signup-Password1", updatedPasswordHash), false);
   });
 
   it("changes an unverified signup email and sends a fresh verification code", async () => {
@@ -258,7 +258,7 @@ describe("AppAuthService", () => {
       emailVerifiedAt: null,
       mustChangePassword: false,
       tokenVersion: 1,
-      passwordHash: await (serviceForHash as any).hashPassword("signup-password")
+      passwordHash: await (serviceForHash as any).hashPassword("Signup-Password1")
     };
     const updates: any[] = [];
     const tokenUpdates: any[] = [];
@@ -299,7 +299,7 @@ describe("AppAuthService", () => {
     const result = await service.changeUnverifiedEmail({
       currentEmail: "wrong@example.com",
       newEmail: "right@example.com",
-      password: "signup-password"
+      password: "Signup-Password1"
     });
 
     assert.equal(result.user.email, "right@example.com");
@@ -329,7 +329,7 @@ describe("AppAuthService", () => {
                 emailVerifiedAt: null,
                 mustChangePassword: false,
                 tokenVersion: 1,
-                passwordHash: await (serviceForHash as any).hashPassword("signup-password")
+                passwordHash: await (serviceForHash as any).hashPassword("Signup-Password1")
               };
             }
             return null;
@@ -358,7 +358,7 @@ describe("AppAuthService", () => {
         service.changeUnverifiedEmail({
           currentEmail: "wrong@example.com",
           newEmail: "right@example.com",
-          password: "wrong-password"
+          password: "Wrong-Password1"
         }),
       UnauthorizedException
     );
@@ -376,7 +376,7 @@ describe("AppAuthService", () => {
               id: "auth-1",
               email: "wrong@example.com",
               emailVerifiedAt: null,
-              passwordHash: await (serviceForHash as any).hashPassword("signup-password")
+              passwordHash: await (serviceForHash as any).hashPassword("Signup-Password1")
             };
           }
           if (where.email === "taken@example.com") {
@@ -388,7 +388,7 @@ describe("AppAuthService", () => {
     } as any);
 
     await assert.rejects(
-      () => service.changeUnverifiedEmail({ currentEmail: "wrong@example.com", newEmail: "taken@example.com", password: "signup-password" }),
+      () => service.changeUnverifiedEmail({ currentEmail: "wrong@example.com", newEmail: "taken@example.com", password: "Signup-Password1" }),
       ConflictException
     );
   });
@@ -495,7 +495,7 @@ describe("AppAuthService", () => {
       emailVerifiedAt: null,
       mustChangePassword: false,
       tokenVersion: 1,
-      passwordHash: await (serviceForHash as any).hashPassword("old-password")
+      passwordHash: await (serviceForHash as any).hashPassword("Old-Password1")
     };
     const userUpdates: any[] = [];
     const createdSessions: any[] = [];
@@ -536,7 +536,7 @@ describe("AppAuthService", () => {
         service.resetPassword({
           email: "alex@example.com",
           code: "654321",
-          password: "new-secure-password"
+          password: "New-Secure-Password1"
         }),
       UnauthorizedException
     );
@@ -555,7 +555,7 @@ describe("AppAuthService", () => {
       emailVerifiedAt: new Date(),
       mustChangePassword: false,
       tokenVersion: 1,
-      passwordHash: await (serviceForHash as any).hashPassword("old-password")
+      passwordHash: await (serviceForHash as any).hashPassword("Old-Password1")
     };
     const tokenUpdates: any[] = [];
     const userUpdates: any[] = [];
@@ -604,11 +604,11 @@ describe("AppAuthService", () => {
       const session = (await service.resetPassword({
         email: "alex@example.com",
         code: "654321",
-        password: "new-secure-password"
+        password: "New-Secure-Password1"
       })) as any;
 
       assert.equal(userUpdates[0].where.id, "auth-1");
-      assert.equal(await (serviceForHash as any).verifyPassword("new-secure-password", userUpdates[0].data.passwordHash), true);
+      assert.equal(await (serviceForHash as any).verifyPassword("New-Secure-Password1", userUpdates[0].data.passwordHash), true);
       assert.equal(tokenUpdates[0].where.id, "token-1");
       assert.ok(tokenUpdates[0].data.usedAt);
       assert.match(session.accessToken, /^[^.]+\.[^.]+\.[^.]+$/);
@@ -631,7 +631,7 @@ describe("AppAuthService", () => {
       emailVerifiedAt: new Date(),
       mustChangePassword: false,
       tokenVersion: 1,
-      passwordHash: await (new AppAuthService({} as any) as any).hashPassword("correct-password")
+      passwordHash: await (new AppAuthService({} as any) as any).hashPassword("Correct-Password1")
     };
     const service = new AppAuthService({
       authUser: {
@@ -646,7 +646,7 @@ describe("AppAuthService", () => {
     } as any);
 
     try {
-      const session = (await service.signIn({ email: "sam@example.com", password: "correct-password" })) as any;
+      const session = (await service.signIn({ email: "sam@example.com", password: "Correct-Password1" })) as any;
 
       assert.match(session.accessToken, /^[^.]+\.[^.]+\.[^.]+$/);
       assert.equal(typeof session.refreshToken, "string");
@@ -672,24 +672,29 @@ describe("AppAuthService", () => {
       tokenVersion: 2
     };
     const service = new AppAuthService({
-      authSession: {
-        findUnique: async ({ where }: any) => ({
-          id: "session-1",
-          authUserId: user.id,
-          refreshTokenHash: where.refreshTokenHash,
-          revokedAt: null,
-          expiresAt: new Date(Date.now() + 60_000),
-          tokenVersion: 2,
-          authUser: user
-        }),
-        update: async ({ where, data }: any) => {
-          updates.push({ where, data });
-          return { id: where.id, ...data };
-        },
-        create: async ({ data }: any) => {
-          creates.push(data);
-          return { id: "session-2", ...data };
-        }
+      $transaction: async (callback: any) => {
+        const tx = {
+          authSession: {
+            findUnique: async ({ where }: any) => ({
+              id: "session-1",
+              authUserId: user.id,
+              refreshTokenHash: where.refreshTokenHash,
+              revokedAt: null,
+              expiresAt: new Date(Date.now() + 60_000),
+              tokenVersion: 2,
+              authUser: user
+            }),
+            updateMany: async ({ where, data }: any) => {
+              updates.push({ where, data });
+              return { count: 1 };
+            },
+            create: async ({ data }: any) => {
+              creates.push(data);
+              return { id: "session-2", ...data };
+            }
+          }
+        };
+        return callback(tx);
       }
     } as any);
 
@@ -709,19 +714,27 @@ describe("AppAuthService", () => {
 
   it("revokes a user's active refresh sessions when a revoked refresh token is reused", async () => {
     const updates: any[] = [];
+    const sessionData = {
+      id: "session-1",
+      authUserId: "auth-1",
+      refreshTokenHash: "hash",
+      revokedAt: new Date(),
+      expiresAt: new Date(Date.now() + 60_000),
+      tokenVersion: 1,
+      authUser: { id: "auth-1", tokenVersion: 1 }
+    };
     const service = new AppAuthService({
-      authSession: {
-        findUnique: async () => ({
-          id: "session-1",
-          authUserId: "auth-1",
-          revokedAt: new Date(),
-          expiresAt: new Date(Date.now() + 60_000),
-          authUser: { id: "auth-1" }
-        }),
-        updateMany: async ({ where, data }: any) => {
-          updates.push({ where, data });
-          return { count: 2 };
-        }
+      $transaction: async (callback: any) => {
+        const tx = {
+          authSession: {
+            findUnique: async () => sessionData,
+            updateMany: async ({ where, data }: any) => {
+              updates.push({ where, data });
+              return { count: 2 };
+            }
+          }
+        };
+        return callback(tx);
       }
     } as any);
 
@@ -800,7 +813,7 @@ describe("AppAuthService", () => {
       emailVerifiedAt: new Date(),
       mustChangePassword: true,
       tokenVersion: 1,
-      passwordHash: await (serviceForHash as any).hashPassword("old-password")
+      passwordHash: await (serviceForHash as any).hashPassword("Old-Password1")
     };
     const updatedUser = {
       ...originalUser,
@@ -831,8 +844,8 @@ describe("AppAuthService", () => {
     try {
       const oldAccessToken = (service as any).signAccessToken(originalUser);
       const nextSession = (await service.changePassword(oldAccessToken, {
-        oldPassword: "old-password",
-        password: "new-secure-password"
+        oldPassword: "Old-Password1",
+        password: "New-Secure-Password1"
       })) as any;
 
       assert.match(nextSession.accessToken, /^[^.]+\.[^.]+\.[^.]+$/);

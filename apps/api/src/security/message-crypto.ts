@@ -5,6 +5,21 @@ const envelopePrefix = "enc:v1";
 const aad = Buffer.from("madupe:message:v1", "utf8");
 const legacyAads = [Buffer.from("guestos:message:v1", "utf8")];
 
+let cachedEncryptionKey: { raw: string; key: Buffer } | null = null;
+
+function getEncryptionKey(): Buffer | null {
+  const raw = process.env.MESSAGE_ENCRYPTION_KEY;
+  if (!raw) {
+    cachedEncryptionKey = null;
+    return null;
+  }
+  if (cachedEncryptionKey && cachedEncryptionKey.raw === raw) {
+    return cachedEncryptionKey.key;
+  }
+  cachedEncryptionKey = { raw, key: resolveMessageKey(raw, {}) as Buffer };
+  return cachedEncryptionKey.key;
+}
+
 type CryptoOptions = {
   requireKey?: boolean;
 };
@@ -21,7 +36,7 @@ export function isEncryptedMessageBody(body: string) {
   return body.startsWith(`${envelopePrefix}:`);
 }
 
-export function encryptMessageBody(body: string, rawKey = process.env.MESSAGE_ENCRYPTION_KEY, options: CryptoOptions = {}) {
+export function encryptMessageBody(body: string, rawKey: Buffer | string | null | undefined = getEncryptionKey(), options: CryptoOptions = {}) {
   const key = resolveMessageKey(rawKey, options);
 
   if (!key) {
@@ -42,7 +57,7 @@ export function encryptMessageBody(body: string, rawKey = process.env.MESSAGE_EN
   ].join(":");
 }
 
-export function decryptMessageBody(body: string, rawKey = process.env.MESSAGE_ENCRYPTION_KEY) {
+export function decryptMessageBody(body: string, rawKey: Buffer | string | null | undefined = getEncryptionKey()) {
   if (!isEncryptedMessageBody(body)) {
     return body;
   }
@@ -67,7 +82,7 @@ export function decryptMessageBody(body: string, rawKey = process.env.MESSAGE_EN
 export function encryptMessageCreateData<T extends MessageCreateData>(data: T): T {
   return {
     ...data,
-    body: encryptMessageBody(data.body, process.env.MESSAGE_ENCRYPTION_KEY, {
+    body: encryptMessageBody(data.body, getEncryptionKey(), {
       requireKey: process.env.NODE_ENV === "production"
     })
   };
@@ -88,7 +103,7 @@ export function decryptMessageRecords<T extends MessageWithBody>(messages: T[]):
   return messages.map(decryptMessageRecord);
 }
 
-function resolveMessageKey(rawKey: string | undefined, options: CryptoOptions) {
+function resolveMessageKey(rawKey: Buffer | string | null | undefined, options: CryptoOptions) {
   if (!rawKey) {
     if (options.requireKey) {
       throw new Error("MESSAGE_ENCRYPTION_KEY is required to encrypt/decrypt message bodies");
@@ -96,8 +111,7 @@ function resolveMessageKey(rawKey: string | undefined, options: CryptoOptions) {
     return null;
   }
 
-  const trimmed = rawKey.trim();
-  const decoded = decodeKey(trimmed);
+  const decoded = Buffer.isBuffer(rawKey) ? rawKey : decodeKey(rawKey.trim());
 
   if (decoded.length !== 32) {
     throw new Error("MESSAGE_ENCRYPTION_KEY must decode to 32 bytes for AES-256-GCM");

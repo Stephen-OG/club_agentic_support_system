@@ -31,13 +31,15 @@ describe("SetupService", () => {
         $transaction: async (operation: any) =>
           operation({
             workspace: {
-              create: async ({ data }: any) => ({ id: "workspace-1", ...data })
+              create: async ({ data }: any) => ({ id: "workspace-1", ...data }),
+              findUnique: async () => null
             },
             staffProfile: {
               create: async ({ data }: any) => ({ id: "staff-1", ...data })
             },
             venue: {
-              create: async ({ data }: any) => ({ id: "venue-1", ...data })
+              create: async ({ data }: any) => ({ id: "venue-1", ...data }),
+              findFirst: async () => null
             },
             staffMembership: {
               create: async ({ data }: any) => {

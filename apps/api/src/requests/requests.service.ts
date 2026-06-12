@@ -73,9 +73,13 @@ type VenueRequestListPage<T> = {
 function latestSatisfactionRating(messages: Array<{ metadata: unknown; createdAt: Date | string }>) {
   for (const message of messages) {
     const metadata = message.metadata as { satisfactionRating?: unknown } | null;
-    const rating = normalizeSatisfactionRating(metadata?.satisfactionRating);
-    if (rating) {
-      return rating;
+    try {
+      const rating = normalizeSatisfactionRating(metadata?.satisfactionRating);
+      if (rating) {
+        return rating;
+      }
+    } catch {
+      continue;
     }
   }
 
@@ -86,7 +90,13 @@ function recentMessages(messages: Array<{ id: string; sender: SenderType; body: 
   return [...messages]
     .reverse()
     .filter((message) => message.sender === SenderType.GUEST)
-    .map(decryptMessageRecord)
+    .map((message) => {
+      try {
+        return decryptMessageRecord(message);
+      } catch {
+        return { ...message, body: "[Decryption error]" };
+      }
+    })
     .map((message) => ({
       id: message.id,
       sender: message.sender,
@@ -226,28 +236,41 @@ export class RequestsService {
 
     this.venueAccess.assertCanOperateVenue(auth, { workspaceId: request.venue.workspaceId, venueId: request.venueId });
 
-    const fromStatus = sharedStatusByPrismaStatus[request.status];
+    if (request.venue.workspaceId !== auth.workspaceId) {
+      throw new NotFoundException("Request not found");
+    }
+
     const toStatus = input.status;
     const actor = this.actorFromAuth(auth);
 
-    if (!canTransitionRequest(fromStatus, toStatus, actor)) {
-      throw new ConflictException(`Cannot transition request from ${fromStatus} to ${toStatus}`);
-    }
-
-    const prismaToStatus = prismaStatusBySharedStatus[toStatus];
-    const updateData = {
-      status: prismaToStatus,
-      ...(input.assignedToId ? { assignedToId: input.assignedToId } : {}),
-      ...(toStatus === "acknowledged" ? { acknowledgedAt: new Date() } : {}),
-      ...(toStatus === "completed" ? { completedAt: new Date() } : {}),
-      ...(toStatus === "resolved" ? { resolvedAt: new Date() } : {}),
-      ...(toStatus === "in_progress" ? { resolvedAt: null } : {})
-    };
-
     const result = await this.prisma.$transaction(async (tx) => {
-      const updatedRequest = await tx.supportRequest.update({
+      const fromStatus = sharedStatusByPrismaStatus[request.status];
+
+      if (!canTransitionRequest(fromStatus, toStatus, actor)) {
+        throw new ConflictException(`Cannot transition request from ${fromStatus} to ${toStatus}`);
+      }
+
+      const prismaToStatus = prismaStatusBySharedStatus[toStatus];
+      const updateData = {
+        status: prismaToStatus,
+        ...(input.assignedToId ? { assignedToId: input.assignedToId } : {}),
+        ...(toStatus === "acknowledged" ? { acknowledgedAt: new Date() } : {}),
+        ...(toStatus === "completed" ? { completedAt: new Date() } : {}),
+        ...(toStatus === "resolved" ? { resolvedAt: new Date() } : {}),
+        ...(toStatus === "in_progress" ? { resolvedAt: null } : {})
+      };
+
+      const { count } = await tx.supportRequest.updateMany({
+        where: { id: requestId, status: request.status },
+        data: updateData
+      });
+
+      if (count === 0) {
+        throw new ConflictException("Request status was changed by another request");
+      }
+
+      const updatedRequest = await tx.supportRequest.findUnique({
         where: { id: requestId },
-        data: updateData,
         include: {
           assignedTo: true,
           servicePoint: true
@@ -290,51 +313,78 @@ export class RequestsService {
       return { message: createdMessage, request: updatedRequest };
     });
 
-    this.publishRequestUpdated(result.request);
-    this.publishMessageCreated(result.request, result.message);
+    if (result.request) {
+      this.publishRequestUpdated(result.request);
+      this.publishMessageCreated(result.request, result.message);
+    }
 
-    return result.request;
+    return result.request!
   }
 
   async applyGuestAction(input: GuestActionInput) {
     const request = await this.prisma.supportRequest.findUnique({
       where: { id: input.requestId },
-      include: { conversation: true }
+      include: {
+        conversation: true,
+        venue: { select: { workspaceId: true } }
+      }
     });
 
     if (!request) {
       throw new NotFoundException("Request not found");
     }
 
-    if (request.conversation.guestSessionId) {
-      if (!input.sessionId || input.sessionId !== request.conversation.guestSessionId) {
-        throw new ForbiddenException("You are not allowed to act on this request");
-      }
-    }
-
     if (input.action === "confirm_resolved" && !this.isValidRating(input.rating)) {
       throw new BadRequestException("A satisfaction rating from 1 to 5 is required");
     }
 
-    let nextStatus: RequestStatus;
-
-    try {
-      nextStatus = getNextGuestActionStatus(sharedStatusByPrismaStatus[request.status], input.action);
-    } catch (error) {
-      throw new ConflictException(error instanceof Error ? error.message : "Guest action is not allowed");
-    }
-
-    const prismaToStatus = prismaStatusBySharedStatus[nextStatus];
-    const metadata = this.isValidRating(input.rating) ? { satisfactionRating: input.rating } : {};
-
     const result = await this.prisma.$transaction(async (tx) => {
-      const updatedRequest = await tx.supportRequest.update({
+      const conv = await tx.conversation.findUnique({
+        where: { id: request.conversationId },
+        select: { guestSessionId: true }
+      });
+
+      if (conv?.guestSessionId) {
+        if (!input.sessionId || input.sessionId !== conv.guestSessionId) {
+          throw new ForbiddenException("You are not allowed to act on this request");
+        }
+      }
+
+      const currentRequest = await tx.supportRequest.findUnique({
         where: { id: input.requestId },
+        select: { status: true }
+      });
+
+      if (!currentRequest) {
+        throw new NotFoundException("Request not found");
+      }
+
+      let nextStatus: RequestStatus;
+
+      try {
+        nextStatus = getNextGuestActionStatus(sharedStatusByPrismaStatus[currentRequest.status], input.action);
+      } catch (error) {
+        throw new ConflictException(error instanceof Error ? error.message : "Guest action is not allowed");
+      }
+
+      const prismaToStatus = prismaStatusBySharedStatus[nextStatus];
+      const metadata = this.isValidRating(input.rating) ? { satisfactionRating: input.rating } : {};
+
+      const { count } = await tx.supportRequest.updateMany({
+        where: { id: input.requestId, status: currentRequest.status },
         data: {
           status: prismaToStatus,
           ...(nextStatus === "resolved" ? { resolvedAt: new Date() } : {}),
           ...(nextStatus === "in_progress" ? { resolvedAt: null } : {})
         }
+      });
+
+      if (count === 0) {
+        throw new ConflictException("Request status was changed by another request");
+      }
+
+      const updatedRequest = await tx.supportRequest.findUnique({
+        where: { id: input.requestId }
       });
 
       await this.closeConversationIfTerminal(tx, request.conversationId, nextStatus);
@@ -363,7 +413,7 @@ export class RequestsService {
       });
 
       return {
-        request: updatedRequest,
+        request: updatedRequest!,
         message: decryptMessageRecord(message)
       };
     });
@@ -387,7 +437,11 @@ export class RequestsService {
   }
 
   private isValidRating(rating: unknown): rating is number {
-    return normalizeSatisfactionRating(rating) !== null;
+    try {
+      return normalizeSatisfactionRating(rating) !== null;
+    } catch {
+      return false;
+    }
   }
 
   private async closeConversationIfTerminal(

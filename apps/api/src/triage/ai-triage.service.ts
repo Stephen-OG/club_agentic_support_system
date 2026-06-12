@@ -1,4 +1,4 @@
-import { Injectable, Optional } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   AgentActionSchema,
@@ -58,12 +58,14 @@ type TriageInput = {
   message: string;
   servicePointLabel: string;
   isFollowup?: boolean;
+  venueId?: string;
 };
 
 @Injectable()
 export class AiTriageService {
   private readonly model: string;
   private openai: OpenAI | null;
+  private readonly logger = new Logger(AiTriageService.name);
 
   constructor(
     @Optional() private readonly cache?: RedisCacheService,
@@ -96,7 +98,7 @@ export class AiTriageService {
         input: JSON.stringify({
           deterministicPriority: input.deterministicPriority,
           isFollowup: Boolean(input.isFollowup),
-          message: input.message,
+          message: this.sanitizeInput(input.message, input.venueId),
           servicePointLabel: input.servicePointLabel
         }),
         instructions: MADUPE_TRIAGE_SYSTEM_PROMPT,
@@ -117,7 +119,8 @@ export class AiTriageService {
       }
 
       return result;
-    } catch {
+    } catch (error) {
+      this.logger.warn(`AI triage failed: ${error instanceof Error ? error.message : "Unknown error"}`);
       return fallback;
     }
   }
@@ -181,7 +184,24 @@ export class AiTriageService {
       .replace(/\s+/g, " ")
       .slice(0, 100);
 
-    return `triage:${input.deterministicPriority}:${input.servicePointLabel}:${normalizedMessage}`;
+    const venueId = input.venueId || "global";
+    return `triage:${input.deterministicPriority}:${input.servicePointLabel}:${venueId}:${normalizedMessage}`;
+  }
+
+  private sanitizeInput(message: string, venueId?: string): string {
+    let sanitized = message
+      .replace(/\0/g, "")
+      .replace(/---[\s\S]*?---/g, "");
+
+    const injectionPattern =
+      /\b(ignore\s+(all\s+)?previous\s+(instructions|directions|commands|prompts?)|forget\s+(all\s+)?(previous\s+)?(instructions|directions)|new\s+(instructions|prompt)|override\s+(instructions|prompt)|disregard|you\s+are\s+now|act\s+as\s+if|from\s+now\s+on)\b/i;
+
+    if (injectionPattern.test(sanitized)) {
+      this.logger.warn(`Prompt injection detected in message from venue ${venueId || "unknown"}`);
+      sanitized = sanitized.replace(new RegExp(injectionPattern.source, "gi"), "[REDACTED]");
+    }
+
+    return sanitized;
   }
 
   private normalizeModelOutput(output: unknown): AiTriageOutput {

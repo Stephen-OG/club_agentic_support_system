@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger, OnModuleDestroy, Optional } from "@nestjs/common";
 import type { DomainEvent } from "./domain-events.service";
 
@@ -29,6 +30,7 @@ export class DomainEventConsumerService implements OnModuleDestroy {
   private readonly stopCallbacks: Array<() => void> = [];
   private readonly attempts = new Map<string, number>();
   private readonly maxAttempts: number;
+  private readonly instanceId = randomUUID();
 
   constructor(
     @Optional() @Inject(DOMAIN_EVENT_CONSUMER_ADAPTER) private readonly adapter?: DomainEventConsumerAdapter,
@@ -71,8 +73,11 @@ export class DomainEventConsumerService implements OnModuleDestroy {
     }
   }
 
+  // Retry state is in-memory only (per-instance). On restart, attempt counts reset
+  // so messages may be retried up to maxAttempts again. The instanceId prefix ensures
+  // attempt keys are unique per process instance, avoiding cross-instance carryover.
   private attemptKey(lane: DomainEventConsumerLane, messageId: string) {
-    return `${lane}:${messageId}`;
+    return `${this.instanceId}:${lane}:${messageId}`;
   }
 
   private errorMessage(error: unknown) {

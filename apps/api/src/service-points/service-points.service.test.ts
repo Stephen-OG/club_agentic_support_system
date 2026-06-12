@@ -117,10 +117,15 @@ describe("ServicePointsService public QR workflow", () => {
         }
       }
     };
+    const { qrToken: _1, ...publicServicePoint } = servicePoint;
     const prisma = {
       servicePoint: {
         findFirst: async (args: unknown) => {
           calls.push({ model: "servicePoint.findFirst", args });
+          return servicePoint;
+        },
+        upsert: async (args: unknown) => {
+          calls.push({ model: "servicePoint.upsert", args });
           return servicePoint;
         }
       },
@@ -167,7 +172,7 @@ describe("ServicePointsService public QR workflow", () => {
     assert.equal(result.conversationId, conversation.id);
     assert.deepEqual(result.messages, storedMessages);
     assert.deepEqual(result.request, supportRequest);
-    assert.deepEqual(result.servicePoint, servicePoint);
+    assert.deepEqual(result.servicePoint, publicServicePoint);
     assert.deepEqual(
       published.map((event) => ({ ...(event as any), occurredAt: "Any<Date>" })),
       [
@@ -286,7 +291,8 @@ describe("ServicePointsService public QR workflow", () => {
       };
       const prisma = {
         servicePoint: {
-          findFirst: async () => servicePoint
+          findFirst: async () => servicePoint,
+          upsert: async () => servicePoint
         },
         $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
       };
@@ -357,6 +363,7 @@ describe("ServicePointsService public QR workflow", () => {
       }
     ];
 
+    const { qrToken: _1, ...publicServicePoint } = servicePoint;
     const calls: Array<{ model: string; args: unknown }> = [];
     const tx = {
       conversation: {
@@ -385,6 +392,10 @@ describe("ServicePointsService public QR workflow", () => {
         findFirst: async (args: unknown) => {
           calls.push({ model: "servicePoint.findFirst", args });
           return servicePoint;
+        },
+        upsert: async (args: unknown) => {
+          calls.push({ model: "servicePoint.upsert", args });
+          return servicePoint;
         }
       },
       conversation: tx.conversation,
@@ -409,7 +420,7 @@ describe("ServicePointsService public QR workflow", () => {
     assert.equal(result.conversationId, conversation.id);
     assert.deepEqual(result.messages, storedMessages);
     assert.equal(result.request, null);
-    assert.deepEqual(result.servicePoint, servicePoint);
+    assert.deepEqual(result.servicePoint, publicServicePoint);
     assert.deepEqual(calls, [
       {
         model: "servicePoint.findFirst",
@@ -534,6 +545,7 @@ describe("ServicePointsService public QR workflow", () => {
       }
     ];
 
+    const { qrToken: _1, ...publicServicePoint } = servicePoint;
     const calls: Array<{ model: string; args: unknown }> = [];
     const tx = {
       conversation: {
@@ -574,6 +586,10 @@ describe("ServicePointsService public QR workflow", () => {
         findFirst: async (args: unknown) => {
           calls.push({ model: "servicePoint.findFirst", args });
           return servicePoint;
+        },
+        upsert: async (args: unknown) => {
+          calls.push({ model: "servicePoint.upsert", args });
+          return servicePoint;
         }
       },
       conversation: tx.conversation,
@@ -612,7 +628,7 @@ describe("ServicePointsService public QR workflow", () => {
     assert.equal(result.conversationId, conversation.id);
     assert.deepEqual(result.messages, storedMessages);
     assert.deepEqual(result.request, supportRequest);
-    assert.deepEqual(result.servicePoint, servicePoint);
+    assert.deepEqual(result.servicePoint, publicServicePoint);
     assert.equal(calls.some((call) => call.model === "conversation.create"), false);
     assert.equal(calls.some((call) => call.model === "supportRequest.create"), true);
     assert.deepEqual(
@@ -698,6 +714,7 @@ describe("ServicePointsService public QR workflow", () => {
       }
     ];
 
+    const { qrToken: _1, ...publicServicePoint } = servicePoint;
     const calls: Array<{ model: string; args: unknown }> = [];
     const tx = {
       conversation: {
@@ -733,6 +750,10 @@ describe("ServicePointsService public QR workflow", () => {
       servicePoint: {
         findFirst: async (args: unknown) => {
           calls.push({ model: "servicePoint.findFirst", args });
+          return servicePoint;
+        },
+        upsert: async (args: unknown) => {
+          calls.push({ model: "servicePoint.upsert", args });
           return servicePoint;
         }
       },
@@ -772,7 +793,7 @@ describe("ServicePointsService public QR workflow", () => {
     assert.equal(result.conversationId, conversation.id);
     assert.deepEqual(result.messages, storedMessages);
     assert.deepEqual(result.request, newSupportRequest);
-    assert.deepEqual(result.servicePoint, servicePoint);
+    assert.deepEqual(result.servicePoint, publicServicePoint);
     const createCall = calls.find((call) => call.model === "supportRequest.create") as { args: { data: { summary: string } } };
     assert.equal(createCall.args.data.summary, "Could we get more water?");
     assert.deepEqual(
@@ -875,7 +896,8 @@ describe("ServicePointsService public QR workflow", () => {
       { classifyOrDefault: () => "normal" } as never,
       {
         servicePoint: {
-          findFirst: async () => servicePoint
+          findFirst: async () => servicePoint,
+          upsert: async () => servicePoint
         },
         conversation: {
           findFirst: async () => conversation
@@ -937,6 +959,10 @@ describe("ServicePointsService public QR workflow", () => {
       servicePoint: {
         findFirst: async (args: unknown) => {
           calls.push({ model: "servicePoint.findFirst", args });
+          return servicePoint;
+        },
+        upsert: async (args: unknown) => {
+          calls.push({ model: "servicePoint.upsert", args });
           return servicePoint;
         }
       },
@@ -1043,6 +1069,7 @@ describe("ServicePointsService public QR workflow", () => {
       messages,
       requests: [request]
     };
+    const { qrToken: _1, ...publicServicePoint } = servicePoint;
     const calls: Array<{ model: string; args: unknown }> = [];
     const service = createService(
       {} as never,
@@ -1051,6 +1078,10 @@ describe("ServicePointsService public QR workflow", () => {
         servicePoint: {
           findFirst: async (args: unknown) => {
             calls.push({ model: "servicePoint.findFirst", args });
+            return servicePoint;
+          },
+          upsert: async (args: unknown) => {
+            calls.push({ model: "servicePoint.upsert", args });
             return servicePoint;
           }
         },
@@ -1075,7 +1106,7 @@ describe("ServicePointsService public QR workflow", () => {
       messages,
       replyPending: true,
       request,
-      servicePoint
+      servicePoint: publicServicePoint
     });
     assert.deepEqual(calls, [
       {
@@ -1153,7 +1184,8 @@ describe("ServicePointsService public QR workflow", () => {
       {} as never,
       {
         servicePoint: {
-          findFirst: async () => servicePoint
+          findFirst: async () => servicePoint,
+          upsert: async () => servicePoint
         },
         conversation: {
           findFirst: async () => ({
@@ -1194,7 +1226,8 @@ describe("ServicePointsService public QR workflow", () => {
         {} as never,
         {
           servicePoint: {
-            findFirst: async () => servicePoint
+            findFirst: async () => servicePoint,
+            upsert: async () => servicePoint
           },
           conversation: {
             findFirst: async () => ({
@@ -1256,6 +1289,7 @@ describe("ServicePointsService public QR workflow", () => {
       messages,
       requests: [request]
     };
+    const { qrToken: _1, ...publicServicePoint } = servicePoint;
     const calls: Array<{ model: string; args: unknown }> = [];
     const service = createService(
       {} as never,
@@ -1270,6 +1304,10 @@ describe("ServicePointsService public QR workflow", () => {
         servicePoint: {
           findFirst: async (args: unknown) => {
             calls.push({ model: "servicePoint.findFirst", args });
+            return servicePoint;
+          },
+          upsert: async (args: unknown) => {
+            calls.push({ model: "servicePoint.upsert", args });
             return servicePoint;
           }
         },
@@ -1294,7 +1332,7 @@ describe("ServicePointsService public QR workflow", () => {
       messages,
       replyPending: false,
       request,
-      servicePoint,
+      servicePoint: publicServicePoint,
       venue: { id: venue.id, name: venue.name, slug: venue.slug }
     });
     assert.deepEqual(calls, [
@@ -1312,12 +1350,20 @@ describe("ServicePointsService public QR workflow", () => {
         }
       },
       {
-        model: "servicePoint.findFirst",
+        model: "servicePoint.upsert",
         args: {
           where: {
+            venueId_label: {
+              venueId: venue.id,
+              label: "Venue support"
+            }
+          },
+          create: {
             venueId: venue.id,
-            label: "Venue support"
-          }
+            label: "Venue support",
+            qrToken: "venue_support_blue-note"
+          },
+          update: {}
         }
       },
       {
@@ -1411,6 +1457,10 @@ describe("ServicePointsService public QR workflow", () => {
       servicePoint: {
         findFirst: async (args: unknown) => {
           calls.push({ model: "servicePoint.findFirst", args });
+          return servicePoint;
+        },
+        upsert: async (args: unknown) => {
+          calls.push({ model: "servicePoint.upsert", args });
           return servicePoint;
         }
       },
@@ -1572,12 +1622,12 @@ describe("ServicePointsService public QR workflow", () => {
       }
     };
     const prisma = {
-      venue: { findFirst: async () => venue },
-      servicePoint: {
-        findFirst: async () => servicePoint,
-        create: async () => servicePoint
-      },
-      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
+        venue: { findFirst: async () => venue },
+        servicePoint: {
+          findFirst: async () => servicePoint,
+          upsert: async () => servicePoint
+        },
+        $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
     };
     const service = createService(
       {
@@ -1689,7 +1739,7 @@ describe("ServicePointsService public QR workflow", () => {
         venue: { findFirst: async () => venue },
         servicePoint: {
           findFirst: async () => servicePoint,
-          create: async () => servicePoint
+          upsert: async () => servicePoint
         },
         conversation: {
           findFirst: async () => ({
@@ -1765,7 +1815,7 @@ describe("ServicePointsService public QR workflow", () => {
         venue: { findFirst: async () => venue },
         servicePoint: {
           findFirst: async () => servicePoint,
-          create: async () => servicePoint
+          upsert: async () => servicePoint
         },
         $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
       } as never,
@@ -1841,7 +1891,7 @@ describe("ServicePointsService public QR workflow", () => {
         venue: { findFirst: async () => venue },
         servicePoint: {
           findFirst: async () => servicePoint,
-          create: async () => servicePoint
+          upsert: async () => servicePoint
         },
         $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
       } as never,
@@ -1918,7 +1968,7 @@ describe("ServicePointsService public QR workflow", () => {
       } as never,
       { classifyOrDefault: () => "normal" } as never,
       {
-        servicePoint: { findFirst: async () => servicePoint },
+        servicePoint: { findFirst: async () => servicePoint, upsert: async () => servicePoint },
         conversation: { findFirst: async () => null },
         $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
       } as never,
@@ -1996,7 +2046,7 @@ describe("ServicePointsService public QR workflow", () => {
       } as never,
       { classifyOrDefault: () => "normal" } as never,
       {
-        servicePoint: { findFirst: async () => servicePoint },
+        servicePoint: { findFirst: async () => servicePoint, upsert: async () => servicePoint },
         conversation: { findFirst: async () => null },
         $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
         message: {
@@ -2069,7 +2119,7 @@ describe("ServicePointsService public QR workflow", () => {
         }
       } as never,
       {
-        servicePoint: { findFirst: async () => servicePoint },
+        servicePoint: { findFirst: async () => servicePoint, upsert: async () => servicePoint },
         conversation: { findFirst: async () => conversation },
         supportRequest: {
           create: async () => {
@@ -2104,7 +2154,7 @@ describe("ServicePointsService public QR workflow", () => {
       {} as never,
       {} as never,
       {
-        servicePoint: { findFirst: async () => servicePoint },
+        servicePoint: { findFirst: async () => servicePoint, upsert: async () => servicePoint },
         conversation: {
           findFirst: async () => ({
             id: "conversation_session_guard",
@@ -2197,7 +2247,8 @@ describe("ServicePointsService public QR workflow", () => {
       { classifyOrDefault: () => "normal" } as never,
       {
         servicePoint: {
-          findFirst: async () => servicePoint
+          findFirst: async () => servicePoint,
+          upsert: async () => servicePoint
         },
         conversation: {
           findFirst: async () => null
@@ -2287,7 +2338,7 @@ describe("ServicePointsService public QR workflow", () => {
         venue: { findFirst: async () => venue },
         servicePoint: {
           findFirst: async () => servicePoint,
-          create: async () => servicePoint
+          upsert: async () => servicePoint
         },
         conversation: {
           findFirst: async () => null

@@ -50,12 +50,14 @@ describe("AuditEventsConsumer", () => {
           action: "request.created",
           targetType: "support_request",
           targetId: baseEvent.requestId,
+          actorStaffId: null,
           metadata: {
             eventId: baseEvent.eventId,
             occurredAt: baseEvent.occurredAt,
             conversationId: baseEvent.conversationId,
             messageId: baseEvent.messageId,
-            requestId: baseEvent.requestId
+            requestId: baseEvent.requestId,
+            actorStaffId: null
           }
         }
       }

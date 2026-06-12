@@ -168,11 +168,36 @@ export class RedisCacheService {
 }
 
 /**
- * In-memory fallback with TTL support.
+ * In-memory fallback with TTL support and eviction policy.
  */
 class MemoryCache {
   private store = new Map<string, { value: unknown; expiresAt: number }>();
   private listeners = new Map<string, Array<(message: unknown) => void>>();
+  private readonly maxSize: number;
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+  constructor(maxSize = 1000) {
+    this.maxSize = maxSize;
+    this.cleanupTimer = setInterval(() => this.sweepExpired(), 60_000);
+  }
+
+  private sweepExpired(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.store) {
+      if (now > entry.expiresAt) {
+        this.store.delete(key);
+      }
+    }
+  }
+
+  private evict(): void {
+    if (this.store.size <= this.maxSize) return;
+    const deleteCount = Math.max(1, Math.floor(this.maxSize * 0.1));
+    const keys = [...this.store.keys()];
+    for (let i = 0; i < deleteCount && i < keys.length; i++) {
+      this.store.delete(keys[i]!);
+    }
+  }
 
   async get<T>(key: string): Promise<T | null> {
     const entry = this.store.get(key);
@@ -189,6 +214,7 @@ class MemoryCache {
       expiresAt: Date.now() + ttlSeconds * 1000,
       value
     });
+    this.evict();
   }
 
   async del(key: string): Promise<void> {

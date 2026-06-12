@@ -4,6 +4,7 @@ import { InjectQueue } from "@nestjs/bullmq";
 import type { Queue } from "bullmq";
 import { RequestPriority as PrismaRequestPriority, RequestStatus, SenderType } from "@prisma/client";
 import type { RequestPriority } from "@madupe/shared";
+import type { AiTriageOutput } from "@madupe/shared";
 import type { AuthContext } from "../auth/auth-context";
 import { RedisCacheService } from "../common/cache/redis-cache.service";
 import { PrismaService } from "../database/prisma.service";
@@ -33,6 +34,8 @@ const prismaPriorityBySharedPriority: Record<RequestPriority, PrismaRequestPrior
 
 const publicConversationMessageLimit = 50;
 const defaultPublicGuestSessionTtlMinutes = 12 * 60;
+const triageLocalCacheTtlMs = 60_000;
+
 const publicConversationMessageSelect = {
   id: true,
   venueId: true,
@@ -66,6 +69,9 @@ function assignmentSuggestedAction(route: AssignmentRoute) {
 
 @Injectable()
 export class ServicePointsService {
+  private readonly pendingCacheFills = new Map<string, Promise<any>>();
+  private readonly triageLocalCache = new Map<string, { result: AiTriageOutput; expiresAt: number }>();
+
   constructor(
     private readonly aiTriage: AiTriageService,
     private readonly cache: RedisCacheService,
@@ -86,23 +92,19 @@ export class ServicePointsService {
   }
 
   private async findOrCreateVenueSupportServicePoint(venue: { id: string; slug: string }) {
-    const existing = await this.prisma.servicePoint.findFirst({
+    return this.prisma.servicePoint.upsert({
       where: {
-        venueId: venue.id,
-        label: "Venue support"
-      }
-    });
-
-    if (existing) {
-      return existing;
-    }
-
-    return this.prisma.servicePoint.create({
-      data: {
+        venueId_label: {
+          venueId: venue.id,
+          label: "Venue support"
+        }
+      },
+      create: {
         venueId: venue.id,
         label: "Venue support",
         qrToken: this.venueSupportQrToken(venue.slug)
-      }
+      },
+      update: {}
     });
   }
 
@@ -111,6 +113,19 @@ export class ServicePointsService {
     const cached = await this.cache.get<any>(cacheKey);
     if (cached) return cached;
 
+    const inFlight = this.pendingCacheFills.get(cacheKey);
+    if (inFlight) return inFlight;
+
+    const promise = this.fetchVenueIntake(venueSlug, cacheKey);
+    this.pendingCacheFills.set(cacheKey, promise);
+    try {
+      return await promise;
+    } finally {
+      this.pendingCacheFills.delete(cacheKey);
+    }
+  }
+
+  private async fetchVenueIntake(venueSlug: string, cacheKey: string) {
     const venue = await this.prisma.venue.findFirst({
       where: { slug: venueSlug },
       include: {
@@ -156,6 +171,19 @@ export class ServicePointsService {
     const cached = await this.cache.get<any>(cacheKey);
     if (cached) return cached;
 
+    const inFlight = this.pendingCacheFills.get(cacheKey);
+    if (inFlight) return inFlight;
+
+    const promise = this.fetchServicePointIntake(token, cacheKey);
+    this.pendingCacheFills.set(cacheKey, promise);
+    try {
+      return await promise;
+    } finally {
+      this.pendingCacheFills.delete(cacheKey);
+    }
+  }
+
+  private async fetchServicePointIntake(token: string, cacheKey: string) {
     const servicePoint = await this.prisma.servicePoint.findFirst({
       where: {
         isActive: true,
@@ -582,6 +610,11 @@ export class ServicePointsService {
     return venue ? { id: venue.id, name: venue.name, slug: venue.slug } : null;
   }
 
+  private publicServicePoint<T extends Record<string, any>>(sp: T): Omit<T, "qrToken"> {
+    const { qrToken: _, ...rest } = sp;
+    return rest;
+  }
+
   private publicChatAvailability(
     venue: { timezone: string; openingHours?: VenueOpeningHourWindow[] | null } | null | undefined
   ) {
@@ -599,7 +632,29 @@ export class ServicePointsService {
     }
   }
 
+  private triageCacheKey(input: { deterministicPriority: string; message: string; servicePointLabel: string; isFollowup?: boolean }) {
+    const normalizedMessage = input.message
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .replace(/\s+/g, " ")
+      .slice(0, 100);
+
+    return `triage:${input.deterministicPriority}:${input.servicePointLabel}:${normalizedMessage}`;
+  }
+
   private async triageGuestMessage(input: Parameters<AiTriageService["triage"]>[0]) {
+    if (!input.isFollowup) {
+      const cacheKey = this.triageCacheKey(input);
+      const cached = this.triageLocalCache.get(cacheKey);
+      if (cached && Date.now() < cached.expiresAt) {
+        return cached.result;
+      }
+      const result = await this.aiTriage.triage(input);
+      this.triageLocalCache.set(cacheKey, { result, expiresAt: Date.now() + triageLocalCacheTtlMs });
+      return result;
+    }
+
     return this.aiTriage.triage(input);
   }
 
@@ -643,7 +698,7 @@ export class ServicePointsService {
   private buildCommonResponse(
     conversationId: string,
     messages: Array<unknown>,
-    servicePoint: unknown,
+    servicePoint: any,
     venue: { id: string; name: string; slug: string } | null | undefined,
     options?: { request?: unknown; replyPending?: boolean }
   ) {
@@ -652,7 +707,7 @@ export class ServicePointsService {
       messages,
       replyPending: options?.replyPending ?? false,
       request: options?.request ?? null,
-      servicePoint,
+      servicePoint: this.publicServicePoint(servicePoint),
       chatAvailability: this.publicChatAvailability((venue as any)),
       ...(this.publicVenueSummary(venue) ? { venue: this.publicVenueSummary(venue) } : {})
     };
@@ -1516,7 +1571,7 @@ export class ServicePointsService {
       messages: this.publicConversationMessages(conversation.messages),
       replyPending: this.requiresAsyncReply(conversation.messages),
       request: conversation.requests[0] ?? null,
-      servicePoint,
+      servicePoint: this.publicServicePoint(servicePoint),
       chatAvailability: this.publicChatAvailability((servicePoint as any).venue),
       ...(this.publicVenueSummary((servicePoint as any).venue) ? { venue: this.publicVenueSummary((servicePoint as any).venue) } : {})
     };
@@ -1584,7 +1639,7 @@ export class ServicePointsService {
       messages: this.publicConversationMessages(conversation.messages),
       replyPending: this.requiresAsyncReply(conversation.messages),
       request: conversation.requests[0] ?? null,
-      servicePoint,
+      servicePoint: this.publicServicePoint(servicePoint),
       chatAvailability: this.publicChatAvailability(venue),
       venue: this.publicVenueSummary(venue)
     };

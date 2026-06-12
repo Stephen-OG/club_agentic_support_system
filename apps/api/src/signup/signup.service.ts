@@ -36,14 +36,8 @@ export class SetupService {
       throw new ConflictException("A staff profile already exists for this email. Please sign in instead.");
     }
 
-    // Check if workspace slug is taken
-    const existingWorkspace = await this.prisma.workspace.findUnique({ where: { slug: input.workspaceSlug } });
-    if (existingWorkspace) {
-      this.logger.warn(`Setup failed: workspace slug "${input.workspaceSlug}" already taken`, "SetupService");
-      throw new ConflictException(`Workspace slug "${input.workspaceSlug}" is already taken.`);
-    }
-
-    // Check if venue slug is taken within the future workspace
+    // NOTE: This is a best-effort early check; the authoritative check happens inside the
+    // transaction to avoid TOCTOU races and to scope the check to the workspace.
     const existingVenue = await this.prisma.venue.findFirst({
       where: { slug: input.venueSlug }
     });
@@ -69,6 +63,13 @@ export class SetupService {
 
     // Create everything in a transaction
     const result = await this.prisma.$transaction(async (tx) => {
+      // Check workspace slug uniqueness inside transaction (TOCTOU-safe)
+      const txExistingWorkspace = await tx.workspace.findUnique({ where: { slug: input.workspaceSlug } });
+      if (txExistingWorkspace) {
+        this.logger.warn(`Setup failed: workspace slug "${input.workspaceSlug}" already taken`, "SetupService");
+        throw new ConflictException(`Workspace slug "${input.workspaceSlug}" is already taken.`);
+      }
+
       // 1. Create workspace
       const workspace = await tx.workspace.create({
         data: {
@@ -77,6 +78,16 @@ export class SetupService {
         }
       });
       this.logger.logEvent("signup.workspace_created", { workspaceId: workspace.id, name: workspace.name }, "SetupService");
+
+      // NOTE: venue slug is checked scoped to the workspace to avoid TOCTOU race and
+      // ensure per-workspace uniqueness.
+      const txExistingVenue = await tx.venue.findFirst({
+        where: { slug: input.venueSlug, workspaceId: workspace.id }
+      });
+      if (txExistingVenue) {
+        this.logger.warn(`Setup failed: venue slug "${input.venueSlug}" already taken in this workspace`, "SetupService");
+        throw new ConflictException(`Venue slug "${input.venueSlug}" is already taken in this workspace.`);
+      }
 
       // 2. Create staff profile with auth link
       const staff = await tx.staffProfile.create({
@@ -113,6 +124,11 @@ export class SetupService {
       this.logger.logEvent("signup.staff_created", { staffProfileId: staff.id, email, venueId: venue.id }, "SetupService");
 
       return { workspace, staff, venue };
+    }).catch((error) => {
+      if ((error as any)?.code === 'P2002') {
+        throw new ConflictException("A unique constraint violation occurred. Please try again.");
+      }
+      throw error;
     });
 
     this.logger.logEvent("signup.completed", {

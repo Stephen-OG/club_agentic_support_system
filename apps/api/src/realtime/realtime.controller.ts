@@ -1,6 +1,7 @@
 import { Controller, ForbiddenException, Headers, NotFoundException, Param, Sse, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
-import { map, Observable } from "rxjs";
+import { from, interval, map, merge, Observable } from "rxjs";
+import { filter, switchMap, timeout } from "rxjs/operators";
 import type { AuthContext } from "../auth/auth-context";
 import { CurrentAuth } from "../auth/auth-context.decorator";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
@@ -45,7 +46,7 @@ export class RealtimeController {
 
     this.venueAccess.assertCanReadVenue(auth, { workspaceId: venue.workspaceId, venueId: venue.id });
 
-    return this.events.streamForVenue(venueId).pipe(map(toSseMessage));
+    return this.events.streamForVenue(venueId).pipe(timeout(30 * 60 * 1000), map(toSseMessage));
   }
 
   @Sse("public/qr/:token/conversations/:conversationId/events")
@@ -77,6 +78,20 @@ export class RealtimeController {
       throw new ForbiddenException("You are not allowed to stream this conversation");
     }
 
-    return this.events.streamForConversation(conversationId).pipe(map(toSseMessage));
+    const healthCheck = interval(30000).pipe(
+      switchMap(() => from(this.prisma.conversation.findFirst({
+        where: { id: conversationId },
+        select: { guestSessionId: true, status: true }
+      }))),
+      map((c) => {
+        if (!c || c.status === 'closed' || (c.guestSessionId && c.guestSessionId !== sessionId)) {
+          throw new NotFoundException("Conversation is no longer accessible");
+        }
+        return null;
+      }),
+      filter((v): v is never => v !== null)
+    );
+
+    return merge(healthCheck, this.events.streamForConversation(conversationId)).pipe(timeout(30 * 60 * 1000), map(toSseMessage));
   }
 }

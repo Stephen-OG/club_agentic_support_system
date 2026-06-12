@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, randomInt, scrypt, timingSafeEqual } from "node:crypto";
-import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { AuthEmailTokenType } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service";
 import { MailService } from "../mail/mail.service";
@@ -31,13 +31,23 @@ type AccessTokenPayload = {
 
 @Injectable()
 export class AppAuthService {
+  private readonly logger = new Logger(AppAuthService.name);
+  private readonly jwtSecret: string;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail?: MailService
-  ) {}
+  ) {
+    this.jwtSecret = process.env.AUTH_JWT_SECRET || "development-only-auth-jwt-secret-change-me";
+    if (process.env.NODE_ENV === "production" && this.jwtSecret === "development-only-auth-jwt-secret-change-me") {
+      this.logger.warn("Using default development JWT secret in production. Set AUTH_JWT_SECRET.");
+    }
+  }
 
   async signUp(input: { email: string; password: string; displayName?: string }) {
     const email = this.normalizeEmail(input.email);
+    input.password = input.password.trim();
+    this.validatePassword(input.password);
     const existing = await this.prisma.authUser.findUnique({ where: { email } });
 
     if (existing) {
@@ -201,31 +211,74 @@ export class AppAuthService {
   }
 
   async refreshSession(refreshToken: string) {
-    const session = await this.prisma.authSession.findUnique({
-      where: { refreshTokenHash: this.hashToken(refreshToken) },
-      include: { authUser: true }
+    const hash = this.hashToken(refreshToken);
+
+    return this.prisma.$transaction(async (tx) => {
+      const session = await tx.authSession.findUnique({
+        where: { refreshTokenHash: hash },
+        include: { authUser: true }
+      });
+
+      if (!session) {
+        throw new UnauthorizedException("Invalid session");
+      }
+
+      if (session.revokedAt) {
+        await tx.authSession.updateMany({
+          where: { authUserId: session.authUserId, revokedAt: null },
+          data: { revokedAt: new Date() }
+        });
+        throw new UnauthorizedException("Invalid session");
+      }
+
+      if (session.expiresAt <= new Date() || session.tokenVersion !== session.authUser.tokenVersion) {
+        await tx.authSession.update({
+          where: { id: session.id },
+          data: { revokedAt: new Date() }
+        });
+        throw new UnauthorizedException("Invalid session");
+      }
+
+      const result = await tx.authSession.updateMany({
+        where: { id: session.id, revokedAt: null },
+        data: { revokedAt: new Date() }
+      });
+
+      if (result.count === 0) {
+        await tx.authSession.updateMany({
+          where: { authUserId: session.authUserId, revokedAt: null },
+          data: { revokedAt: new Date() }
+        });
+        throw new UnauthorizedException("Invalid session");
+      }
+
+      const newRefreshToken = randomBytes(48).toString("base64url");
+      const refreshExpiresAt = new Date(Date.now() + refreshTokenTtlMs);
+      const accessTokenExpiresAt = new Date(Date.now() + accessTokenTtlSeconds * 1000);
+
+      await tx.authSession.create({
+        data: {
+          authUserId: session.authUserId,
+          refreshTokenHash: this.hashToken(newRefreshToken),
+          tokenVersion: session.authUser.tokenVersion,
+          expiresAt: refreshExpiresAt
+        }
+      });
+
+      return {
+        accessToken: this.signAccessToken(session.authUser, accessTokenExpiresAt),
+        refreshToken: newRefreshToken,
+        expiresAt: accessTokenExpiresAt,
+        refreshExpiresAt,
+        user: this.serializeUser(session.authUser)
+      };
     });
-
-    if (!session) {
-      throw new UnauthorizedException("Invalid session");
-    }
-
-    if (session.revokedAt) {
-      await this.revokeUserRefreshSessions(session.authUserId);
-      throw new UnauthorizedException("Invalid session");
-    }
-
-    if (session.expiresAt <= new Date() || session.tokenVersion !== session.authUser.tokenVersion) {
-      await this.revokeRefreshSession(session.id);
-      throw new UnauthorizedException("Invalid session");
-    }
-
-    await this.revokeRefreshSession(session.id);
-    return this.createSession(session.authUser);
   }
 
   async changePassword(token: string, input: { oldPassword: string; password: string }) {
     const session = await this.verifyBearerToken(token);
+    input.password = input.password.trim();
+    this.validatePassword(input.password);
     const user = await this.prisma.authUser.findUnique({ where: { id: session.user.id } });
 
     if (!user || !(await this.verifyPassword(input.oldPassword, user.passwordHash))) {
@@ -277,6 +330,8 @@ export class AppAuthService {
   }
 
   async resetPassword(input: { token?: string; email?: string; code?: string; password: string }) {
+    input.password = input.password.trim();
+    this.validatePassword(input.password);
     const token = input.token
       ? await this.consumeEmailToken(input.token, AuthEmailTokenType.PASSWORD_RESET)
       : await this.consumePasswordResetCode(input);
@@ -325,9 +380,17 @@ export class AppAuthService {
     return this.serializeUser(updated);
   }
 
-  async signOut(token: string) {
-    const payload = this.verifyAccessToken(token);
-    await this.revokeUserRefreshSessions(payload.sub);
+  async signOut(accessToken: string, refreshToken?: string) {
+    const payload = this.verifyAccessToken(accessToken);
+    if (refreshToken) {
+      const hash = this.hashToken(refreshToken);
+      await this.prisma.authSession.updateMany({
+        where: { refreshTokenHash: hash, revokedAt: null },
+        data: { revokedAt: new Date() }
+      });
+    } else {
+      await this.revokeUserRefreshSessions(payload.sub);
+    }
   }
 
   private async createSession(user: AppSessionUser) {
@@ -435,7 +498,7 @@ export class AppAuthService {
   }
 
   private getJwtSecret() {
-    return process.env.AUTH_JWT_SECRET || "development-only-auth-jwt-secret-change-me";
+    return this.jwtSecret;
   }
 
   private async sendEmailVerification(user: AppSessionUser) {
@@ -573,6 +636,21 @@ export class AppAuthService {
 
   private buildAppUrl(path: string) {
     return new URL(path, getPublicAppBaseUrl()).toString();
+  }
+
+  private validatePassword(password: string) {
+    if (password.length < 8) {
+      throw new BadRequestException("Password must be at least 8 characters");
+    }
+    if (!/[A-Z]/.test(password)) {
+      throw new BadRequestException("Password must contain at least one uppercase letter");
+    }
+    if (!/[a-z]/.test(password)) {
+      throw new BadRequestException("Password must contain at least one lowercase letter");
+    }
+    if (!/\d/.test(password)) {
+      throw new BadRequestException("Password must contain at least one digit");
+    }
   }
 
   private async hashPassword(password: string) {

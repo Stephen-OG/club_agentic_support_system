@@ -331,7 +331,8 @@ describe("RequestsService lifecycle", () => {
     const prisma = {
       supportRequest: {
         findUnique: async () => request
-      }
+      },
+      $transaction: async (callback: (tx: any) => Promise<unknown>) => callback({})
     };
     const service = new RequestsService(prisma as never, createVenueAccess() as never);
 
@@ -362,10 +363,17 @@ describe("RequestsService lifecycle", () => {
     const calls: Array<{ model: string; args: unknown }> = [];
     const tx = {
       supportRequest: {
-        update: async (args: unknown) => {
-          calls.push({ model: "supportRequest.update", args });
+        updateMany: async (args: unknown) => {
+          calls.push({ model: "supportRequest.updateMany", args });
+          return { count: 1 };
+        },
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "supportRequest.findUnique", args });
           return updatedRequest;
         }
+      },
+      conversation: {
+        update: async () => ({})
       },
       requestEvent: {
         create: async (args: unknown) => {
@@ -396,7 +404,7 @@ describe("RequestsService lifecycle", () => {
 
     await service.updateStatus(auth, request.id, { status: "acknowledged" });
 
-    const updateCall = calls.find((call) => call.model === "supportRequest.update") as {
+    const updateCall = calls.find((call) => call.model === "supportRequest.updateMany") as {
       args: { data: { acknowledgedAt?: unknown } };
     };
     assert.ok(updateCall.args.data.acknowledgedAt instanceof Date);
@@ -428,10 +436,17 @@ describe("RequestsService lifecycle", () => {
     const calls: Array<{ model: string; args: unknown }> = [];
     const tx = {
       supportRequest: {
-        update: async (args: unknown) => {
-          calls.push({ model: "supportRequest.update", args });
+        updateMany: async (args: unknown) => {
+          calls.push({ model: "supportRequest.updateMany", args });
+          return { count: 1 };
+        },
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "supportRequest.findUnique", args });
           return updatedRequest;
         }
+      },
+      conversation: {
+        update: async () => ({})
       },
       requestEvent: {
         create: async (args: unknown) => {
@@ -482,14 +497,20 @@ describe("RequestsService lifecycle", () => {
         args: "callback"
       },
       {
-        model: "supportRequest.update",
+        model: "supportRequest.updateMany",
         args: {
-          where: { id: request.id },
+          where: { id: request.id, status: RequestStatus.IN_PROGRESS },
           data: {
             status: RequestStatus.COMPLETED,
             assignedToId: "11111111-1111-4111-8111-111111111111",
             completedAt: "Any<Date>"
-          },
+          }
+        }
+      },
+      {
+        model: "supportRequest.findUnique",
+        args: {
+          where: { id: request.id },
           include: {
             assignedTo: true,
             servicePoint: true
@@ -552,10 +573,17 @@ describe("RequestsService lifecycle", () => {
     const calls: Array<{ model: string; args: unknown }> = [];
     const tx = {
       supportRequest: {
-        update: async (args: unknown) => {
-          calls.push({ model: "supportRequest.update", args });
+        updateMany: async (args: unknown) => {
+          calls.push({ model: "supportRequest.updateMany", args });
+          return { count: 1 };
+        },
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "supportRequest.findUnique", args });
           return updatedRequest;
         }
+      },
+      conversation: {
+        update: async () => ({})
       },
       message: {
         create: async (args: unknown) => {
@@ -610,10 +638,17 @@ describe("RequestsService lifecycle", () => {
     const calls: Array<{ model: string; args: unknown }> = [];
     const tx = {
       supportRequest: {
-        update: async (args: unknown) => {
-          calls.push({ model: "supportRequest.update", args });
+        updateMany: async (args: unknown) => {
+          calls.push({ model: "supportRequest.updateMany", args });
+          return { count: 1 };
+        },
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "supportRequest.findUnique", args });
           return updatedRequest;
         }
+      },
+      conversation: {
+        update: async () => ({})
       },
       message: {
         create: async (args: unknown) => {
@@ -694,7 +729,8 @@ describe("RequestsService lifecycle", () => {
       $transaction: async (callback: (tx: any) => Promise<unknown>) =>
         callback({
           supportRequest: {
-            update: async () => updatedRequest
+            updateMany: async () => ({ count: 1 }),
+            findUnique: async () => updatedRequest
           },
           conversation: {
             update: async () => ({})
@@ -786,17 +822,29 @@ describe("RequestsService lifecycle", () => {
     };
     const calls: Array<{ model: string; args: unknown }> = [];
     const tx = {
-      supportRequest: {
-        update: async (args: unknown) => {
-          calls.push({ model: "supportRequest.update", args });
-          return updatedRequest;
-        }
-      },
       conversation: {
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "conversation.findUnique", args });
+          return request.conversation || { guestSessionId: null };
+        },
         update: async (args: unknown) => {
           calls.push({ model: "conversation.update", args });
           return args;
         }
+      },
+      supportRequest: {
+        updateMany: async (args: unknown) => {
+          calls.push({ model: "supportRequest.updateMany", args });
+          return { count: 1 };
+        },
+        findUnique: (() => {
+          let callCount = 0;
+          return async (args: unknown) => {
+            calls.push({ model: "supportRequest.findUnique", args });
+            callCount++;
+            return callCount === 2 ? updatedRequest : request;
+          };
+        })()
       },
       message: {
         create: async (args: unknown) => {
@@ -832,10 +880,10 @@ describe("RequestsService lifecycle", () => {
     });
 
     assert.deepEqual(result, { request: updatedRequest, message });
-    const updateCall = calls[2] as { args: { data: { resolvedAt?: unknown } } };
+    const updateCall = calls[4] as { args: { data: { resolvedAt?: unknown } } };
     assert.ok(updateCall.args.data.resolvedAt instanceof Date);
     updateCall.args.data.resolvedAt = "Any<Date>";
-    const conversationUpdateCall = calls[3] as { args: { data: { closedAt?: unknown } } };
+    const conversationUpdateCall = calls[6] as { args: { data: { closedAt?: unknown } } };
     assert.ok(conversationUpdateCall.args.data.closedAt instanceof Date);
     conversationUpdateCall.args.data.closedAt = "Any<Date>";
     assert.deepEqual(calls, [
@@ -843,7 +891,7 @@ describe("RequestsService lifecycle", () => {
         model: "supportRequest.findUnique",
         args: {
           where: { id: request.id },
-          include: { conversation: true }
+          include: { conversation: true, venue: { select: { workspaceId: true } } }
         }
       },
       {
@@ -851,13 +899,33 @@ describe("RequestsService lifecycle", () => {
         args: "callback"
       },
       {
-        model: "supportRequest.update",
+        model: "conversation.findUnique",
+        args: {
+          where: { id: request.conversationId },
+          select: { guestSessionId: true }
+        }
+      },
+      {
+        model: "supportRequest.findUnique",
         args: {
           where: { id: request.id },
+          select: { status: true }
+        }
+      },
+      {
+        model: "supportRequest.updateMany",
+        args: {
+          where: { id: request.id, status: RequestStatus.COMPLETED },
           data: {
             status: RequestStatus.RESOLVED,
             resolvedAt: "Any<Date>"
           }
+        }
+      },
+      {
+        model: "supportRequest.findUnique",
+        args: {
+          where: { id: request.id }
         }
       },
       {
@@ -933,11 +1001,13 @@ describe("RequestsService lifecycle", () => {
       },
       $transaction: async (callback: (tx: any) => Promise<unknown>) =>
         callback({
-          supportRequest: {
-            update: async () => updatedRequest
-          },
           conversation: {
+            findUnique: async () => ({ guestSessionId: "guest_session_1" }),
             update: async () => ({})
+          },
+          supportRequest: {
+            updateMany: async () => ({ count: 1 }),
+            findUnique: async () => request
           },
           message: {
             create: async () => message
@@ -993,17 +1063,31 @@ describe("RequestsService lifecycle", () => {
     };
     const calls: Array<{ model: string; args: unknown }> = [];
     const tx = {
-      supportRequest: {
-        update: async (args: unknown) => {
-          calls.push({ model: "supportRequest.update", args });
-          return { ...request, status: RequestStatus.CANCELLED };
-        }
-      },
       conversation: {
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "conversation.findUnique", args });
+          return request.conversation || { guestSessionId: null };
+        },
         update: async (args: unknown) => {
           calls.push({ model: "conversation.update", args });
           return args;
         }
+      },
+      supportRequest: {
+        updateMany: async (args: unknown) => {
+          calls.push({ model: "supportRequest.updateMany", args });
+          return { count: 1 };
+        },
+        findUnique: (() => {
+          let callCount = 0;
+          return async (args: unknown) => {
+            calls.push({ model: "supportRequest.findUnique", args });
+            callCount++;
+            return callCount === 2
+              ? { ...request, status: RequestStatus.CANCELLED }
+              : request;
+          };
+        })()
       },
       message: {
         create: async (args: unknown) => {
@@ -1060,11 +1144,26 @@ describe("RequestsService lifecycle", () => {
     };
     const calls: Array<{ model: string; args: unknown }> = [];
     const tx = {
+      conversation: {
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "conversation.findUnique", args });
+          return request.conversation || { guestSessionId: null };
+        },
+        update: async () => ({})
+      },
       supportRequest: {
-        update: async (args: unknown) => {
-          calls.push({ model: "supportRequest.update", args });
-          return updatedRequest;
-        }
+        updateMany: async (args: unknown) => {
+          calls.push({ model: "supportRequest.updateMany", args });
+          return { count: 1 };
+        },
+        findUnique: (() => {
+          let callCount = 0;
+          return async (args: unknown) => {
+            calls.push({ model: "supportRequest.findUnique", args });
+            callCount++;
+            return callCount === 2 ? updatedRequest : request;
+          };
+        })()
       },
       message: {
         create: async (args: unknown) => {
@@ -1091,13 +1190,33 @@ describe("RequestsService lifecycle", () => {
 
     assert.deepEqual(calls, [
       {
-        model: "supportRequest.update",
+        model: "conversation.findUnique",
+        args: {
+          where: { id: request.conversationId },
+          select: { guestSessionId: true }
+        }
+      },
+      {
+        model: "supportRequest.findUnique",
         args: {
           where: { id: request.id },
+          select: { status: true }
+        }
+      },
+      {
+        model: "supportRequest.updateMany",
+        args: {
+          where: { id: request.id, status: RequestStatus.COMPLETED },
           data: {
             status: RequestStatus.IN_PROGRESS,
             resolvedAt: null
           }
+        }
+      },
+      {
+        model: "supportRequest.findUnique",
+        args: {
+          where: { id: request.id }
         }
       },
       {

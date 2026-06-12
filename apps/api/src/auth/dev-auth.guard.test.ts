@@ -15,21 +15,27 @@ function contextWithHeaders(headers: Record<string, string>): ExecutionContext {
 
 describe("DevAuthGuard", () => {
   it("creates a staff auth context from development headers", () => {
-    const guard = new DevAuthGuard();
-    const context = contextWithHeaders({
-      "x-staff-id": "staff-1",
-      "x-workspace-id": "workspace-1",
-      "x-venue-id": "venue-1",
-      "x-staff-role": "manager"
-    });
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development";
+    try {
+      const guard = new DevAuthGuard();
+      const context = contextWithHeaders({
+        "x-staff-id": "staff-1",
+        "x-workspace-id": "workspace-1",
+        "x-venue-id": "venue-1",
+        "x-staff-role": "manager"
+      });
 
-    assert.equal(guard.canActivate(context), true);
-    const request = context.switchToHttp().getRequest();
-    assert.deepEqual(request.auth, {
-      staffProfileId: "staff-1",
-      workspaceId: "workspace-1",
-      venueId: "venue-1",
-      role: "manager"
-    });
+      assert.equal(guard.canActivate(context), true);
+      const request = context.switchToHttp().getRequest();
+      assert.deepEqual(request.auth, {
+        staffProfileId: "staff-1",
+        workspaceId: "workspace-1",
+        venueId: "venue-1",
+        role: "manager"
+      });
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
   });
 });

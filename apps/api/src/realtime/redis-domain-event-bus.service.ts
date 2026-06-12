@@ -126,8 +126,8 @@ function createRedisStreamsAdapter(url: string | undefined, logger: Logger): Red
 
         return () => {
           closed = true;
-          reader.disconnect();
-          writer.disconnect();
+          reader.quit().catch(() => {});
+          writer.quit().catch(() => {});
         };
       }
     };

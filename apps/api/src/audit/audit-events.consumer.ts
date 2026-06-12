@@ -7,6 +7,8 @@ import { DomainEventConsumerService } from "../realtime/domain-event-consumers.s
 
 @Injectable()
 export class AuditEventsConsumer implements OnModuleInit {
+  private registered = false;
+
   constructor(
     private readonly consumers: DomainEventConsumerService,
     private readonly prisma: PrismaService,
@@ -14,6 +16,8 @@ export class AuditEventsConsumer implements OnModuleInit {
   ) {}
 
   onModuleInit() {
+    if (this.registered) return;
+    this.registered = true;
     this.consumers.registerLane("audit", async (event) => {
       await this.recordAuditEvent(event);
     });
@@ -26,6 +30,7 @@ export class AuditEventsConsumer implements OnModuleInit {
         action: event.type,
         targetType: this.targetType(event),
         targetId: this.targetId(event),
+        actorStaffId: (event as any).actorStaffId ?? null,
         metadata: this.auditMetadata(event)
       }
     });
@@ -67,7 +72,8 @@ export class AuditEventsConsumer implements OnModuleInit {
       occurredAt: event.occurredAt,
       conversationId: event.conversationId ?? null,
       messageId: event.messageId ?? null,
-      requestId: event.requestId ?? null
+      requestId: event.requestId ?? null,
+      actorStaffId: (event as any).actorStaffId ?? null
     };
   }
 

@@ -109,9 +109,12 @@ export class AuthController {
   }
 
   @Post("signout")
-  async signOut(@Headers("authorization") authorization?: string) {
+  async signOut(
+    @Headers("authorization") authorization?: string,
+    @Body() body?: { refresh_token?: string }
+  ) {
     const token = this.getBearerToken(authorization);
-    await this.appAuth.signOut(token);
+    await this.appAuth.signOut(token, body?.refresh_token);
     return { ok: true };
   }
 

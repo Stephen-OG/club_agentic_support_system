@@ -44,7 +44,7 @@ export class OnboardingService {
         where: {
           workspaceId: auth.workspaceId,
           openingHours: {
-            some: {}
+            some: { dayOfWeek: { gte: 0 } }
           }
         }
       }),

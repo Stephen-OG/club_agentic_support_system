@@ -5,6 +5,10 @@ import type { RequestWithAuth } from "./auth-context";
 @Injectable()
 export class DevAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext) {
+    if (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test") {
+      throw new UnauthorizedException("Dev auth is not available in this environment");
+    }
+
     const request = context
       .switchToHttp()
       .getRequest<RequestWithAuth & { headers: Record<string, string | string[] | undefined> }>();
