@@ -168,14 +168,14 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         return;
       }
 
-      setServicePointLabel(result.servicePoint.label);
+      setServicePointLabel(result.qrPoint.label);
       setVenueName(result.venue?.name ?? null);
       setChatAvailability(result.chatAvailability);
 
       if (!result.chatAvailability.isOpen) {
         applyClosedState();
       } else if (!conversationId) {
-        setMessages([createWelcomeMessage(result.servicePoint.label)]);
+        setMessages([createWelcomeMessage(result.qrPoint.label)]);
       }
     }
 
@@ -226,7 +226,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         return;
       }
 
-      const label = result.servicePoint.label || servicePointLabel;
+      const label = result.qrPoint.label || servicePointLabel;
       setServicePointLabel(label);
       setVenueName(result.venue?.name ?? null);
       setChatAvailability(result.chatAvailability ?? null);
@@ -286,7 +286,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         body: JSON.stringify({ message: body, conversationId, sessionId: guestSessionId })
       });
 
-      setServicePointLabel(result.servicePoint.label);
+      setServicePointLabel(result.qrPoint.label);
       setVenueName(result.venue?.name ?? null);
       setChatAvailability(result.chatAvailability ?? null);
 
@@ -296,14 +296,14 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       }
 
       if (result.request && endedRequestStatuses.has(result.request.status)) {
-        applyEndedState(result.servicePoint.label);
+        applyEndedState(result.qrPoint.label);
         return;
       }
 
       setMessages((current) =>
         reconcileConversationMessages({
           currentMessages: current,
-          label: result.servicePoint.label,
+          label: result.qrPoint.label,
           replyPending: Boolean(result.replyPending),
           serverMessages: result.messages
         })

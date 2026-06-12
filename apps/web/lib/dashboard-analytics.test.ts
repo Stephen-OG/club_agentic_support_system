@@ -107,7 +107,7 @@ describe("dashboard analytics", () => {
         {
           id: "request-1",
           venueId: "venue-a",
-          servicePointId: "table-7",
+          qrPointId: "table-7",
           title: "Table 7 payment terminal is down",
           category: "payment",
           priority: "URGENT",
@@ -118,12 +118,12 @@ describe("dashboard analytics", () => {
           satisfactionRating: null,
           agentConfidence: 0.42,
           assignedTo: null,
-          servicePoint: { id: "table-7", name: "Table 7", zone: "Terrace" }
+          qrPoint: { id: "table-7", name: "Table 7", zone: "Terrace" }
         },
         {
           id: "request-2",
           venueId: "venue-a",
-          servicePointId: "table-7",
+          qrPointId: "table-7",
           title: "Table 7 still waiting for drinks",
           category: "service",
           priority: "HIGH",
@@ -134,12 +134,12 @@ describe("dashboard analytics", () => {
           satisfactionRating: 2,
           agentConfidence: 0.91,
           assignedTo: { id: "staff-1", displayName: "Maya", email: "maya@example.com" },
-          servicePoint: { id: "table-7", name: "Table 7", zone: "Terrace" }
+          qrPoint: { id: "table-7", name: "Table 7", zone: "Terrace" }
         },
         {
           id: "request-3",
           venueId: "venue-b",
-          servicePointId: "bar-1",
+          qrPointId: "bar-1",
           title: "Bar spill",
           category: "cleaning",
           priority: "NORMAL",
@@ -150,12 +150,12 @@ describe("dashboard analytics", () => {
           satisfactionRating: 5,
           agentConfidence: 0.88,
           assignedTo: { id: "staff-2", displayName: "Noor", email: "noor@example.com" },
-          servicePoint: { id: "bar-1", name: "Main Bar", zone: null }
+          qrPoint: { id: "bar-1", name: "Main Bar", zone: null }
         },
         {
           id: "request-4",
           venueId: "venue-a",
-          servicePointId: "booth-2",
+          qrPointId: "booth-2",
           title: "Booth 2 needs security",
           category: "security",
           priority: "URGENT",
@@ -166,7 +166,7 @@ describe("dashboard analytics", () => {
           satisfactionRating: null,
           agentConfidence: 0.67,
           assignedTo: { id: "staff-1", displayName: "Maya", email: "maya@example.com" },
-          servicePoint: { id: "booth-2", name: "Booth 2", zone: "VIP" }
+          qrPoint: { id: "booth-2", name: "Booth 2", zone: "VIP" }
         }
       ],
       new Date("2026-06-02T13:20:00.000Z")
@@ -292,8 +292,8 @@ describe("dashboard analytics", () => {
         {
           id: "venue-a",
           name: "Main Room",
-          openingHours: [{ dayOfWeek: 1, opensAt: "09:00", closesAt: "17:00", isClosed: false }],
-          servicePoints: [
+          hours: [{ dayOfWeek: 1, opensAt: "09:00", closesAt: "17:00", isClosed: false }],
+          qrPoints: [
             { id: "qr-1", isActive: true },
             { id: "qr-2", isActive: false }
           ]
@@ -301,8 +301,8 @@ describe("dashboard analytics", () => {
         {
           id: "venue-b",
           name: "Roof Bar",
-          openingHours: [],
-          servicePoints: []
+          hours: [],
+          qrPoints: []
         }
       ],
       [

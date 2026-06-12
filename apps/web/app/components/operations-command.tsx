@@ -477,7 +477,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
                       <strong>{latestPreview(request)}</strong>
                     </div>
                     <div className="request-meta-line">
-                      <span>{request.servicePoint?.label || request.guestLocationLabel || "Service point"}</span>
+                      <span>{request.qrPoint?.label || request.guestLocationLabel || "QR point"}</span>
                       <span>{formatOperationsElapsedLabel(request, operationsNow)}</span>
                       <span>{request.title}</span>
                       {activeBucket === "completed" ? <span>{ratingLabel(request)}</span> : null}

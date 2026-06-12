@@ -35,14 +35,14 @@ describe("SessionAuthGuard", () => {
             authUserId: "auth-1",
             email: "admin@example.com",
             displayName: "Admin User",
-            memberships: [
+            teamRoles: [
               {
                 id: "membership-1",
-                workspaceId: "workspace-1",
+                organizationId: "workspace-1",
                 venueId: null,
                 role: "ADMIN",
                 isActive: true,
-                workspace: { id: "workspace-1", name: "Workspace", slug: "workspace" },
+                organization: { id: "workspace-1", name: "Workspace", slug: "workspace" },
                 venue: null
               }
             ]
@@ -55,7 +55,7 @@ describe("SessionAuthGuard", () => {
     assert.equal(await guard.canActivate(context), true);
     const request = context.switchToHttp().getRequest() as any;
     assert.equal(request.auth.staffProfileId, "staff-1");
-    assert.equal(request.auth.workspaceId, "workspace-1");
+    assert.equal(request.auth.organizationId, "workspace-1");
     assert.equal(request.auth.role, "admin");
     assert.equal(request.currentUser.mustChangePassword, false);
   });
@@ -79,23 +79,23 @@ describe("SessionAuthGuard", () => {
             authUserId: "auth-1",
             email: "multi@example.com",
             displayName: "Multi Role",
-            memberships: [
+            teamRoles: [
               {
                 id: "membership-staff",
-                workspaceId: "workspace-1",
+                organizationId: "workspace-1",
                 venueId: "venue-1",
                 role: "STAFF",
                 isActive: true,
-                workspace: { id: "workspace-1", name: "Workspace", slug: "workspace" },
+                organization: { id: "workspace-1", name: "Workspace", slug: "workspace" },
                 venue: { id: "venue-1", name: "Main Venue", slug: "main-venue" }
               },
               {
                 id: "membership-manager",
-                workspaceId: "workspace-1",
+                organizationId: "workspace-1",
                 venueId: "venue-1",
                 role: "MANAGER",
                 isActive: true,
-                workspace: { id: "workspace-1", name: "Workspace", slug: "workspace" },
+                organization: { id: "workspace-1", name: "Workspace", slug: "workspace" },
                 venue: { id: "venue-1", name: "Main Venue", slug: "main-venue" }
               }
             ]
@@ -134,14 +134,14 @@ describe("SessionAuthGuard", () => {
             authUserId: "auth-1",
             email: "temp@example.com",
             displayName: "Temp User",
-            memberships: [
+            teamRoles: [
               {
                 id: "membership-1",
-                workspaceId: "workspace-1",
+                organizationId: "workspace-1",
                 venueId: "venue-1",
                 role: "STAFF",
                 isActive: true,
-                workspace: { id: "workspace-1", name: "Workspace", slug: "workspace" },
+                organization: { id: "workspace-1", name: "Workspace", slug: "workspace" },
                 venue: { id: "venue-1", name: "Main Venue", slug: "main-venue" }
               }
             ]

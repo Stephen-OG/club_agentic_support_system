@@ -7,7 +7,7 @@ import { RequestsService } from "./requests.service";
 
 const auth: AuthContext = {
   staffProfileId: "staff_1",
-  workspaceId: "workspace_1",
+  organizationId: "workspace_1",
   venueId: "venue_1",
   role: "staff"
 };
@@ -23,7 +23,7 @@ describe("RequestsService lifecycle", () => {
   it("uses read permission when listing venue requests", async () => {
     const venue = {
       id: "venue_1",
-      workspaceId: "workspace_1"
+      organizationId: "workspace_1"
     };
     const calls: Array<{ model: string; args: unknown }> = [];
     let readPermissionChecked = false;
@@ -60,7 +60,7 @@ describe("RequestsService lifecycle", () => {
         args: {
           where: {
             id: venue.id,
-            workspaceId: auth.workspaceId
+            organizationId: auth.organizationId
           }
         }
       },
@@ -78,7 +78,7 @@ describe("RequestsService lifecycle", () => {
                 email: true
               }
             },
-            servicePoint: {
+            qrPoint: {
               select: {
                 id: true,
                 label: true
@@ -108,11 +108,11 @@ describe("RequestsService lifecycle", () => {
   });
 
   it("returns satisfaction rating and recent conversation preview for venue requests", async () => {
-    const venue = { id: "venue_1", workspaceId: "workspace_1" };
+    const venue = { id: "venue_1", organizationId: "workspace_1" };
     const request = {
       id: "request_1",
       venueId: venue.id,
-      servicePointId: "sp_1",
+      qrPointId: "sp_1",
       conversationId: "conversation_1",
       title: "Missing order",
       category: "missing_order",
@@ -143,7 +143,7 @@ describe("RequestsService lifecycle", () => {
         }
       ],
       assignedTo: null,
-      servicePoint: { id: "sp_1", label: "Venue support" }
+      qrPoint: { id: "sp_1", label: "Venue support" }
     };
     const prisma = {
       venue: { findFirst: async () => venue },
@@ -152,7 +152,7 @@ describe("RequestsService lifecycle", () => {
     const service = new RequestsService(prisma as never, { assertCanReadVenue: () => undefined } as never);
 
     const result = await service.listForVenue(
-      { workspaceId: "workspace_1", role: "admin", venueId: null } as never,
+      { organizationId: "workspace_1", role: "admin", venueId: null } as never,
       venue.id
     );
 
@@ -163,7 +163,7 @@ describe("RequestsService lifecycle", () => {
   });
 
   it("supports paged active request lists for larger venue workspaces", async () => {
-    const venue = { id: "venue_1", workspaceId: "workspace_1" };
+    const venue = { id: "venue_1", organizationId: "workspace_1" };
     const calls: Array<{ model: string; args: any }> = [];
     const requests = [
       {
@@ -173,7 +173,7 @@ describe("RequestsService lifecycle", () => {
         createdAt: "2026-05-20T10:00:00.000Z",
         messages: [],
         assignedTo: null,
-        servicePoint: null
+        qrPoint: null
       },
       {
         id: "request_next",
@@ -182,7 +182,7 @@ describe("RequestsService lifecycle", () => {
         createdAt: "2026-05-20T09:00:00.000Z",
         messages: [],
         assignedTo: null,
-        servicePoint: null
+        qrPoint: null
       },
       {
         id: "request_extra",
@@ -191,7 +191,7 @@ describe("RequestsService lifecycle", () => {
         createdAt: "2026-05-20T08:00:00.000Z",
         messages: [],
         assignedTo: null,
-        servicePoint: null
+        qrPoint: null
       }
     ];
     const prisma = {
@@ -206,7 +206,7 @@ describe("RequestsService lifecycle", () => {
     const service = new RequestsService(prisma as never, { assertCanReadVenue: () => undefined } as never);
 
     const result = await service.listForVenue(
-      { workspaceId: "workspace_1", role: "admin", venueId: null } as never,
+      { organizationId: "workspace_1", role: "admin", venueId: null } as never,
       venue.id,
       {
         cursor: "2026-05-20T11:00:00.000Z",
@@ -237,7 +237,7 @@ describe("RequestsService lifecycle", () => {
   });
 
   it("caps paged venue request limits to protect the API", async () => {
-    const venue = { id: "venue_1", workspaceId: "workspace_1" };
+    const venue = { id: "venue_1", organizationId: "workspace_1" };
     const calls: Array<{ args: any }> = [];
     const prisma = {
       venue: { findFirst: async () => venue },
@@ -250,7 +250,7 @@ describe("RequestsService lifecycle", () => {
     };
     const service = new RequestsService(prisma as never, { assertCanReadVenue: () => undefined } as never);
 
-    await service.listForVenue({ workspaceId: "workspace_1", role: "admin", venueId: null } as never, venue.id, {
+    await service.listForVenue({ organizationId: "workspace_1", role: "admin", venueId: null } as never, venue.id, {
       limit: 500,
       page: true
     });
@@ -259,11 +259,11 @@ describe("RequestsService lifecycle", () => {
   });
 
   it("keeps operations previews focused on guest messages after staff acknowledgements", async () => {
-    const venue = { id: "venue_1", workspaceId: "workspace_1" };
+    const venue = { id: "venue_1", organizationId: "workspace_1" };
     const request = {
       id: "request_guest_preview_1",
       venueId: venue.id,
-      servicePointId: "sp_1",
+      qrPointId: "sp_1",
       conversationId: "conversation_1",
       title: "Drink request",
       category: "drink",
@@ -294,7 +294,7 @@ describe("RequestsService lifecycle", () => {
         }
       ],
       assignedTo: null,
-      servicePoint: { id: "sp_1", label: "Table 4" }
+      qrPoint: { id: "sp_1", label: "Table 4" }
     };
     const prisma = {
       venue: { findFirst: async () => venue },
@@ -303,7 +303,7 @@ describe("RequestsService lifecycle", () => {
     const service = new RequestsService(prisma as never, { assertCanReadVenue: () => undefined } as never);
 
     const result = await service.listForVenue(
-      { workspaceId: "workspace_1", role: "admin", venueId: null } as never,
+      { organizationId: "workspace_1", role: "admin", venueId: null } as never,
       venue.id
     );
 
@@ -325,7 +325,7 @@ describe("RequestsService lifecycle", () => {
       assignedToId: null,
       venue: {
         id: "venue_1",
-        workspaceId: "workspace_1"
+        organizationId: "workspace_1"
       }
     };
     const prisma = {
@@ -346,13 +346,13 @@ describe("RequestsService lifecycle", () => {
     const request = {
       id: "request_acknowledge_1",
       venueId: "venue_1",
-      servicePointId: "service_point_1",
+      qrPointId: "service_point_1",
       conversationId: "conversation_1",
       status: RequestStatus.NEW,
       assignedToId: null,
       venue: {
         id: "venue_1",
-        workspaceId: "workspace_1"
+        organizationId: "workspace_1"
       }
     };
     const updatedRequest = {
@@ -419,13 +419,13 @@ describe("RequestsService lifecycle", () => {
     const request = {
       id: "request_1",
       venueId: "venue_1",
-      servicePointId: "service_point_1",
+      qrPointId: "service_point_1",
       conversationId: "conversation_1",
       status: RequestStatus.IN_PROGRESS,
       assignedToId: null,
       venue: {
         id: "venue_1",
-        workspaceId: "workspace_1"
+        organizationId: "workspace_1"
       }
     };
     const updatedRequest = {
@@ -513,7 +513,7 @@ describe("RequestsService lifecycle", () => {
           where: { id: request.id },
           include: {
             assignedTo: true,
-            servicePoint: true
+            qrPoint: true
           }
         }
       },
@@ -538,7 +538,7 @@ describe("RequestsService lifecycle", () => {
         args: {
           data: {
             venueId: request.venueId,
-            servicePointId: request.servicePointId,
+            qrPointId: request.qrPointId,
             conversationId: request.conversationId,
             requestId: request.id,
             sender: SenderType.SYSTEM,
@@ -557,13 +557,13 @@ describe("RequestsService lifecycle", () => {
     const request = {
       id: "request_status_message_1",
       venueId: "venue_1",
-      servicePointId: "service_point_1",
+      qrPointId: "service_point_1",
       conversationId: "conversation_status_message_1",
       status: RequestStatus.NEW,
       assignedToId: null,
       venue: {
         id: "venue_1",
-        workspaceId: "workspace_1"
+        organizationId: "workspace_1"
       }
     };
     const updatedRequest = {
@@ -622,13 +622,13 @@ describe("RequestsService lifecycle", () => {
     const request = {
       id: "request_in_progress_message_1",
       venueId: "venue_1",
-      servicePointId: "service_point_1",
+      qrPointId: "service_point_1",
       conversationId: "conversation_in_progress_message_1",
       status: RequestStatus.ACKNOWLEDGED,
       assignedToId: null,
       venue: {
         id: "venue_1",
-        workspaceId: "workspace_1"
+        organizationId: "workspace_1"
       }
     };
     const updatedRequest = {
@@ -686,7 +686,7 @@ describe("RequestsService lifecycle", () => {
         args: {
           data: {
             venueId: request.venueId,
-            servicePointId: request.servicePointId,
+            qrPointId: request.qrPointId,
             conversationId: request.conversationId,
             requestId: request.id,
             sender: SenderType.SYSTEM,
@@ -705,16 +705,16 @@ describe("RequestsService lifecycle", () => {
     const request = {
       id: "request_realtime_1",
       venueId: "venue_1",
-      servicePointId: "sp_1",
+      qrPointId: "sp_1",
       conversationId: "conversation_1",
       status: RequestStatus.ACKNOWLEDGED,
-      venue: { workspaceId: auth.workspaceId }
+      venue: { organizationId: auth.organizationId }
     };
     const updatedRequest = {
       ...request,
       status: RequestStatus.IN_PROGRESS,
       assignedTo: null,
-      servicePoint: null
+      qrPoint: null
     };
     const message = {
       id: "message_realtime_1",
@@ -778,7 +778,7 @@ describe("RequestsService lifecycle", () => {
     const request = {
       id: "request_1",
       venueId: "venue_1",
-      servicePointId: "sp_1",
+      qrPointId: "sp_1",
       conversationId: "conversation_1",
       status: RequestStatus.COMPLETED,
       conversation: { guestSessionId: null }
@@ -801,7 +801,7 @@ describe("RequestsService lifecycle", () => {
     const request = {
       id: "request_1",
       venueId: "venue_1",
-      servicePointId: "sp_1",
+      qrPointId: "sp_1",
       conversationId: "conversation_1",
       status: RequestStatus.COMPLETED,
       conversation: { guestSessionId: null }
@@ -891,7 +891,7 @@ describe("RequestsService lifecycle", () => {
         model: "supportRequest.findUnique",
         args: {
           where: { id: request.id },
-          include: { conversation: true, venue: { select: { workspaceId: true } } }
+          include: { conversation: true, venue: { select: { organizationId: true } } }
         }
       },
       {
@@ -943,7 +943,7 @@ describe("RequestsService lifecycle", () => {
         args: {
           data: {
             venueId: request.venueId,
-            servicePointId: request.servicePointId,
+            qrPointId: request.qrPointId,
             conversationId: request.conversationId,
             requestId: request.id,
             sender: SenderType.SYSTEM,
@@ -976,7 +976,7 @@ describe("RequestsService lifecycle", () => {
     const request = {
       id: "request_guest_realtime_1",
       venueId: "venue_1",
-      servicePointId: "sp_1",
+      qrPointId: "sp_1",
       conversationId: "conversation_1",
       status: RequestStatus.COMPLETED,
       conversation: { guestSessionId: "guest_session_1" }
@@ -1056,7 +1056,7 @@ describe("RequestsService lifecycle", () => {
     const request = {
       id: "request_cancel_1",
       venueId: "venue_1",
-      servicePointId: "sp_1",
+      qrPointId: "sp_1",
       conversationId: "conversation_cancel_1",
       status: RequestStatus.NEW,
       conversation: { guestSessionId: "session_cancel_1" }
@@ -1133,7 +1133,7 @@ describe("RequestsService lifecycle", () => {
     const request = {
       id: "request_1",
       venueId: "venue_1",
-      servicePointId: "sp_1",
+      qrPointId: "sp_1",
       conversationId: "conversation_1",
       status: RequestStatus.COMPLETED,
       conversation: { guestSessionId: null }
@@ -1224,7 +1224,7 @@ describe("RequestsService lifecycle", () => {
         args: {
           data: {
             venueId: request.venueId,
-            servicePointId: request.servicePointId,
+            qrPointId: request.qrPointId,
             conversationId: request.conversationId,
             requestId: request.id,
             sender: SenderType.SYSTEM,

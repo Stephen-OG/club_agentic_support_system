@@ -3,7 +3,7 @@ import type { CommandRequestPriority, CommandRequestStatus } from "./auth/types"
 type DashboardRequest = {
   id: string;
   venueId?: string;
-  servicePointId?: string;
+  qrPointId?: string;
   assignedToId?: string | null;
   title: string;
   category: string;
@@ -15,14 +15,14 @@ type DashboardRequest = {
   satisfactionRating?: number | null;
   agentConfidence?: number | null;
   assignedTo?: { id: string; displayName: string | null; email: string | null } | null;
-  servicePoint?: { id: string; label?: string | null; name?: string | null; zone?: string | null } | null;
+  qrPoint?: { id: string; label?: string | null; name?: string | null; zone?: string | null } | null;
 };
 
 type DashboardVenue = {
   id: string;
   name: string;
-  openingHours?: Array<unknown> | null;
-  servicePoints?: Array<{ id: string; isActive: boolean }> | null;
+  hours?: Array<unknown> | null;
+  qrPoints?: Array<{ id: string; isActive: boolean }> | null;
 };
 
 type RatingValue = 1 | 2 | 3 | 4 | 5;
@@ -42,15 +42,15 @@ export function calculateAdminDashboardControls(venues: DashboardVenue[], reques
   const venueSetupGaps: Array<{ venueId: string; venueName: string; gaps: string[] }> = [];
 
   for (const venue of venues) {
-    const servicePoints = venue.servicePoints ?? [];
-    const activeCount = servicePoints.filter((servicePoint) => servicePoint.isActive).length;
-    const inactiveCount = servicePoints.length - activeCount;
+    const qrPoints = venue.qrPoints ?? [];
+    const activeCount = qrPoints.filter((qrPoint) => qrPoint.isActive).length;
+    const inactiveCount = qrPoints.length - activeCount;
     const gaps: string[] = [];
 
     activeServicePoints += activeCount;
     inactiveServicePoints += inactiveCount;
 
-    if (!(venue.openingHours?.length)) {
+    if (!(venue.hours?.length)) {
       gaps.push("opening hours");
     }
     if (!activeCount) {
@@ -159,16 +159,16 @@ export function calculateDashboardAnalytics(requests: DashboardRequest[], now = 
       }
     }
 
-    const servicePointId = request.servicePoint?.id || request.servicePointId;
-    if (servicePointId) {
-      const label = request.servicePoint?.label || request.servicePoint?.name || request.servicePointId || servicePointId;
-      const current = servicePointCounts.get(servicePointId) ?? {
+    const qrPointId = request.qrPoint?.id || request.qrPointId;
+    if (qrPointId) {
+      const label = request.qrPoint?.label || request.qrPoint?.name || request.qrPointId || qrPointId;
+      const current = servicePointCounts.get(qrPointId) ?? {
         count: 0,
         label,
         lowRatings: 0,
-        servicePointId,
+        servicePointId: qrPointId,
         urgentOrHigh: 0,
-        zone: request.servicePoint?.zone ?? null
+        zone: request.qrPoint?.zone ?? null
       };
       current.count += 1;
       if (urgentPriorities.has(request.priority)) {
@@ -177,7 +177,7 @@ export function calculateDashboardAnalytics(requests: DashboardRequest[], now = 
       if (rating && rating <= 2) {
         current.lowRatings += 1;
       }
-      servicePointCounts.set(servicePointId, current);
+      servicePointCounts.set(qrPointId, current);
     }
 
     if (request.assignedTo) {

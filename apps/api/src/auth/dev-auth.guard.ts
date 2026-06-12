@@ -13,18 +13,18 @@ export class DevAuthGuard implements CanActivate {
       .switchToHttp()
       .getRequest<RequestWithAuth & { headers: Record<string, string | string[] | undefined> }>();
     const staffProfileId = this.header(request.headers, "x-staff-id");
-    const workspaceId = this.header(request.headers, "x-workspace-id");
+    const organizationId = this.header(request.headers, "x-organization-id");
     const roleInput = this.header(request.headers, "x-staff-role");
     const venueId = this.header(request.headers, "x-venue-id");
     const role = StaffRoleSchema.safeParse(roleInput);
 
-    if (!staffProfileId || !workspaceId || !role.success) {
+    if (!staffProfileId || !organizationId || !role.success) {
       throw new UnauthorizedException("Missing staff auth headers");
     }
 
     request.auth = {
       staffProfileId,
-      workspaceId,
+      organizationId,
       venueId,
       role: role.data
     };

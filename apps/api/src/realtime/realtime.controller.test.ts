@@ -20,7 +20,7 @@ describe("RealtimeController", () => {
         venue: {
           findFirst: async (args: unknown) => {
             accessCalls.push(args);
-            return { id: "venue_1", workspaceId: "workspace_1" };
+            return { id: "venue_1", organizationId: "workspace_1" };
           }
         }
       } as never,
@@ -32,7 +32,7 @@ describe("RealtimeController", () => {
     );
 
     const stream = await controller.streamVenueEvents(
-      { workspaceId: "workspace_1", role: "manager" } as never,
+      { organizationId: "workspace_1", role: "manager" } as never,
       "venue_1"
     );
     const nextEvent = firstValueFrom(stream.pipe(take(1)));
@@ -54,10 +54,10 @@ describe("RealtimeController", () => {
       }
     });
     assert.deepEqual(accessCalls, [
-      { where: { id: "venue_1" }, select: { id: true, workspaceId: true } },
+      { where: { id: "venue_1" }, select: { id: true, organizationId: true } },
       {
-        auth: { workspaceId: "workspace_1", role: "manager" },
-        venue: { workspaceId: "workspace_1", venueId: "venue_1" }
+        auth: { organizationId: "workspace_1", role: "manager" },
+        venue: { organizationId: "workspace_1", venueId: "venue_1" }
       }
     ]);
   });
@@ -75,7 +75,7 @@ describe("RealtimeController", () => {
             assert.deepEqual(args, {
               where: {
                 id: "conversation_1",
-                servicePoint: {
+                qrPoint: {
                   qrToken: "qr_token_1",
                   isActive: true
                 }

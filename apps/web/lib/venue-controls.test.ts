@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  copyMondayHoursToWeekdays,
   createLocationPayload,
   createOpeningHoursPayload,
-  createServicePointPayload,
-  createServicePointUpdatePayload,
+  createQrPointPayload,
+  createQrPointUpdatePayload,
   getVenueChatAvailabilityPreview,
   normalizeOpeningHours,
   resolveGuestAppOrigin,
-  servicePointGuestUrl,
+  qrPointGuestUrl,
   venueWideGuestUrl
 } from "./venue-controls";
 
@@ -22,25 +21,25 @@ describe("venue controls", () => {
 
   it("builds guest URLs for venue-wide and service-point QR codes", () => {
     assert.equal(venueWideGuestUrl("https://app.example.com", "blue-note"), "https://app.example.com/venue/blue-note");
-    assert.equal(servicePointGuestUrl("https://app.example.com/", "qr_table_1"), "https://app.example.com/qr/qr_table_1");
+    assert.equal(qrPointGuestUrl("https://app.example.com/", "qr_table_1"), "https://app.example.com/qr/qr_table_1");
   });
 
   it("trims service-point labels and omits blank location IDs", () => {
-    assert.deepEqual(createServicePointPayload({ label: "  VIP Booth  ", locationId: "" }), {
+    assert.deepEqual(createQrPointPayload({ label: "  VIP Booth  ", locationId: "" }), {
       label: "VIP Booth"
     });
-    assert.deepEqual(createServicePointPayload({ label: "Bar 1", locationId: "location_1" }), {
+    assert.deepEqual(createQrPointPayload({ label: "Bar 1", locationId: "location_1" }), {
       label: "Bar 1",
       locationId: "location_1"
     });
   });
 
   it("builds QR point update payloads with nullable locations", () => {
-    assert.deepEqual(createServicePointUpdatePayload({ label: "  Patio Door  ", locationId: "" }), {
+    assert.deepEqual(createQrPointUpdatePayload({ label: "  Patio Door  ", locationId: "" }), {
       label: "Patio Door",
       locationId: null
     });
-    assert.deepEqual(createServicePointUpdatePayload({ label: "DJ Booth", locationId: "location_2" }), {
+    assert.deepEqual(createQrPointUpdatePayload({ label: "DJ Booth", locationId: "location_2" }), {
       label: "DJ Booth",
       locationId: "location_2"
     });
@@ -73,7 +72,7 @@ describe("venue controls", () => {
         }
       ]),
       {
-        openingHours: [
+        hours: [
           {
             dayOfWeek: 1,
             opensAt: "10:00",
@@ -89,40 +88,6 @@ describe("venue controls", () => {
         ]
       }
     );
-  });
-
-  it("normalizes missing opening hours and copies Monday hours across weekdays", () => {
-    const normalized = normalizeOpeningHours([
-      {
-        dayOfWeek: 1,
-        opensAt: "18:00",
-        closesAt: "02:00",
-        isClosed: false
-      }
-    ]);
-
-    assert.equal(normalized.length, 7);
-    assert.equal(normalized[1].opensAt, "18:00");
-    assert.equal(normalized[0].opensAt, "09:00");
-
-    const copied = copyMondayHoursToWeekdays(normalized);
-    assert.deepEqual(
-      copied.slice(1, 6).map((hours) => ({
-        dayOfWeek: hours.dayOfWeek,
-        opensAt: hours.opensAt,
-        closesAt: hours.closesAt,
-        isClosed: hours.isClosed
-      })),
-      [
-        { dayOfWeek: 1, opensAt: "18:00", closesAt: "02:00", isClosed: false },
-        { dayOfWeek: 2, opensAt: "18:00", closesAt: "02:00", isClosed: false },
-        { dayOfWeek: 3, opensAt: "18:00", closesAt: "02:00", isClosed: false },
-        { dayOfWeek: 4, opensAt: "18:00", closesAt: "02:00", isClosed: false },
-        { dayOfWeek: 5, opensAt: "18:00", closesAt: "02:00", isClosed: false }
-      ]
-    );
-    assert.equal(copied[0].opensAt, "09:00");
-    assert.equal(copied[6].opensAt, "09:00");
   });
 
   it("previews venue chat availability from opening hours and timezone", () => {

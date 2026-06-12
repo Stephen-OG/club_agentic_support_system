@@ -63,9 +63,9 @@ function buildUser(role: CommandUser["memberships"][number]["role"]): CommandUse
       {
         id: `membership_${role}`,
         role,
-        workspaceId: "workspace_1",
+        organizationId: "workspace_1",
         venueId: "venue_1",
-        workspace: { id: "workspace_1", name: "Workspace", slug: "workspace" },
+        organization: { id: "workspace_1", name: "Workspace", slug: "workspace" },
         venue: { id: "venue_1", name: "Main Room", slug: "main-room" }
       }
     ]
@@ -76,7 +76,7 @@ function buildRequest(input: Pick<CommandSupportRequest, "conversationId" | "sta
   return {
     id: "request_1",
     venueId: "venue_1",
-    servicePointId: "service_point_1",
+    qrPointId: "service_point_1",
     conversationId: input.conversationId,
     assignedToId: null,
     title: "Guest support request",

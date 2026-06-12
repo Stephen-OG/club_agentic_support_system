@@ -12,11 +12,11 @@ import { DomainEventsService } from "../realtime/domain-events.service";
 export type TriageReplyJobData = {
   conversationId: string;
   venueId: string;
-  servicePointId: string;
+  qrPointId: string;
   guestMessageBody: string;
   qrToken: string;
   source: string; // "public_qr" | "public_venue_qr"
-  servicePointLabel?: string;
+  qrPointLabel?: string;
   venueSlug?: string;
   quickAction?: string | null;
   locationLabel?: string | null;
@@ -43,11 +43,11 @@ export class TriageReplyProcessor extends WorkerHost {
     const {
       conversationId,
       venueId,
-      servicePointId,
+      qrPointId: qrPointId,
       guestMessageBody,
       qrToken,
       source,
-      servicePointLabel,
+      qrPointLabel,
       venueSlug,
       quickAction,
       locationLabel,
@@ -77,7 +77,7 @@ export class TriageReplyProcessor extends WorkerHost {
         message: quickAction
           ? `Quick action: ${quickAction}\n${guestMessageBody}`
           : guestMessageBody,
-        servicePointLabel: locationLabel ?? servicePointLabel ?? "your location",
+        servicePointLabel: locationLabel ?? qrPointLabel ?? "your location",
         isFollowup: hasActiveRequest
       });
 
@@ -116,7 +116,7 @@ export class TriageReplyProcessor extends WorkerHost {
       const message = await this.prisma.message.create({
         data: encryptMessageCreateData({
           venueId,
-          servicePointId,
+          qrPointId,
           conversationId,
           requestId: request?.id ?? null,
           sender: SenderType.ASSISTANT,
@@ -153,7 +153,7 @@ export class TriageReplyProcessor extends WorkerHost {
         const message = await this.prisma.message.create({
           data: encryptMessageCreateData({
             venueId,
-            servicePointId,
+            qrPointId,
             conversationId,
             requestId: null,
             sender: SenderType.ASSISTANT,

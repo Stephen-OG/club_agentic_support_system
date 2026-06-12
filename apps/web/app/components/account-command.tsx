@@ -1,12 +1,12 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Bell, Building2, CalendarClock, Clock3, Copy, Eye, EyeOff, LogOut, RefreshCw, Save, ShieldCheck } from "lucide-react";
+import { Bell, Building2, CalendarClock, Clock3, Eye, EyeOff, LogOut, RefreshCw, Save, ShieldCheck } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { validatePasswordChange } from "@/lib/account-security";
 import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, hasCommandDashboardAccess } from "@/lib/auth/role-policy";
-import type { CommandUser, CommandVenue, CommandVenueOpeningHour } from "@/lib/auth/types";
+import type { CommandUser, CommandVenue, CommandVenueHours } from "@/lib/auth/types";
 import {
   getRequestNotificationPermission,
   isRequestNotificationSupported,
@@ -14,7 +14,6 @@ import {
 } from "@/lib/request-notification-alerts";
 import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 import {
-  copyMondayHoursToWeekdays,
   createOpeningHoursPayload,
   getVenueChatAvailabilityPreview,
   normalizeOpeningHours,
@@ -22,20 +21,20 @@ import {
   weekdayLabels
 } from "@/lib/venue-controls";
 
-type SettingsSection = "workspace" | "venue-hours" | "notifications" | "security";
+type SettingsSection = "organization" | "venue-hours" | "notifications" | "security";
 
 const settingsSections: Array<{ id: SettingsSection; label: string; icon: LucideIcon }> = [
-  { id: "workspace", label: "Workspace", icon: Building2 },
+  { id: "organization", label: "Organization", icon: Building2 },
   { id: "venue-hours", label: "Venue Hours", icon: CalendarClock },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "security", label: "Security", icon: ShieldCheck }
 ];
 
-export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
+export function AccountCommand({ currentUser, initialSection }: { currentUser: CommandUser; initialSection?: string }) {
   const authClient = useMemo(() => createBrowserAuthClient(), []);
   const primaryMembership = getPrimaryMembership(currentUser);
   const canManageVenueSettings = hasCommandDashboardAccess(currentUser);
-  const [activeSection, setActiveSection] = useState<SettingsSection>("workspace");
+  const [activeSection, setActiveSection] = useState<SettingsSection>((initialSection as SettingsSection) || "organization");
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -51,8 +50,14 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
   const [lastHoursSavedAt, setLastHoursSavedAt] = useState<string | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
 
+  useEffect(() => {
+    if (initialSection && (["organization", "venue-hours", "notifications", "security"] as SettingsSection[]).includes(initialSection as SettingsSection)) {
+      setActiveSection(initialSection as SettingsSection);
+    }
+  }, [initialSection]);
+
   const selectedVenue = venues.find((venue) => venue.id === selectedVenueId) ?? venues[0] ?? null;
-  const selectedHours = selectedVenue ? hourDrafts[selectedVenue.id] ?? normalizeOpeningHours(selectedVenue.openingHours) : [];
+  const selectedHours = selectedVenue ? hourDrafts[selectedVenue.id] ?? normalizeOpeningHours(selectedVenue.hours) : [];
   const availabilityPreview = selectedVenue
     ? getVenueChatAvailabilityPreview(selectedHours, selectedVenue.timezone)
     : { isOpen: false, label: "No venue selected" };
@@ -77,7 +82,7 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
       setHourDrafts((current) => {
         const next = { ...current };
         for (const venue of nextVenues) {
-          next[venue.id] = next[venue.id] ?? normalizeOpeningHours(venue.openingHours);
+          next[venue.id] = next[venue.id] ?? normalizeOpeningHours(venue.hours);
         }
         return next;
       });
@@ -99,21 +104,14 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
     void loadVenues();
   }, [loadVenues]);
 
-  function updateHourDraft(venue: CommandVenue, dayOfWeek: number, patch: Partial<CommandVenueOpeningHour>) {
+  function updateHourDraft(venue: CommandVenue, dayOfWeek: number, patch: Partial<CommandVenueHours>) {
     setHourDrafts((current) => {
-      const draft = current[venue.id] ?? normalizeOpeningHours(venue.openingHours);
+      const draft = current[venue.id] ?? normalizeOpeningHours(venue.hours);
       return {
         ...current,
         [venue.id]: draft.map((hours) => (hours.dayOfWeek === dayOfWeek ? { ...hours, ...patch } : hours))
       };
     });
-  }
-
-  function copyMondayToWeekdays(venue: CommandVenue) {
-    setHourDrafts((current) => ({
-      ...current,
-      [venue.id]: copyMondayHoursToWeekdays(current[venue.id] ?? normalizeOpeningHours(venue.openingHours))
-    }));
   }
 
   async function saveOpeningHours(venue: CommandVenue) {
@@ -126,13 +124,13 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
     setSettingsError(null);
 
     try {
-      const openingHours = hourDrafts[venue.id] ?? normalizeOpeningHours(venue.openingHours);
+      const openingHours = hourDrafts[venue.id] ?? normalizeOpeningHours(venue.hours);
       const updated = await apiRequest<CommandVenue>(authClient, `/admin/venues/${venue.id}/opening-hours`, {
         method: "PATCH",
         body: JSON.stringify(createOpeningHoursPayload(openingHours))
       });
       setVenues((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      setHourDrafts((current) => ({ ...current, [venue.id]: normalizeOpeningHours(updated.openingHours) }));
+      setHourDrafts((current) => ({ ...current, [venue.id]: normalizeOpeningHours(updated.hours) }));
       setLastHoursSavedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     } catch (nextError) {
       setSettingsError(nextError instanceof Error ? nextError.message : "Could not update venue hours");
@@ -218,27 +216,27 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
         </aside>
 
         <div className="settings-stack">
-          {activeSection === "workspace" ? (
+          {activeSection === "organization" ? (
             <section className="command-panel settings-panel">
               <div className="panel-title-row">
                 <div>
-                  <h2>Workspace Settings</h2>
-                  <p className="meta">Workspace-level configuration, policy, and operational defaults.</p>
+                  <h2>Organization Settings</h2>
+                  <p className="meta">Organization-level configuration, policy, and operational defaults.</p>
                 </div>
                 <Building2 size={22} />
               </div>
               <div className="settings-facts">
                 <div>
-                  <span>Workspace</span>
-                  <strong>{primaryMembership?.workspace.name || "Workspace"}</strong>
+                  <span>Organization</span>
+                  <strong>{primaryMembership?.organization.name || "Organization"}</strong>
                 </div>
                 <div>
-                  <span>Workspace slug</span>
-                  <strong>{primaryMembership?.workspace.slug || "Not configured"}</strong>
+                  <span>Organization slug</span>
+                  <strong>{primaryMembership?.organization.slug || "Not configured"}</strong>
                 </div>
                 <div>
                   <span>Access scope</span>
-                  <strong>{primaryMembership?.venue?.name || "Workspace-wide access"}</strong>
+                  <strong>{primaryMembership?.venue?.name || "Organization-wide access"}</strong>
                 </div>
                 <div>
                   <span>Memberships</span>
@@ -258,7 +256,7 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
                 </div>
                 <div>
                   <span>Data policy</span>
-                  <strong>Workspace scoped</strong>
+                  <strong>Organization scoped</strong>
                 </div>
               </div>
             </section>
@@ -310,10 +308,6 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
                       <div className="form-note warning-note">Changes affect guest QR chat availability immediately after saving.</div>
 
                       <div className="settings-schedule-actions">
-                        <button className="command-button" onClick={() => copyMondayToWeekdays(selectedVenue)} type="button">
-                          <Copy size={16} />
-                          Copy Monday to weekdays
-                        </button>
                         <button
                           className="command-button primary"
                           disabled={updatingHoursId === selectedVenue.id}
@@ -361,7 +355,7 @@ export function AccountCommand({ currentUser }: { currentUser: CommandUser }) {
                       </div>
                     </>
                   ) : (
-                    <div className="empty-state">No venues available for this workspace.</div>
+                    <div className="empty-state">No venues available for this organization.</div>
                   )}
                 </>
               ) : null}

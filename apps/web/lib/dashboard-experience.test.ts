@@ -14,8 +14,8 @@ function userWithRole(role: CommandRole, venueId: string | null = "venue-1"): Co
         id: `membership-${role}`,
         role,
         venueId,
-        workspaceId: "workspace-1",
-        workspace: { id: "workspace-1", name: "Demo Workspace", slug: "demo" },
+        organizationId: "workspace-1",
+        organization: { id: "workspace-1", name: "Demo Workspace", slug: "demo" },
         venue: venueId ? { id: venueId, name: "Main Room", slug: "main-room" } : null
       }
     ]
@@ -23,16 +23,16 @@ function userWithRole(role: CommandRole, venueId: string | null = "venue-1"): Co
 }
 
 describe("dashboard experience", () => {
-  it("gives owners a workspace-level business dashboard", () => {
+  it("gives owners an organization-level business dashboard", () => {
     const experience = getDashboardExperience(userWithRole("owner", null));
 
     assert.equal(experience.mode, "owner");
     assert.equal(experience.eyebrow, "Owner intelligence");
-    assert.equal(experience.title, "Workspace Dashboard");
+    assert.equal(experience.title, "Organization Dashboard");
     assert.equal(experience.showLaunchChecklist, true);
     assert.equal(experience.scopeVenueIds, null);
     assert.equal(experience.panels.venuePerformance, true);
-    assert.equal(experience.panels.aiTriageQuality, true);
+    assert.equal(experience.panels.aiTriageQuality, false);
   });
 
   it("gives admins a cross-venue operations dashboard", () => {

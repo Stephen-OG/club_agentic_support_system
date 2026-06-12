@@ -2,7 +2,7 @@ import type { StaffRole } from "@madupe/shared";
 
 export type AuthContext = {
   staffProfileId: string;
-  workspaceId: string;
+  organizationId: string;
   venueId?: string;
   role: StaffRole;
 };

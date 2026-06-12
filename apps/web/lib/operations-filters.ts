@@ -26,7 +26,7 @@ type FilterableRequest = {
   priority: CommandRequestPriority | string;
   resolvedAt?: string | null;
   satisfactionRating?: number | null;
-  servicePoint?: { label?: string | null } | null;
+  qrPoint?: { label?: string | null } | null;
   updatedAt?: string | null;
 };
 
@@ -66,7 +66,7 @@ export function runOperationsFilterPipeline<T extends FilterableRequest>(
 export function getOperationsFilterOptions(requests: readonly FilterableRequest[]) {
   return {
     categories: uniqueSorted(requests.map((request) => request.category).filter(Boolean)),
-    tables: uniqueSorted(requests.map((request) => request.servicePoint?.label || "").filter(Boolean))
+    tables: uniqueSorted(requests.map((request) => request.qrPoint?.label || "").filter(Boolean))
   };
 }
 
@@ -126,7 +126,7 @@ function matchesOperationsFilters(request: FilterableRequest, filters: Operation
   }
 
   const tableQuery = filters.tableQuery.trim().toLowerCase();
-  if (tableQuery && !(request.servicePoint?.label || "").toLowerCase().includes(tableQuery)) {
+  if (tableQuery && !(request.qrPoint?.label || "").toLowerCase().includes(tableQuery)) {
     return false;
   }
 
@@ -200,7 +200,7 @@ function compareRequests(left: FilterableRequest, right: FilterableRequest, sort
   }
 
   if (sortBy === "table") {
-    return (left.servicePoint?.label || "").localeCompare(right.servicePoint?.label || "", undefined, { numeric: false });
+    return (left.qrPoint?.label || "").localeCompare(right.qrPoint?.label || "", undefined, { numeric: false });
   }
 
   return 0;

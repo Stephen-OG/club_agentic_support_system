@@ -35,7 +35,7 @@ function createLocalMessage(body: string, sender: CommandMessage["sender"]): Loc
     metadata: null,
     requestId: null,
     sender,
-    servicePointId: "",
+    qrPointId: "",
     venueId: ""
   };
 }

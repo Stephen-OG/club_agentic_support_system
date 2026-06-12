@@ -22,7 +22,7 @@ async function deleteUser(email: string) {
       `  StaffProfile: id=${staffProfile.id}, displayName=${staffProfile.displayName}, email=${staffProfile.email ?? "(no email on profile)"}`
     );
 
-    const membershipCount = await prisma.staffMembership.count({
+    const membershipCount = await prisma.teamRole.count({
       where: { staffProfileId: staffProfile.id },
     });
     console.log(`  Memberships to delete: ${membershipCount}`);

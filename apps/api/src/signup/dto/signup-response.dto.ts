@@ -2,10 +2,10 @@ import { ApiProperty } from "@nestjs/swagger";
 
 export class SetupResponseDto {
   @ApiProperty()
-  workspaceId!: string;
+  organizationId!: string;
 
   @ApiProperty()
-  workspaceName!: string;
+  organizationName!: string;
 
   @ApiProperty()
   staffProfileId!: string;

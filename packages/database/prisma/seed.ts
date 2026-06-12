@@ -2,25 +2,25 @@ import { PrismaClient, SenderType, StaffRole, RequestPriority, RequestStatus } f
 
 const prisma = new PrismaClient();
 
-const workspaceId = "00000000-0000-0000-0000-000000000001";
+const organizationId = "00000000-0000-0000-0000-000000000001";
 const venueId = "00000000-0000-0000-0000-000000000101";
 const mainFloorId = "00000000-0000-0000-0000-000000000201";
-const venueSupportServicePointId = "00000000-0000-0000-0000-000000000300";
+const venueSupportQrPointId = "00000000-0000-0000-0000-000000000300";
 
 type SeedStaff = readonly [id: string, email: string, displayName: string, role: StaffRole, authUserId?: string];
 
 async function main() {
-  await prisma.workspace.upsert({
+  await prisma.organization.upsert({
     create: {
-      id: workspaceId,
-      name: "Demo Workspace",
+      id: organizationId,
+      name: "Demo Organization",
       slug: "demo"
     },
     update: {
-      name: "Demo Workspace"
+      name: "Demo Organization"
     },
     where: {
-      id: workspaceId
+      id: organizationId
     }
   });
 
@@ -29,7 +29,7 @@ async function main() {
       id: venueId,
       name: "Demo Venue",
       slug: "demo-venue",
-      workspaceId
+      organizationId
     },
     update: {
       name: "Demo Venue"
@@ -40,7 +40,7 @@ async function main() {
   });
 
   for (const dayOfWeek of [0, 1, 2, 3, 4, 5, 6]) {
-    await prisma.venueOpeningHour.upsert({
+    await prisma.venueHours.upsert({
       create: {
         closesAt: "23:00",
         dayOfWeek,
@@ -77,16 +77,16 @@ async function main() {
     }
   });
 
-  const servicePoints = [
+  const qrPoints = [
     ["00000000-0000-0000-0000-000000000301", "Table 1", "demo-table-1"],
     ["00000000-0000-0000-0000-000000000302", "Table 2", "demo-table-2"],
     ["00000000-0000-0000-0000-000000000303", "Table 3", "demo-table-3"],
     ["00000000-0000-0000-0000-000000000304", "Table 4", "demo-table-4"]
   ] as const;
 
-  await prisma.servicePoint.upsert({
+  await prisma.qrPoint.upsert({
     create: {
-      id: venueSupportServicePointId,
+      id: venueSupportQrPointId,
       label: "Venue support",
       locationId: mainFloorId,
       qrToken: "demo-venue-support",
@@ -98,12 +98,12 @@ async function main() {
       locationId: mainFloorId
     },
     where: {
-      id: venueSupportServicePointId
+      id: venueSupportQrPointId
     }
   });
 
-  for (const [id, label, qrToken] of servicePoints) {
-    await prisma.servicePoint.upsert({
+  for (const [id, label, qrToken] of qrPoints) {
+    await prisma.qrPoint.upsert({
       create: {
         id,
         label,
@@ -149,13 +149,13 @@ async function main() {
       }
     });
 
-    await prisma.staffMembership.upsert({
+    await prisma.teamRole.upsert({
       create: {
         id: id.replace("0004", "0005"),
         role,
         staffProfileId: id,
         venueId,
-        workspaceId
+        organizationId
       },
       update: {
         isActive: true,
@@ -177,7 +177,7 @@ async function main() {
     create: {
       id: conversationId,
       venueId,
-      servicePointId: servicePoints[0][0],
+      qrPointId: qrPoints[0][0],
       guestSessionId: "demo-session-1",
       status: "open"
     },
@@ -193,7 +193,7 @@ async function main() {
     create: {
       id: requestId,
       venueId,
-      servicePointId: servicePoints[0][0],
+      qrPointId: qrPoints[0][0],
       conversationId,
       title: "Need service at Table 1",
       category: "general",
@@ -216,7 +216,7 @@ async function main() {
     create: {
       id: guestMessageId,
       venueId,
-      servicePointId: servicePoints[0][0],
+      qrPointId: qrPoints[0][0],
       conversationId,
       requestId,
       sender: SenderType.GUEST,
@@ -234,7 +234,7 @@ async function main() {
     create: {
       id: staffMessageId,
       venueId,
-      servicePointId: servicePoints[0][0],
+      qrPointId: qrPoints[0][0],
       conversationId,
       requestId,
       sender: SenderType.STAFF,

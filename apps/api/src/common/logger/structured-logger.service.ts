@@ -10,7 +10,7 @@ type LogEntry = {
   trace?: string;
   requestId?: string;
   userId?: string;
-  workspaceId?: string;
+  organizationId?: string;
   venueId?: string;
   durationMs?: number;
   method?: string;
@@ -76,7 +76,7 @@ export class StructuredLogger implements LoggerService {
     durationMs: number;
     requestId?: string;
     userId?: string;
-    workspaceId?: string;
+    organizationId?: string;
     venueId?: string;
     error?: Error | null;
   }) {
@@ -90,7 +90,7 @@ export class StructuredLogger implements LoggerService {
       requestId: input.requestId,
       statusCode: input.statusCode,
       userId: input.userId,
-      workspaceId: input.workspaceId,
+      organizationId: input.organizationId,
       venueId: input.venueId,
       error: input.error
         ? {

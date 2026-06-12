@@ -53,13 +53,13 @@ describe("ServicePointsService public QR workflow", () => {
     const conversation = {
       id: "conversation_1",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       guestSessionId: "session_public_123"
     };
     const supportRequest = {
       id: "request_1",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       conversationId: conversation.id,
       title: "High priority guest request",
       category: "facilities",
@@ -119,13 +119,13 @@ describe("ServicePointsService public QR workflow", () => {
     };
     const { qrToken: _1, ...publicServicePoint } = servicePoint;
     const prisma = {
-      servicePoint: {
+      qrPoint: {
         findFirst: async (args: unknown) => {
-          calls.push({ model: "servicePoint.findFirst", args });
+          calls.push({ model: "qrPoint.findFirst", args });
           return servicePoint;
         },
         upsert: async (args: unknown) => {
-          calls.push({ model: "servicePoint.upsert", args });
+          calls.push({ model: "qrPoint.upsert", args });
           return servicePoint;
         }
       },
@@ -210,7 +210,7 @@ describe("ServicePointsService public QR workflow", () => {
       [
         {
           venueId: servicePoint.venueId,
-          servicePointId: servicePoint.id,
+          qrPointId: servicePoint.id,
           conversationId: conversation.id,
           requestId: supportRequest.id,
           sender: SenderType.GUEST,
@@ -222,7 +222,7 @@ describe("ServicePointsService public QR workflow", () => {
         },
         {
           venueId: servicePoint.venueId,
-          servicePointId: servicePoint.id,
+          qrPointId: servicePoint.id,
           conversationId: conversation.id,
           requestId: supportRequest.id,
           sender: SenderType.ASSISTANT,
@@ -252,13 +252,13 @@ describe("ServicePointsService public QR workflow", () => {
       const conversation = {
         id: "conversation_encrypted_1",
         venueId: servicePoint.venueId,
-        servicePointId: servicePoint.id,
+        qrPointId: servicePoint.id,
         guestSessionId: "session_encrypted_123"
       };
       const supportRequest = {
         id: "request_encrypted_1",
         venueId: servicePoint.venueId,
-        servicePointId: servicePoint.id,
+        qrPointId: servicePoint.id,
         conversationId: conversation.id,
         title: "Guest needs water",
         category: "service",
@@ -290,7 +290,7 @@ describe("ServicePointsService public QR workflow", () => {
         }
       };
       const prisma = {
-        servicePoint: {
+        qrPoint: {
           findFirst: async () => servicePoint,
           upsert: async () => servicePoint
         },
@@ -345,7 +345,7 @@ describe("ServicePointsService public QR workflow", () => {
     const conversation = {
       id: "conversation_greeting_1",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       guestSessionId: "session_greeting_123"
     };
     const storedMessages = [
@@ -388,13 +388,13 @@ describe("ServicePointsService public QR workflow", () => {
       }
     };
     const prisma = {
-      servicePoint: {
+      qrPoint: {
         findFirst: async (args: unknown) => {
-          calls.push({ model: "servicePoint.findFirst", args });
+          calls.push({ model: "qrPoint.findFirst", args });
           return servicePoint;
         },
         upsert: async (args: unknown) => {
-          calls.push({ model: "servicePoint.upsert", args });
+          calls.push({ model: "qrPoint.upsert", args });
           return servicePoint;
         }
       },
@@ -423,7 +423,7 @@ describe("ServicePointsService public QR workflow", () => {
     assert.deepEqual(result.servicePoint, publicServicePoint);
     assert.deepEqual(calls, [
       {
-        model: "servicePoint.findFirst",
+        model: "qrPoint.findFirst",
         args: {
           where: {
             qrToken: "qr_greeting_123",
@@ -432,7 +432,7 @@ describe("ServicePointsService public QR workflow", () => {
           include: {
             venue: {
               include: {
-                openingHours: {
+                hours: {
                   orderBy: {
                     dayOfWeek: "asc"
                   }
@@ -451,7 +451,7 @@ describe("ServicePointsService public QR workflow", () => {
         args: {
           data: {
             guestSessionId: "session_greeting_123",
-            servicePointId: servicePoint.id,
+            qrPointId: servicePoint.id,
             venueId: servicePoint.venueId
           }
         }
@@ -461,7 +461,7 @@ describe("ServicePointsService public QR workflow", () => {
         args: {
           data: {
             venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
+            qrPointId: servicePoint.id,
             conversationId: conversation.id,
             sender: SenderType.GUEST,
             body: "hello",
@@ -477,7 +477,7 @@ describe("ServicePointsService public QR workflow", () => {
         args: {
           data: {
             venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
+            qrPointId: servicePoint.id,
             conversationId: conversation.id,
             sender: SenderType.ASSISTANT,
             body: "Hello. If you'd like help at Table 2, just send your request and the team will respond.",
@@ -513,13 +513,13 @@ describe("ServicePointsService public QR workflow", () => {
     const conversation = {
       id: "conversation_resume_1",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       guestSessionId: "session_existing_123"
     };
     const supportRequest = {
       id: "request_resume_1",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       conversationId: conversation.id,
       title: "Guest support request",
       category: "general",
@@ -582,13 +582,13 @@ describe("ServicePointsService public QR workflow", () => {
       }
     };
     const prisma = {
-      servicePoint: {
+      qrPoint: {
         findFirst: async (args: unknown) => {
-          calls.push({ model: "servicePoint.findFirst", args });
+          calls.push({ model: "qrPoint.findFirst", args });
           return servicePoint;
         },
         upsert: async (args: unknown) => {
-          calls.push({ model: "servicePoint.upsert", args });
+          calls.push({ model: "qrPoint.upsert", args });
           return servicePoint;
         }
       },
@@ -638,7 +638,7 @@ describe("ServicePointsService public QR workflow", () => {
       [
         {
           venueId: servicePoint.venueId,
-          servicePointId: servicePoint.id,
+          qrPointId: servicePoint.id,
           conversationId: conversation.id,
           requestId: supportRequest.id,
           sender: SenderType.GUEST,
@@ -650,7 +650,7 @@ describe("ServicePointsService public QR workflow", () => {
         },
         {
           venueId: servicePoint.venueId,
-          servicePointId: servicePoint.id,
+          qrPointId: servicePoint.id,
           conversationId: conversation.id,
           requestId: supportRequest.id,
           sender: SenderType.ASSISTANT,
@@ -676,7 +676,7 @@ describe("ServicePointsService public QR workflow", () => {
     const supportRequest = {
       id: "request_followup_1",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       conversationId: "conversation_followup_1",
       title: "Guest support request",
       category: "general",
@@ -693,7 +693,7 @@ describe("ServicePointsService public QR workflow", () => {
     const conversation = {
       id: "conversation_followup_1",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       guestSessionId: "session_followup_123",
       requests: [supportRequest]
     };
@@ -747,13 +747,13 @@ describe("ServicePointsService public QR workflow", () => {
       }
     };
     const prisma = {
-      servicePoint: {
+      qrPoint: {
         findFirst: async (args: unknown) => {
-          calls.push({ model: "servicePoint.findFirst", args });
+          calls.push({ model: "qrPoint.findFirst", args });
           return servicePoint;
         },
         upsert: async (args: unknown) => {
-          calls.push({ model: "servicePoint.upsert", args });
+          calls.push({ model: "qrPoint.upsert", args });
           return servicePoint;
         }
       },
@@ -803,7 +803,7 @@ describe("ServicePointsService public QR workflow", () => {
       [
         {
           venueId: servicePoint.venueId,
-          servicePointId: servicePoint.id,
+          qrPointId: servicePoint.id,
           conversationId: conversation.id,
           requestId: newSupportRequest.id,
           sender: SenderType.GUEST,
@@ -815,7 +815,7 @@ describe("ServicePointsService public QR workflow", () => {
         },
         {
           venueId: servicePoint.venueId,
-          servicePointId: servicePoint.id,
+          qrPointId: servicePoint.id,
           conversationId: conversation.id,
           requestId: newSupportRequest.id,
           sender: SenderType.ASSISTANT,
@@ -841,14 +841,14 @@ describe("ServicePointsService public QR workflow", () => {
     const resolvedRequest = {
       id: "request_resolved_old",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       conversationId: "conversation_resolved_followup_1",
       status: RequestStatus.RESOLVED
     };
     const newRequest = {
       id: "request_resolved_new",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       conversationId: "conversation_resolved_followup_1",
       title: "Guest support request",
       category: "general",
@@ -860,7 +860,7 @@ describe("ServicePointsService public QR workflow", () => {
     const conversation = {
       id: "conversation_resolved_followup_1",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       requests: [resolvedRequest]
     };
     let createCount = 0;
@@ -895,7 +895,7 @@ describe("ServicePointsService public QR workflow", () => {
       } as never,
       { classifyOrDefault: () => "normal" } as never,
       {
-        servicePoint: {
+        qrPoint: {
           findFirst: async () => servicePoint,
           upsert: async () => servicePoint
         },
@@ -956,13 +956,13 @@ describe("ServicePointsService public QR workflow", () => {
       }
     };
     const prisma = {
-      servicePoint: {
+      qrPoint: {
         findFirst: async (args: unknown) => {
-          calls.push({ model: "servicePoint.findFirst", args });
+          calls.push({ model: "qrPoint.findFirst", args });
           return servicePoint;
         },
         upsert: async (args: unknown) => {
-          calls.push({ model: "servicePoint.upsert", args });
+          calls.push({ model: "qrPoint.upsert", args });
           return servicePoint;
         }
       },
@@ -999,7 +999,7 @@ describe("ServicePointsService public QR workflow", () => {
     );
     assert.deepEqual(calls, [
       {
-        model: "servicePoint.findFirst",
+        model: "qrPoint.findFirst",
         args: {
           where: {
             qrToken: "qr_missing_conversation_123",
@@ -1008,7 +1008,7 @@ describe("ServicePointsService public QR workflow", () => {
           include: {
             venue: {
               include: {
-                openingHours: {
+                hours: {
                   orderBy: {
                     dayOfWeek: "asc"
                   }
@@ -1023,7 +1023,7 @@ describe("ServicePointsService public QR workflow", () => {
         args: {
           where: {
             id: "conversation_from_another_place",
-            servicePointId: servicePoint.id,
+            qrPointId: servicePoint.id,
             venueId: servicePoint.venueId
           },
           include: {
@@ -1060,12 +1060,12 @@ describe("ServicePointsService public QR workflow", () => {
       conversationId: "conversation_public_state_1",
       title: "Guest support request",
       status: RequestStatus.NEW,
-      servicePoint
+      qrPoint: servicePoint
     };
     const conversation = {
       id: "conversation_public_state_1",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       messages,
       requests: [request]
     };
@@ -1075,13 +1075,13 @@ describe("ServicePointsService public QR workflow", () => {
       {} as never,
       {} as never,
       {
-        servicePoint: {
+        qrPoint: {
           findFirst: async (args: unknown) => {
-            calls.push({ model: "servicePoint.findFirst", args });
+            calls.push({ model: "qrPoint.findFirst", args });
             return servicePoint;
           },
           upsert: async (args: unknown) => {
-            calls.push({ model: "servicePoint.upsert", args });
+            calls.push({ model: "qrPoint.upsert", args });
             return servicePoint;
           }
         },
@@ -1110,7 +1110,7 @@ describe("ServicePointsService public QR workflow", () => {
     });
     assert.deepEqual(calls, [
       {
-        model: "servicePoint.findFirst",
+        model: "qrPoint.findFirst",
         args: {
           where: {
             qrToken: "qr_public_state_123",
@@ -1119,7 +1119,7 @@ describe("ServicePointsService public QR workflow", () => {
           include: {
             venue: {
               include: {
-                openingHours: {
+                hours: {
                   orderBy: {
                     dayOfWeek: "asc"
                   }
@@ -1134,7 +1134,7 @@ describe("ServicePointsService public QR workflow", () => {
         args: {
           where: {
             id: "conversation_public_state_1",
-            servicePointId: servicePoint.id,
+            qrPointId: servicePoint.id,
             venueId: servicePoint.venueId
           },
           include: {
@@ -1142,7 +1142,7 @@ describe("ServicePointsService public QR workflow", () => {
               select: {
                 id: true,
                 venueId: true,
-                servicePointId: true,
+                qrPointId: true,
                 conversationId: true,
                 requestId: true,
                 sender: true,
@@ -1158,7 +1158,7 @@ describe("ServicePointsService public QR workflow", () => {
             requests: {
               include: {
                 assignedTo: true,
-                servicePoint: true
+                qrPoint: true
               },
               orderBy: {
                 createdAt: "desc"
@@ -1183,7 +1183,7 @@ describe("ServicePointsService public QR workflow", () => {
       {} as never,
       {} as never,
       {
-        servicePoint: {
+        qrPoint: {
           findFirst: async () => servicePoint,
           upsert: async () => servicePoint
         },
@@ -1191,7 +1191,7 @@ describe("ServicePointsService public QR workflow", () => {
           findFirst: async () => ({
             id: "conversation_public_closed_1",
             venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
+            qrPointId: servicePoint.id,
             status: "closed",
             closedAt: new Date("2026-06-01T10:00:00.000Z"),
             updatedAt: new Date(),
@@ -1225,7 +1225,7 @@ describe("ServicePointsService public QR workflow", () => {
         {} as never,
         {} as never,
         {
-          servicePoint: {
+          qrPoint: {
             findFirst: async () => servicePoint,
             upsert: async () => servicePoint
           },
@@ -1233,7 +1233,7 @@ describe("ServicePointsService public QR workflow", () => {
             findFirst: async () => ({
               id: "conversation_public_expired_1",
               venueId: servicePoint.venueId,
-              servicePointId: servicePoint.id,
+              qrPointId: servicePoint.id,
               status: "open",
               closedAt: null,
               updatedAt: new Date(Date.now() - 31 * 60 * 1000),
@@ -1280,12 +1280,12 @@ describe("ServicePointsService public QR workflow", () => {
       conversationId: "conversation_venue_state_1",
       title: "Guest support request",
       status: RequestStatus.IN_PROGRESS,
-      servicePoint
+      qrPoint: servicePoint
     };
     const conversation = {
       id: "conversation_venue_state_1",
       venueId: venue.id,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       messages,
       requests: [request]
     };
@@ -1301,13 +1301,13 @@ describe("ServicePointsService public QR workflow", () => {
             return venue;
           }
         },
-        servicePoint: {
+        qrPoint: {
           findFirst: async (args: unknown) => {
-            calls.push({ model: "servicePoint.findFirst", args });
+            calls.push({ model: "qrPoint.findFirst", args });
             return servicePoint;
           },
           upsert: async (args: unknown) => {
-            calls.push({ model: "servicePoint.upsert", args });
+            calls.push({ model: "qrPoint.upsert", args });
             return servicePoint;
           }
         },
@@ -1341,7 +1341,7 @@ describe("ServicePointsService public QR workflow", () => {
         args: {
           where: { slug: "blue-note" },
           include: {
-            openingHours: {
+            hours: {
               orderBy: {
                 dayOfWeek: "asc"
               }
@@ -1350,7 +1350,7 @@ describe("ServicePointsService public QR workflow", () => {
         }
       },
       {
-        model: "servicePoint.upsert",
+        model: "qrPoint.upsert",
         args: {
           where: {
             venueId_label: {
@@ -1371,7 +1371,7 @@ describe("ServicePointsService public QR workflow", () => {
         args: {
           where: {
             id: "conversation_venue_state_1",
-            servicePointId: servicePoint.id,
+            qrPointId: servicePoint.id,
             venueId: venue.id
           },
           include: {
@@ -1379,7 +1379,7 @@ describe("ServicePointsService public QR workflow", () => {
               select: {
                 id: true,
                 venueId: true,
-                servicePointId: true,
+                qrPointId: true,
                 conversationId: true,
                 requestId: true,
                 sender: true,
@@ -1395,7 +1395,7 @@ describe("ServicePointsService public QR workflow", () => {
             requests: {
               include: {
                 assignedTo: true,
-                servicePoint: true
+                qrPoint: true
               },
               orderBy: {
                 createdAt: "desc"
@@ -1419,7 +1419,7 @@ describe("ServicePointsService public QR workflow", () => {
     const conversation = {
       id: "conversation_failed_write_1",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       guestSessionId: "session_failed_write_123"
     };
     const calls: Array<{ model: string; args: unknown }> = [];
@@ -1454,13 +1454,13 @@ describe("ServicePointsService public QR workflow", () => {
       }
     };
     const prisma = {
-      servicePoint: {
+      qrPoint: {
         findFirst: async (args: unknown) => {
-          calls.push({ model: "servicePoint.findFirst", args });
+          calls.push({ model: "qrPoint.findFirst", args });
           return servicePoint;
         },
         upsert: async (args: unknown) => {
-          calls.push({ model: "servicePoint.upsert", args });
+          calls.push({ model: "qrPoint.upsert", args });
           return servicePoint;
         }
       },
@@ -1508,7 +1508,7 @@ describe("ServicePointsService public QR workflow", () => {
     );
     assert.deepEqual(calls, [
       {
-        model: "servicePoint.findFirst",
+        model: "qrPoint.findFirst",
         args: {
           where: {
             qrToken: "qr_failed_write_123",
@@ -1517,7 +1517,7 @@ describe("ServicePointsService public QR workflow", () => {
           include: {
             venue: {
               include: {
-                openingHours: {
+                hours: {
                   orderBy: {
                     dayOfWeek: "asc"
                   }
@@ -1536,7 +1536,7 @@ describe("ServicePointsService public QR workflow", () => {
         args: {
           data: {
             guestSessionId: "session_failed_write_123",
-            servicePointId: servicePoint.id,
+            qrPointId: servicePoint.id,
             venueId: servicePoint.venueId
           }
         }
@@ -1546,7 +1546,7 @@ describe("ServicePointsService public QR workflow", () => {
         args: {
           data: {
             venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
+            qrPointId: servicePoint.id,
             conversationId: conversation.id,
             title: "Guest support request",
             category: "general",
@@ -1563,7 +1563,7 @@ describe("ServicePointsService public QR workflow", () => {
   });
 
   it("creates a venue QR conversation with guest location and semi-autonomous metadata", async () => {
-    const venue = { id: "venue_1", slug: "blue-note", workspaceId: "workspace_1", name: "Blue Note" };
+    const venue = { id: "venue_1", slug: "blue-note", organizationId: "workspace_1", name: "Blue Note" };
     const servicePoint = {
       id: "sp_venue_support",
       venueId: venue.id,
@@ -1574,14 +1574,14 @@ describe("ServicePointsService public QR workflow", () => {
     const conversation = {
       id: "conversation_venue_1",
       venueId: venue.id,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       guestLocationLabel: "Table 14",
       guestLocationSource: "guest"
     };
     const supportRequest = {
       id: "request_venue_1",
       venueId: venue.id,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       conversationId: conversation.id,
       title: "Missing order",
       category: "missing_order",
@@ -1623,7 +1623,7 @@ describe("ServicePointsService public QR workflow", () => {
     };
     const prisma = {
         venue: { findFirst: async () => venue },
-        servicePoint: {
+        qrPoint: {
           findFirst: async () => servicePoint,
           upsert: async () => servicePoint
         },
@@ -1685,7 +1685,7 @@ describe("ServicePointsService public QR workflow", () => {
   });
 
   it("keeps venue QR replies pending when a status message is newer than the latest guest message", async () => {
-    const venue = { id: "venue_pending_reply", slug: "blue-note", workspaceId: "workspace_1", name: "Blue Note" };
+    const venue = { id: "venue_pending_reply", slug: "blue-note", organizationId: "workspace_1", name: "Blue Note" };
     const servicePoint = {
       id: "sp_pending_reply",
       venueId: venue.id,
@@ -1697,7 +1697,7 @@ describe("ServicePointsService public QR workflow", () => {
     const conversation = {
       id: "conversation_pending_reply",
       venueId: venue.id,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       guestSessionId: "session_pending_reply",
       status: "open",
       updatedAt: new Date()
@@ -1705,7 +1705,7 @@ describe("ServicePointsService public QR workflow", () => {
     const request = {
       id: "request_pending_reply",
       venueId: venue.id,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       conversationId: conversation.id,
       status: RequestStatus.IN_PROGRESS
     };
@@ -1737,7 +1737,7 @@ describe("ServicePointsService public QR workflow", () => {
       {} as never,
       {
         venue: { findFirst: async () => venue },
-        servicePoint: {
+        qrPoint: {
           findFirst: async () => servicePoint,
           upsert: async () => servicePoint
         },
@@ -1758,7 +1758,7 @@ describe("ServicePointsService public QR workflow", () => {
   });
 
   it("asks venue QR guests for a location before creating a staff request", async () => {
-    const venue = { id: "venue_location_prompt", slug: "blue-note", workspaceId: "workspace_1", name: "Blue Note" };
+    const venue = { id: "venue_location_prompt", slug: "blue-note", organizationId: "workspace_1", name: "Blue Note" };
     const servicePoint = {
       id: "sp_venue_location_prompt",
       venueId: venue.id,
@@ -1769,7 +1769,7 @@ describe("ServicePointsService public QR workflow", () => {
     const conversation = {
       id: "conversation_location_prompt",
       venueId: venue.id,
-      servicePointId: servicePoint.id
+      qrPointId: servicePoint.id
     };
     const storedMessages = [
       { id: "message_guest", conversationId: conversation.id, sender: SenderType.GUEST, body: "Can we get more napkins?" },
@@ -1813,7 +1813,7 @@ describe("ServicePointsService public QR workflow", () => {
       { classifyOrDefault: () => "normal" } as never,
       {
         venue: { findFirst: async () => venue },
-        servicePoint: {
+        qrPoint: {
           findFirst: async () => servicePoint,
           upsert: async () => servicePoint
         },
@@ -1833,7 +1833,7 @@ describe("ServicePointsService public QR workflow", () => {
   });
 
   it("does not create a venue QR staff request for greetings or informational questions", async () => {
-    const venue = { id: "venue_non_request", slug: "blue-note", workspaceId: "workspace_1", name: "Blue Note" };
+    const venue = { id: "venue_non_request", slug: "blue-note", organizationId: "workspace_1", name: "Blue Note" };
     const servicePoint = {
       id: "sp_venue_non_request",
       venueId: venue.id,
@@ -1844,7 +1844,7 @@ describe("ServicePointsService public QR workflow", () => {
     const conversation = {
       id: "conversation_non_request",
       venueId: venue.id,
-      servicePointId: servicePoint.id
+      qrPointId: servicePoint.id
     };
     const storedMessages = [
       { id: "message_guest", conversationId: conversation.id, sender: SenderType.GUEST, body: "hello" },
@@ -1889,7 +1889,7 @@ describe("ServicePointsService public QR workflow", () => {
       } as never,
       {
         venue: { findFirst: async () => venue },
-        servicePoint: {
+        qrPoint: {
           findFirst: async () => servicePoint,
           upsert: async () => servicePoint
         },
@@ -1915,18 +1915,18 @@ describe("ServicePointsService public QR workflow", () => {
       label: "Table 2",
       qrToken: "qr_restroom_issue",
       isActive: true,
-      venue: { id: "venue_restroom_issue", name: "Cipher", openingHours: [] }
+      venue: { id: "venue_restroom_issue", name: "Cipher", hours: [] }
     };
     const conversation = {
       id: "conversation_restroom_issue",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       guestSessionId: "session_restroom_issue"
     };
     const supportRequest = {
       id: "request_restroom_issue",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       conversationId: conversation.id,
       title: "Guest support request",
       category: "general",
@@ -1968,7 +1968,7 @@ describe("ServicePointsService public QR workflow", () => {
       } as never,
       { classifyOrDefault: () => "normal" } as never,
       {
-        servicePoint: { findFirst: async () => servicePoint, upsert: async () => servicePoint },
+        qrPoint: { findFirst: async () => servicePoint, upsert: async () => servicePoint },
         conversation: { findFirst: async () => null },
         $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
       } as never,
@@ -1991,18 +1991,18 @@ describe("ServicePointsService public QR workflow", () => {
       label: "Table 2",
       qrToken: "qr_queue_down",
       isActive: true,
-      venue: { id: "venue_queue_down", name: "Cipher", openingHours: [] }
+      venue: { id: "venue_queue_down", name: "Cipher", hours: [] }
     };
     const conversation = {
       id: "conversation_queue_down",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       guestSessionId: "session_queue_down"
     };
     const supportRequest = {
       id: "request_queue_down",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       conversationId: conversation.id,
       title: "Guest support request",
       category: "general",
@@ -2046,7 +2046,7 @@ describe("ServicePointsService public QR workflow", () => {
       } as never,
       { classifyOrDefault: () => "normal" } as never,
       {
-        servicePoint: { findFirst: async () => servicePoint, upsert: async () => servicePoint },
+        qrPoint: { findFirst: async () => servicePoint, upsert: async () => servicePoint },
         conversation: { findFirst: async () => null },
         $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
         message: {
@@ -2081,12 +2081,12 @@ describe("ServicePointsService public QR workflow", () => {
       label: "Table 2",
       qrToken: "qr_open_request_chat",
       isActive: true,
-      venue: { id: "venue_open_request_chat", name: "Cipher", openingHours: [] }
+      venue: { id: "venue_open_request_chat", name: "Cipher", hours: [] }
     };
     const supportRequest = {
       id: "request_open_request_chat",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       conversationId: "conversation_open_request_chat",
       title: "Guest support request",
       category: "general",
@@ -2097,7 +2097,7 @@ describe("ServicePointsService public QR workflow", () => {
     const conversation = {
       id: "conversation_open_request_chat",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       guestSessionId: "session_open_request_chat",
       requests: [supportRequest]
     };
@@ -2119,7 +2119,7 @@ describe("ServicePointsService public QR workflow", () => {
         }
       } as never,
       {
-        servicePoint: { findFirst: async () => servicePoint, upsert: async () => servicePoint },
+        qrPoint: { findFirst: async () => servicePoint, upsert: async () => servicePoint },
         conversation: { findFirst: async () => conversation },
         supportRequest: {
           create: async () => {
@@ -2148,18 +2148,18 @@ describe("ServicePointsService public QR workflow", () => {
       label: "Table 5",
       qrToken: "qr_session_guard",
       isActive: true,
-      venue: { id: "venue_session_guard", name: "Cipher", openingHours: [] }
+      venue: { id: "venue_session_guard", name: "Cipher", hours: [] }
     };
     const service = createService(
       {} as never,
       {} as never,
       {
-        servicePoint: { findFirst: async () => servicePoint, upsert: async () => servicePoint },
+        qrPoint: { findFirst: async () => servicePoint, upsert: async () => servicePoint },
         conversation: {
           findFirst: async () => ({
             id: "conversation_session_guard",
             venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
+            qrPointId: servicePoint.id,
             guestSessionId: "session_original",
             requests: []
           })
@@ -2188,17 +2188,17 @@ describe("ServicePointsService public QR workflow", () => {
       label: "Table 8",
       qrToken: "qr_menu_request",
       isActive: true,
-      venue: { id: "venue_menu_request", name: "Blue Note", openingHours: [] }
+      venue: { id: "venue_menu_request", name: "Blue Note", hours: [] }
     };
     const conversation = {
       id: "conversation_menu_request",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id
+      qrPointId: servicePoint.id
     };
     const supportRequest = {
       id: "request_menu_request",
       venueId: servicePoint.venueId,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       conversationId: conversation.id,
       title: "Menu request",
       category: "menu",
@@ -2246,7 +2246,7 @@ describe("ServicePointsService public QR workflow", () => {
       } as never,
       { classifyOrDefault: () => "normal" } as never,
       {
-        servicePoint: {
+        qrPoint: {
           findFirst: async () => servicePoint,
           upsert: async () => servicePoint
         },
@@ -2271,7 +2271,7 @@ describe("ServicePointsService public QR workflow", () => {
   });
 
   it("routes venue QR menu questions to operations without asking for location first", async () => {
-    const venue = { id: "venue_menu_request", slug: "blue-note", workspaceId: "workspace_1", name: "Blue Note" };
+    const venue = { id: "venue_menu_request", slug: "blue-note", organizationId: "workspace_1", name: "Blue Note" };
     const servicePoint = {
       id: "sp_venue_menu_request",
       venueId: venue.id,
@@ -2282,12 +2282,12 @@ describe("ServicePointsService public QR workflow", () => {
     const conversation = {
       id: "conversation_venue_menu_request",
       venueId: venue.id,
-      servicePointId: servicePoint.id
+      qrPointId: servicePoint.id
     };
     const supportRequest = {
       id: "request_venue_menu_request",
       venueId: venue.id,
-      servicePointId: servicePoint.id,
+      qrPointId: servicePoint.id,
       conversationId: conversation.id,
       guestLocationLabel: null,
       guestLocationSource: null,
@@ -2336,7 +2336,7 @@ describe("ServicePointsService public QR workflow", () => {
       { classifyOrDefault: () => "normal" } as never,
       {
         venue: { findFirst: async () => venue },
-        servicePoint: {
+        qrPoint: {
           findFirst: async () => servicePoint,
           upsert: async () => servicePoint
         },
@@ -2371,10 +2371,10 @@ describe("ServicePointsService public QR workflow", () => {
     const venue = {
       id: "venue_closed_hours",
       slug: "blue-note",
-      workspaceId: "workspace_1",
+      organizationId: "workspace_1",
       name: "Blue Note",
       timezone: "UTC",
-      openingHours: closedHours
+      hours: closedHours
     };
     const service = createService(
       {} as never,

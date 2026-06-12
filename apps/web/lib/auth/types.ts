@@ -2,10 +2,10 @@ export type CommandRole = "owner" | "admin" | "manager" | "staff" | "security" |
 
 export type CommandMembership = {
   id: string;
-  workspaceId: string;
+  organizationId: string;
   venueId: string | null;
   role: CommandRole;
-  workspace: { id: string; name: string; slug: string };
+  organization: { id: string; name: string; slug: string };
   venue: { id: string; name: string; slug: string } | null;
 };
 
@@ -17,12 +17,12 @@ export type CommandUser = {
   memberships: CommandMembership[];
 };
 
-export type OnboardingStatus = {
+export type LaunchStatus = {
   isComplete: boolean;
   completedCount: number;
   totalCount: number;
   steps: Array<{
-    id: "workspace" | "venue" | "opening_hours" | "qr_points" | "team" | "test_request";
+    id: "organization" | "venue" | "opening_hours" | "qr_points" | "team" | "test_request";
     label: string;
     detail: string;
     complete: boolean;
@@ -60,7 +60,7 @@ export type CommandVenueLocation = {
   updatedAt?: string;
 };
 
-export type CommandVenueOpeningHour = {
+export type CommandVenueHours = {
   id?: string;
   venueId?: string;
   dayOfWeek: number;
@@ -71,7 +71,7 @@ export type CommandVenueOpeningHour = {
   updatedAt?: string;
 };
 
-export type CommandServicePoint = {
+export type CommandQrPoint = {
   id: string;
   venueId: string;
   locationId: string | null;
@@ -86,13 +86,13 @@ export type CommandServicePoint = {
 
 export type CommandVenue = {
   id: string;
-  workspaceId: string;
+  organizationId: string;
   name: string;
   slug: string;
   timezone: string;
   locations: CommandVenueLocation[];
-  openingHours: CommandVenueOpeningHour[];
-  servicePoints: CommandServicePoint[];
+  hours: CommandVenueHours[];
+  qrPoints: CommandQrPoint[];
   createdAt: string;
   updatedAt: string;
 };
@@ -120,7 +120,7 @@ export type CommandRequestPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
 export type CommandSupportRequest = {
   id: string;
   venueId: string;
-  servicePointId: string;
+  qrPointId: string;
   conversationId: string;
   assignedToId: string | null;
   title: string;
@@ -143,13 +143,13 @@ export type CommandSupportRequest = {
   satisfactionRating?: number | null;
   recentMessages?: Array<Pick<CommandMessage, "id" | "sender" | "body" | "createdAt">>;
   assignedTo?: Pick<CommandTeamMember, "id" | "displayName" | "email"> | null;
-  servicePoint?: CommandServicePoint;
+  qrPoint?: CommandQrPoint;
 };
 
 export type CommandMessage = {
   id: string;
   venueId: string;
-  servicePointId: string;
+  qrPointId: string;
   conversationId: string;
   requestId: string | null;
   sender: "GUEST" | "ASSISTANT" | "STAFF" | "SYSTEM";
@@ -164,12 +164,12 @@ export type PublicQrConversationState = {
   messages: CommandMessage[];
   replyPending?: boolean;
   request: CommandSupportRequest | null;
-  servicePoint: CommandServicePoint;
+  qrPoint: CommandQrPoint;
   venue?: PublicVenueSummary;
 };
 
 export type PublicQrIntakeState = {
   chatAvailability: PublicChatAvailability;
-  servicePoint: CommandServicePoint;
+  qrPoint: CommandQrPoint;
   venue?: PublicVenueSummary;
 };

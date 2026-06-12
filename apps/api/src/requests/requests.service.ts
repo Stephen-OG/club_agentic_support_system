@@ -120,7 +120,7 @@ export class RequestsService {
     const venue = await this.prisma.venue.findFirst({
       where: {
         id: venueId,
-        workspaceId: auth.workspaceId
+        organizationId: auth.organizationId
       }
     });
 
@@ -128,7 +128,7 @@ export class RequestsService {
       throw new NotFoundException("Venue not found");
     }
 
-    this.venueAccess.assertCanReadVenue(auth, { workspaceId: venue.workspaceId, venueId });
+    this.venueAccess.assertCanReadVenue(auth, { organizationId: venue.organizationId, venueId });
 
     const limit = this.resolveVenueRequestLimit(options);
     const requests = await this.prisma.supportRequest.findMany({
@@ -141,7 +141,7 @@ export class RequestsService {
             email: true
           }
         },
-        servicePoint: {
+        qrPoint: {
           select: {
             id: true,
             label: true
@@ -234,9 +234,9 @@ export class RequestsService {
       throw new NotFoundException("Request not found");
     }
 
-    this.venueAccess.assertCanOperateVenue(auth, { workspaceId: request.venue.workspaceId, venueId: request.venueId });
+    this.venueAccess.assertCanOperateVenue(auth, { organizationId: request.venue.organizationId, venueId: request.venueId });
 
-    if (request.venue.workspaceId !== auth.workspaceId) {
+    if (request.venue.organizationId !== auth.organizationId) {
       throw new NotFoundException("Request not found");
     }
 
@@ -273,7 +273,7 @@ export class RequestsService {
         where: { id: requestId },
         include: {
           assignedTo: true,
-          servicePoint: true
+          qrPoint: true
         }
       });
 
@@ -297,7 +297,7 @@ export class RequestsService {
         createdMessage = await tx.message.create({
           data: encryptMessageCreateData({
             venueId: request.venueId,
-            servicePointId: request.servicePointId,
+            qrPointId: request.qrPointId,
             conversationId: request.conversationId,
             requestId: request.id,
             sender: SenderType.SYSTEM,
@@ -326,7 +326,7 @@ export class RequestsService {
       where: { id: input.requestId },
       include: {
         conversation: true,
-        venue: { select: { workspaceId: true } }
+        venue: { select: { organizationId: true } }
       }
     });
 
@@ -392,7 +392,7 @@ export class RequestsService {
       const message = await tx.message.create({
         data: encryptMessageCreateData({
           venueId: request.venueId,
-          servicePointId: request.servicePointId,
+          qrPointId: request.qrPointId,
           conversationId: request.conversationId,
           requestId: request.id,
           sender: SenderType.SYSTEM,

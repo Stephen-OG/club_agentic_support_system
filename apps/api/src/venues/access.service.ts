@@ -2,18 +2,18 @@ import { ForbiddenException, Injectable } from "@nestjs/common";
 import type { AuthContext } from "../auth/auth-context";
 
 type VenueTarget = {
-  workspaceId: string;
+  organizationId: string;
   venueId: string;
 };
 
 @Injectable()
 export class VenueAccessService {
-  canManageWorkspace(auth: AuthContext, workspaceId: string) {
-    return auth.workspaceId === workspaceId && (auth.role === "admin" || auth.role === "owner");
+  canManageOrganization(auth: AuthContext, organizationId: string) {
+    return auth.organizationId === organizationId && (auth.role === "admin" || auth.role === "owner");
   }
 
   canManageVenue(auth: AuthContext, target: VenueTarget) {
-    if (auth.workspaceId !== target.workspaceId) {
+    if (auth.organizationId !== target.organizationId) {
       return false;
     }
 
@@ -33,7 +33,7 @@ export class VenueAccessService {
       return true;
     }
 
-    return auth.workspaceId === target.workspaceId && auth.venueId === target.venueId && ["staff", "security"].includes(auth.role);
+    return auth.organizationId === target.organizationId && auth.venueId === target.venueId && ["staff", "security"].includes(auth.role);
   }
 
   canReadVenue(auth: AuthContext, target: VenueTarget) {
@@ -41,18 +41,24 @@ export class VenueAccessService {
       return true;
     }
 
-    return auth.workspaceId === target.workspaceId && auth.venueId === target.venueId && auth.role === "read_only";
+    return auth.organizationId === target.organizationId && auth.venueId === target.venueId && auth.role === "read_only";
   }
 
-  assertCanManageWorkspace(auth: AuthContext, workspaceId: string) {
-    if (!this.canManageWorkspace(auth, workspaceId)) {
-      throw new ForbiddenException("You cannot manage this workspace");
+  assertCanManageOrganization(auth: AuthContext, organizationId: string) {
+    if (!this.canManageOrganization(auth, organizationId)) {
+      throw new ForbiddenException("You cannot manage this organization");
     }
   }
 
   assertCanManageVenue(auth: AuthContext, target: VenueTarget) {
     if (!this.canManageVenue(auth, target)) {
       throw new ForbiddenException("You cannot manage this venue");
+    }
+  }
+
+  assertCanManageWorkspace(auth: AuthContext, organizationId: string) {
+    if (!this.canManageOrganization(auth, organizationId)) {
+      throw new ForbiddenException("You cannot manage this organization");
     }
   }
 

@@ -11,7 +11,6 @@ const roles: Array<{ label: string; value: CommandRole }> = [
   { label: "Staff", value: "staff" },
   { label: "Manager", value: "manager" },
   { label: "Security", value: "security" },
-  { label: "Read only", value: "read_only" },
   { label: "Admin", value: "admin" },
   { label: "Owner", value: "owner" }
 ];
@@ -27,7 +26,7 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
   const canCreatePlatformRoles = primaryRole === "admin";
   const canChooseVenueForRole = canCreatePlatformRoles || (primaryRole === "owner" && !primaryMembership?.venueId);
   const availableRoles = useMemo(
-    () => (canCreatePlatformRoles ? roles : roles.filter((item) => ["manager", "staff", "security", "read_only"].includes(item.value))),
+    () => (canCreatePlatformRoles ? roles : roles.filter((item) => ["manager", "staff", "security"].includes(item.value))),
     [canCreatePlatformRoles]
   );
   const [email, setEmail] = useState("");
@@ -131,7 +130,7 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
         <div className="panel-title-row">
           <div>
             <h2>Create role access</h2>
-            <p className="meta">Create an account and assign one of the existing workspace roles.</p>
+            <p className="meta">Create an account and assign one of the existing organization roles.</p>
           </div>
           <UserPlus size={22} />
         </div>
@@ -191,7 +190,7 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
                 </div>
                 <div className="directory-meta">
                   <span className="data-chip">{membership?.role.replace("_", " ") || "unassigned"}</span>
-                  <small>{membership?.venue?.name || membership?.workspace?.name || "Workspace"}</small>
+                  <small>{membership?.venue?.name || membership?.organization?.name || "Organization"}</small>
                 </div>
               </article>
             );

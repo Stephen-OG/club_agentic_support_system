@@ -213,7 +213,7 @@ export default function LandingPage() {
           <h2 id="security-heading">Clear public access. Protected operations.</h2>
           <p>
             Public QR chat is intentionally narrow and rate-limited. Operational dashboards require authenticated staff
-            access, workspace membership, and venue permissions.
+            access, organization membership, and venue permissions.
           </p>
         </div>
         <ul>

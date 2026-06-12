@@ -25,7 +25,7 @@ export class SetupService {
 
     this.logger.logEvent("signup.started", {
       email,
-      workspaceName: input.workspaceName,
+      organizationName: input.organizationName,
       venueName: input.venueName
     }, "SetupService");
 
@@ -37,7 +37,7 @@ export class SetupService {
     }
 
     // NOTE: This is a best-effort early check; the authoritative check happens inside the
-    // transaction to avoid TOCTOU races and to scope the check to the workspace.
+    // transaction to avoid TOCTOU races and to scope the check to the organization.
     const existingVenue = await this.prisma.venue.findFirst({
       where: { slug: input.venueSlug }
     });
@@ -56,37 +56,37 @@ export class SetupService {
     }
 
     if (authUser.email.toLowerCase() !== email || !authUser.emailVerifiedAt) {
-      throw new UnauthorizedException("Workspace setup must match your authenticated session");
+      throw new UnauthorizedException("Organization setup must match your authenticated session");
     }
 
     const timezone = input.timezone || "Europe/London";
 
     // Create everything in a transaction
     const result = await this.prisma.$transaction(async (tx) => {
-      // Check workspace slug uniqueness inside transaction (TOCTOU-safe)
-      const txExistingWorkspace = await tx.workspace.findUnique({ where: { slug: input.workspaceSlug } });
-      if (txExistingWorkspace) {
-        this.logger.warn(`Setup failed: workspace slug "${input.workspaceSlug}" already taken`, "SetupService");
-        throw new ConflictException(`Workspace slug "${input.workspaceSlug}" is already taken.`);
+      // Check organization slug uniqueness inside transaction (TOCTOU-safe)
+      const txExistingOrg = await tx.organization.findUnique({ where: { slug: input.organizationSlug } });
+      if (txExistingOrg) {
+        this.logger.warn(`Setup failed: organization slug "${input.organizationSlug}" already taken`, "SetupService");
+        throw new ConflictException(`Organization slug "${input.organizationSlug}" is already taken.`);
       }
 
-      // 1. Create workspace
-      const workspace = await tx.workspace.create({
+      // 1. Create organization
+      const organization = await tx.organization.create({
         data: {
-          name: input.workspaceName.trim(),
-          slug: input.workspaceSlug
+          name: input.organizationName.trim(),
+          slug: input.organizationSlug
         }
       });
-      this.logger.logEvent("signup.workspace_created", { workspaceId: workspace.id, name: workspace.name }, "SetupService");
+      this.logger.logEvent("signup.organization_created", { organizationId: organization.id, name: organization.name }, "SetupService");
 
-      // NOTE: venue slug is checked scoped to the workspace to avoid TOCTOU race and
-      // ensure per-workspace uniqueness.
+      // NOTE: venue slug is checked scoped to the organization to avoid TOCTOU race and
+      // ensure per-organization uniqueness.
       const txExistingVenue = await tx.venue.findFirst({
-        where: { slug: input.venueSlug, workspaceId: workspace.id }
+        where: { slug: input.venueSlug, organizationId: organization.id }
       });
       if (txExistingVenue) {
-        this.logger.warn(`Setup failed: venue slug "${input.venueSlug}" already taken in this workspace`, "SetupService");
-        throw new ConflictException(`Venue slug "${input.venueSlug}" is already taken in this workspace.`);
+        this.logger.warn(`Setup failed: venue slug "${input.venueSlug}" already taken in this organization`, "SetupService");
+        throw new ConflictException(`Venue slug "${input.venueSlug}" is already taken in this organization.`);
       }
 
       // 2. Create staff profile with auth link
@@ -101,11 +101,11 @@ export class SetupService {
       // 3. Create venue with default opening hours
       const venue = await tx.venue.create({
         data: {
-          workspaceId: workspace.id,
+          organizationId: organization.id,
           name: input.venueName.trim(),
           slug: input.venueSlug,
           timezone,
-          openingHours: {
+          hours: {
             create: defaultOpeningHours()
           }
         }
@@ -113,9 +113,9 @@ export class SetupService {
       this.logger.logEvent("signup.venue_created", { venueId: venue.id, name: venue.name }, "SetupService");
 
       // 4. Create the initial owner as a venue-scoped operator for the venue they just set up.
-      await tx.staffMembership.create({
+      await tx.teamRole.create({
         data: {
-          workspaceId: workspace.id,
+          organizationId: organization.id,
           venueId: venue.id,
           staffProfileId: staff.id,
           role: "OWNER"
@@ -123,7 +123,7 @@ export class SetupService {
       });
       this.logger.logEvent("signup.staff_created", { staffProfileId: staff.id, email, venueId: venue.id }, "SetupService");
 
-      return { workspace, staff, venue };
+      return { organization, staff, venue };
     }).catch((error) => {
       if ((error as any)?.code === 'P2002') {
         throw new ConflictException("A unique constraint violation occurred. Please try again.");
@@ -132,14 +132,14 @@ export class SetupService {
     });
 
     this.logger.logEvent("signup.completed", {
-      workspaceId: result.workspace.id,
+      organizationId: result.organization.id,
       staffProfileId: result.staff.id,
       venueId: result.venue.id
     }, "SetupService");
 
     return {
-      workspaceId: result.workspace.id,
-      workspaceName: result.workspace.name,
+      organizationId: result.organization.id,
+      organizationName: result.organization.name,
       staffProfileId: result.staff.id,
       venueId: result.venue.id,
       venueName: result.venue.name

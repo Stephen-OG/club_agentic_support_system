@@ -37,9 +37,9 @@ export class StaffService {
     const profile = await this.prisma.staffProfile.findUnique({
       where: { id: auth.staffProfileId },
       include: {
-        memberships: {
+        teamRoles: {
           where: { isActive: true },
-          include: { workspace: true, venue: true },
+          include: { organization: true, venue: true },
           orderBy: { createdAt: "asc" }
         }
       }
@@ -51,7 +51,7 @@ export class StaffService {
 
     return {
       ...profile,
-      memberships: profile.memberships.map((membership) => ({
+      memberships: profile.teamRoles.map((membership) => ({
         ...membership,
         role: sharedRoleByPrismaRole[membership.role]
       }))
@@ -63,23 +63,23 @@ export class StaffService {
     const membershipWhere =
       auth.role === "admin" || (auth.role === "owner" && !auth.venueId)
         ? {
-            workspaceId: auth.workspaceId,
+            organizationId: auth.organizationId,
             isActive: true
           }
         : {
-            workspaceId: auth.workspaceId,
+            organizationId: auth.organizationId,
             venueId: auth.venueId ?? "00000000-0000-0000-0000-000000000000",
             isActive: true
           };
 
     const profiles = await this.prisma.staffProfile.findMany({
       where: {
-        memberships: {
+        teamRoles: {
           some: membershipWhere
         }
       },
       include: {
-        memberships: {
+        teamRoles: {
           where: membershipWhere,
           include: { venue: true },
           orderBy: { createdAt: "asc" }
@@ -90,7 +90,7 @@ export class StaffService {
 
     return profiles.map((profile) => ({
       ...profile,
-      memberships: profile.memberships.map((membership) => ({
+      memberships: profile.teamRoles.map((membership) => ({
         ...membership,
         role: sharedRoleByPrismaRole[membership.role]
       }))
@@ -99,7 +99,7 @@ export class StaffService {
 
   async createStaffUser(auth: AuthContext, input: CreateStaffUserDto) {
     const venueId = this.resolveCreatableVenueId(auth, input);
-    await this.assertVenueInWorkspace(auth, venueId);
+    await this.assertVenueInOrganization(auth, venueId);
 
     const email = input.email.trim().toLowerCase();
     const existing = await this.prisma.staffProfile.findUnique({ where: { email } });
@@ -130,9 +130,9 @@ export class StaffService {
           }
         });
 
-        const membership = await tx.staffMembership.create({
+        const membership = await tx.teamRole.create({
           data: {
-            workspaceId: auth.workspaceId,
+            organizationId: auth.organizationId,
             venueId,
             staffProfileId: staff.id,
             role: prismaRoleBySharedRole[input.role]
@@ -193,11 +193,11 @@ export class StaffService {
 
     if (auth.role === "owner" && !auth.venueId) {
       if (!venueManagerCreatableRoles.has(input.role)) {
-        throw new ForbiddenException("Workspace owners cannot create platform admin or owner accounts here");
+        throw new ForbiddenException("Organization owners cannot create platform admin or owner accounts here");
       }
 
       if (!input.venueId) {
-        throw new ForbiddenException("Workspace owners must choose a venue for venue-scoped staff");
+        throw new ForbiddenException("Organization owners must choose a venue for venue-scoped staff");
       }
 
       return input.venueId;
@@ -214,7 +214,7 @@ export class StaffService {
     return auth.venueId;
   }
 
-  private async assertVenueInWorkspace(auth: AuthContext, venueId: string | null | undefined) {
+  private async assertVenueInOrganization(auth: AuthContext, venueId: string | null | undefined) {
     if (!venueId) {
       return;
     }
@@ -222,7 +222,7 @@ export class StaffService {
     const venue = await this.prisma.venue.findFirst({
       where: {
         id: venueId,
-        workspaceId: auth.workspaceId
+        organizationId: auth.organizationId
       },
       select: {
         id: true
@@ -230,7 +230,7 @@ export class StaffService {
     });
 
     if (!venue) {
-      throw new ForbiddenException("Venue does not belong to this workspace");
+      throw new ForbiddenException("Venue does not belong to this organization");
     }
   }
 

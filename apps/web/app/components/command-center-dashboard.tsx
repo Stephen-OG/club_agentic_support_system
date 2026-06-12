@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, ArrowRight, BrainCircuit, CheckCircle2, Circle, Clock3, Flame, Gauge, KeyRound, MapPin, PieChart, QrCode, RefreshCw, Rocket, ShieldAlert, Star, Users } from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, CheckCircle2, Circle, Clock3, Flame, Gauge, KeyRound, MapPin, PieChart, QrCode, RefreshCw, Rocket, ShieldAlert, Star, Users } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
-import type { CommandSupportRequest, CommandUser, CommandVenue, OnboardingStatus } from "@/lib/auth/types";
+import type { CommandSupportRequest, CommandUser, CommandVenue, LaunchStatus } from "@/lib/auth/types";
 import { type DashboardVolumeWindow, calculateAdminDashboardControls, calculateDashboardAnalytics, getRequestVolumeSeries } from "@/lib/dashboard-analytics";
 import { getDashboardExperience } from "@/lib/dashboard-experience";
 import { createBrowserAuthClient } from "@/lib/app-auth/browser";
@@ -47,7 +47,7 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
   const experience = useMemo(() => getDashboardExperience(currentUser), [currentUser]);
   const [venues, setVenues] = useState<CommandVenue[]>([]);
   const [requests, setRequests] = useState<CommandSupportRequest[]>([]);
-  const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
+  const [launch, setLaunch] = useState<LaunchStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
@@ -69,11 +69,11 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
       const requestGroups = await Promise.all(
         visibleVenues.map((venue) => apiRequest<CommandSupportRequest[]>(authClient, `/venues/${venue.id}/requests`).catch(() => []))
       );
-      const nextOnboarding = experience.showLaunchChecklist ? await apiRequest<OnboardingStatus>(authClient, "/onboarding/status").catch(() => null) : null;
+      const nextLaunch = experience.showLaunchChecklist ? await apiRequest<LaunchStatus>(authClient, "/launch/status").catch(() => null) : null;
       const scopedRequests = experience.scopeVenueIds ? requestGroups.flat().filter((request) => experience.scopeVenueIds?.includes(request.venueId)) : requestGroups.flat();
       setVenues(visibleVenues);
       setRequests(scopedRequests);
-      setOnboarding(nextOnboarding);
+      setLaunch(nextLaunch);
       setLastUpdatedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not load dashboard analytics");
@@ -163,7 +163,7 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
 
       {error ? <div className="form-error wide">{error}</div> : null}
 
-      {onboarding && experience.showLaunchChecklist && !onboarding.isComplete ? <LaunchChecklist status={onboarding} /> : null}
+      {launch && experience.showLaunchChecklist && !launch.isComplete ? <LaunchChecklist status={launch} /> : null}
 
       {experience.panels.adminControls ? <AdminControls controls={adminControls} /> : null}
 
@@ -245,7 +245,7 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
       <section className="command-panel chart-panel">
         <div className="panel-title-row">
           <div>
-            <h2>SLA Risk Forecast</h2>
+            <h2>Response Risk</h2>
             <span className="panel-subtle">Requests most likely to breach next</span>
           </div>
           <ShieldAlert size={17} />
@@ -289,7 +289,7 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
         <section className="command-panel chart-panel">
           <div className="panel-title-row">
             <div>
-              <h2>Service-Point Hotspots</h2>
+              <h2>Active Tables</h2>
               <span className="panel-subtle">Where repeated demand is clustering</span>
             </div>
             <MapPin size={17} />
@@ -312,7 +312,7 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
 
       <section className="command-panel chart-panel chart-panel-large">
         <div className="panel-title-row">
-          <h2>Guest Satisfaction & Recovery</h2>
+          <h2>Guest Satisfaction</h2>
           <span className="data-chip">{analytics.satisfactionRecovery.lowRatingCount} low ratings</span>
         </div>
         <div className="satisfaction-layout">
@@ -343,7 +343,7 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
         <section className="command-panel chart-panel chart-panel-large">
           <div className="panel-title-row">
             <div>
-              <h2>Staff Workload Matrix</h2>
+              <h2>Team Workload</h2>
               <span className="panel-subtle">Open load, high-priority pressure, completion pace, and recovery signals</span>
             </div>
             <Users size={17} />
@@ -386,32 +386,6 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
         </section>
       ) : null}
 
-      {experience.panels.aiTriageQuality ? (
-        <section className="command-panel chart-panel">
-          <div className="panel-title-row">
-            <div>
-              <h2>AI Triage Quality</h2>
-              <span className="panel-subtle">Low-confidence agent decisions to review</span>
-            </div>
-            <BrainCircuit size={17} />
-          </div>
-          <div className="ai-quality-panel">
-            <div className="ai-score">
-              <strong>{analytics.aiTriageQuality.averageConfidence === null ? "No data" : `${Math.round(analytics.aiTriageQuality.averageConfidence * 100)}%`}</strong>
-              <span>average confidence</span>
-            </div>
-            <div className="recovery-table">
-              {analytics.aiTriageQuality.lowConfidenceRequests.map((request) => (
-                <div key={request.id}>
-                  <span>{Math.round(request.confidence * 100)}%</span>
-                  <strong>{request.title}</strong>
-                </div>
-              ))}
-              {!analytics.aiTriageQuality.lowConfidenceRequests.length ? <div className="empty-state">No low-confidence triage decisions.</div> : null}
-            </div>
-          </div>
-        </section>
-      ) : null}
     </section>
   );
 }
@@ -460,7 +434,7 @@ function AdminControls({ controls }: { controls: ReturnType<typeof calculateAdmi
     <section className="command-panel admin-controls-panel wide" aria-label="Admin dashboard controls">
       <div className="panel-title-row">
         <div>
-          <h2>Admin Control Center</h2>
+          <h2>Management</h2>
           <span className="panel-subtle">Operational access, queue ownership, and venue readiness controls</span>
         </div>
         <span className="data-chip">{controls.activeServicePoints} live QR points</span>
@@ -483,15 +457,20 @@ function AdminControls({ controls }: { controls: ReturnType<typeof calculateAdmi
   );
 }
 
-function LaunchChecklist({ status }: { status: OnboardingStatus }) {
+const stepSectionMap: Record<string, string | undefined> = {
+  organization: "organization",
+  opening_hours: "venue-hours"
+};
+
+function LaunchChecklist({ status }: { status: LaunchStatus }) {
   const percent = Math.round((status.completedCount / status.totalCount) * 100);
 
   return (
-    <section className="command-panel launch-checklist wide" aria-label="Workspace launch checklist">
+    <section className="command-panel launch-checklist wide" aria-label="Organization launch checklist">
       <div className="launch-checklist-header">
         <div>
           <div className="eyebrow">Launch checklist</div>
-          <h2>Get this workspace ready for live guests</h2>
+          <h2>Get your organization ready for live guests</h2>
           <span className="panel-subtle">
             {status.completedCount} of {status.totalCount} setup steps complete
           </span>
@@ -507,6 +486,8 @@ function LaunchChecklist({ status }: { status: OnboardingStatus }) {
       <div className="launch-step-grid">
         {status.steps.map((step) => {
           const Icon = step.complete ? CheckCircle2 : Circle;
+          const section = stepSectionMap[step.id];
+          const href = section ? `?view=${step.actionView}&section=${section}` : `?view=${step.actionView}`;
           return (
             <article className={step.complete ? "launch-step complete" : "launch-step"} key={step.id}>
               <Icon size={18} />
@@ -514,7 +495,7 @@ function LaunchChecklist({ status }: { status: OnboardingStatus }) {
                 <strong>{step.label}</strong>
                 <span>{step.detail}</span>
               </div>
-              <a className="command-button" href={`?view=${step.actionView}`}>
+              <a className="command-button" href={href}>
                 {step.actionLabel}
                 <ArrowRight size={14} />
               </a>

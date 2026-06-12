@@ -17,10 +17,10 @@ type RequestWithCurrentUser = RequestWithAuth & {
     mustChangePassword: boolean;
     memberships: Array<{
       id: string;
-      workspaceId: string;
+      organizationId: string;
       venueId: string | null;
       role: AuthRole;
-      workspace: { id: string; name: string; slug: string };
+      organization: { id: string; name: string; slug: string };
       venue: { id: string; name: string; slug: string } | null;
     }>;
   };
@@ -58,15 +58,15 @@ export class SessionAuthGuard implements CanActivate {
     const profile = await this.prisma.staffProfile.findUnique({
       where: { authUserId: session.user.id },
       include: {
-        memberships: {
+        teamRoles: {
           where: { isActive: true },
-          include: { workspace: true, venue: true },
+          include: { organization: true, venue: true },
           orderBy: { createdAt: "asc" }
         }
       }
     });
 
-    const memberships = profile?.memberships.map((item) => ({ ...item, role: this.mapRole(item.role) })) ?? [];
+    const memberships = profile?.teamRoles.map((item) => ({ ...item, role: this.mapRole(item.role) })) ?? [];
     const membership = getPrimaryStaffRole(memberships);
 
     if (!profile || !membership) {
@@ -77,7 +77,7 @@ export class SessionAuthGuard implements CanActivate {
 
     request.auth = {
       staffProfileId: profile.id,
-      workspaceId: membership.workspaceId,
+      organizationId: membership.organizationId,
       venueId: membership.venueId ?? undefined,
       role: membership.role
     };
@@ -87,14 +87,7 @@ export class SessionAuthGuard implements CanActivate {
       email: session.user.email ?? profile.email ?? null,
       displayName: profile.displayName,
       mustChangePassword: session.user.mustChangePassword,
-      memberships: memberships.map((item) => ({
-        id: item.id,
-        workspaceId: item.workspaceId,
-        venueId: item.venueId,
-        role: item.role,
-        workspace: item.workspace,
-        venue: item.venue
-      }))
+      memberships
     };
 
     return true;

@@ -10,7 +10,7 @@ import { getSignupSlugError, normalizeSignupSlug } from "@/lib/auth/signup-flow"
 import { apiBaseUrl, createApiUnreachableError } from "@/lib/api/client";
 import { safeReplace } from "@/lib/navigation";
 
-type Step = "welcome" | "workspace" | "venue" | "creating";
+type Step = "welcome" | "organization" | "venue" | "creating";
 
 export default function SetupPage() {
   const router = useRouter();
@@ -22,8 +22,8 @@ export default function SetupPage() {
 
   // Form state
   const [displayName, setDisplayName] = useState("");
-  const [workspaceName, setWorkspaceName] = useState("");
-  const [workspaceSlug, setWorkspaceSlug] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
+  const [organizationSlug, setOrganizationSlug] = useState("");
   const [venueName, setVenueName] = useState("");
   const [venueSlug, setVenueSlug] = useState("");
   const [timezone, setTimezone] = useState("Europe/London");
@@ -43,7 +43,7 @@ export default function SetupPage() {
     }
 
     if (!session.user.email_confirmed_at && !session.user.confirmed_at) {
-      setError("Verify your email before completing workspace setup.");
+      setError("Verify your email before completing organization setup.");
       return;
     }
 
@@ -55,7 +55,7 @@ export default function SetupPage() {
     })
       .then((res) => {
         if (res.ok) {
-          // Already has a profile, redirect to the command workspace.
+          // Already has a profile, redirect to the command center.
           safeReplace(router, "/command");
         }
         // If 401/403, proceed with setup
@@ -93,27 +93,27 @@ export default function SetupPage() {
       return;
     }
 
-    setStep("workspace");
+    setStep("organization");
   }
 
   async function handleCreateWorkspace(event: FormEvent) {
     event.preventDefault();
     setError(null);
 
-    if (!workspaceName.trim()) {
-      setError("Please enter a workspace name.");
+    if (!organizationName.trim()) {
+      setError("Please enter an organization name.");
       return;
     }
 
-    const nextWorkspaceSlug = workspaceSlug || toSlug(workspaceName);
-    const slugError = getSignupSlugError("Workspace", nextWorkspaceSlug);
+    const nextOrganizationSlug = organizationSlug || toSlug(organizationName);
+    const slugError = getSignupSlugError("Organization", nextOrganizationSlug);
     if (slugError) {
       setError(slugError);
-      setWorkspaceSlug(nextWorkspaceSlug);
+      setOrganizationSlug(nextOrganizationSlug);
       return;
     }
 
-    setWorkspaceSlug(nextWorkspaceSlug);
+    setOrganizationSlug(nextOrganizationSlug);
     setStep("venue");
   }
 
@@ -126,12 +126,12 @@ export default function SetupPage() {
       return;
     }
 
-    const nextWorkspaceSlug = workspaceSlug || toSlug(workspaceName);
-    const workspaceSlugError = getSignupSlugError("Workspace", nextWorkspaceSlug);
-    if (workspaceSlugError) {
-      setError(workspaceSlugError);
-      setWorkspaceSlug(nextWorkspaceSlug);
-      setStep("workspace");
+    const nextOrganizationSlug = organizationSlug || toSlug(organizationName);
+    const organizationSlugError = getSignupSlugError("Organization", nextOrganizationSlug);
+    if (organizationSlugError) {
+      setError(organizationSlugError);
+      setOrganizationSlug(nextOrganizationSlug);
+      setStep("organization");
       return;
     }
 
@@ -143,7 +143,7 @@ export default function SetupPage() {
       return;
     }
 
-    setWorkspaceSlug(nextWorkspaceSlug);
+    setOrganizationSlug(nextOrganizationSlug);
     setVenueSlug(nextVenueSlug);
 
     if (!session || !authClient) {
@@ -167,8 +167,8 @@ export default function SetupPage() {
           body: JSON.stringify({
             email: session.user.email,
             displayName: displayName.trim(),
-            workspaceName: workspaceName.trim(),
-            workspaceSlug: nextWorkspaceSlug,
+            organizationName: organizationName.trim(),
+            organizationSlug: nextOrganizationSlug,
             venueName: venueName.trim(),
             venueSlug: nextVenueSlug,
             timezone
@@ -206,13 +206,13 @@ export default function SetupPage() {
                 <Building2 size={24} />
               </span>
               <h1>Welcome to Madupe</h1>
-              <p>Let&apos;s set up your workspace. You&apos;ll be the first owner.</p>
+              <p>Let&apos;s set up your organization. You&apos;ll be the first owner.</p>
             </div>
 
             <form className="auth-form" onSubmit={handleStartWorkspace}>
               <label>
                 <span>Your name</span>
-                <small className="field-hint">Shown to your team as the first owner of the workspace.</small>
+                <small className="field-hint">Shown to your team as the first owner of the organization.</small>
                 <span className="input-shell">
                   <User size={16} />
                   <input
@@ -236,49 +236,49 @@ export default function SetupPage() {
           </>
         )}
 
-        {step === "workspace" && (
+        {step === "organization" && (
           <>
             <div className="auth-hero compact">
               <span className="status-orbit">
                 <Users size={24} />
               </span>
-              <h1>Create your workspace</h1>
-              <p>A workspace is your organisation or group. All venues and staff live inside it.</p>
+              <h1>Create your organization</h1>
+              <p>An organization is your group. All venues and staff live inside it.</p>
             </div>
 
             <form className="auth-form" onSubmit={handleCreateWorkspace}>
               <label>
-                <span>Workspace name</span>
-                <small className="field-hint">The business or organisation that owns the venues.</small>
+                <span>Organization name</span>
+                <small className="field-hint">The business or organization that owns the venues.</small>
                 <span className="input-shell">
                   <Building2 size={16} />
                   <input
                     onChange={(e) => {
-                      setWorkspaceName(e.target.value);
-                      if (!workspaceSlug || workspaceSlug === toSlug(workspaceName)) {
-                        setWorkspaceSlug(toSlug(e.target.value));
+                      setOrganizationName(e.target.value);
+                      if (!organizationSlug || organizationSlug === toSlug(organizationName)) {
+                        setOrganizationSlug(toSlug(e.target.value));
                       }
                     }}
                     placeholder="e.g. ACME Group"
                     required
                     type="text"
-                    value={workspaceName}
+                    value={organizationName}
                   />
                 </span>
               </label>
 
               <label>
-                <span>Workspace URL slug</span>
-                <small className="field-hint">A unique lowercase identifier for the workspace, like lost-mary.</small>
+                <span>Organization URL slug</span>
+                <small className="field-hint">A unique lowercase identifier for the organization, like lost-mary.</small>
                 <span className="input-shell">
                   <Hash size={16} />
                   <input
-                    onBlur={() => setWorkspaceSlug((current) => normalizeSignupSlug(current))}
-                    onChange={(e) => setWorkspaceSlug(normalizeSignupSlug(e.target.value))}
+                    onBlur={() => setOrganizationSlug((current) => normalizeSignupSlug(current))}
+                    onChange={(e) => setOrganizationSlug(normalizeSignupSlug(e.target.value))}
                     placeholder="e.g. acme-group"
                     required
                     type="text"
-                    value={workspaceSlug}
+                    value={organizationSlug}
                   />
                 </span>
               </label>
@@ -367,7 +367,7 @@ export default function SetupPage() {
               {error ? <div className="form-error">{error}</div> : null}
 
               <div className="form-actions">
-                <button className="command-button" disabled={loading} onClick={() => setStep("workspace")} type="button">
+                <button className="command-button" disabled={loading} onClick={() => setStep("organization")} type="button">
                   Back
                 </button>
                 <button className="command-button primary" disabled={loading} type="submit">
@@ -391,8 +391,8 @@ export default function SetupPage() {
         {step === "creating" && (
           <div className="setup-creating">
             <Loader2 size={32} className="spin" />
-            <h2>Setting up your workspace</h2>
-            <p>Creating workspace, your profile, and venue...</p>
+            <h2>Setting up your organization</h2>
+            <p>Creating organization, your profile, and venue...</p>
           </div>
         )}
       </section>

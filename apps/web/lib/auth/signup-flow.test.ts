@@ -9,7 +9,7 @@ import {
 } from "./signup-flow";
 
 describe("signup flow", () => {
-  it("sends signed-in new users to workspace setup", () => {
+  it("sends signed-in new users to organization setup", () => {
     assert.deepEqual(getSignupCompletionAction({ hasSession: true }), {
       kind: "setup"
     });
@@ -21,14 +21,14 @@ describe("signup flow", () => {
     });
   });
 
-  it("normalizes workspace and venue slugs", () => {
+  it("normalizes organization and venue slugs", () => {
     assert.equal(normalizeSignupSlug(" The Grand Lounge!! "), "the-grand-lounge");
     assert.equal(normalizeSignupSlug("Tesco__Oxford---Street"), "tesco-oxford-street");
   });
 
   it("validates setup slugs before submission", () => {
-    assert.equal(getSignupSlugError("Workspace", "lost-mary"), null);
-    assert.equal(getSignupSlugError("Workspace", ""), "Workspace slug is required.");
+    assert.equal(getSignupSlugError("Organization", "lost-mary"), null);
+    assert.equal(getSignupSlugError("Organization", ""), "Organization slug is required.");
     assert.equal(getSignupSlugError("Venue", "ab"), "Venue slug must be at least 3 characters.");
     assert.equal(
       getSignupSlugError("Venue", "bad--slug"),

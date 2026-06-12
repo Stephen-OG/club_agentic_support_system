@@ -49,7 +49,7 @@ export function getDashboardExperience(user: CommandUser): DashboardExperience {
       volumeTitle: "Venue Demand Heatmap",
       kpiLabels: {
         health: "Venue health",
-        risk: "Venue SLA risk",
+        risk: "Venue response risk",
         speed: "Venue acknowledgement",
         satisfaction: "Venue satisfaction"
       },
@@ -67,22 +67,22 @@ export function getDashboardExperience(user: CommandUser): DashboardExperience {
     return {
       mode: "owner",
       eyebrow: "Owner intelligence",
-      title: "Workspace Dashboard",
-      scopeLabel: getPrimaryMembership(user)?.workspace.name || "Workspace",
+      title: "Organization Dashboard",
+      scopeLabel: getPrimaryMembership(user)?.organization.name || "Organization",
       scopeVenueIds: null,
       showLaunchChecklist: true,
       actionHeading: "Business Action Required",
-      actionEmptyCopy: "The workspace is steady. No urgent owner actions detected from current request data.",
-      volumeTitle: "Workspace Demand Heatmap",
+      actionEmptyCopy: "Your organization is steady. No urgent owner actions detected from current request data.",
+      volumeTitle: "Organization Demand Heatmap",
       kpiLabels: {
-        health: "Workspace health",
-        risk: "Portfolio SLA risk",
-        speed: "Workspace acknowledgement",
+        health: "Organization health",
+        risk: "Portfolio response risk",
+        speed: "Organization acknowledgement",
         satisfaction: "Guest satisfaction"
       },
       panels: {
         adminControls: false,
-        aiTriageQuality: true,
+        aiTriageQuality: false,
         servicePointHotspots: true,
         staffWorkload: true,
         venuePerformance: true
@@ -102,16 +102,16 @@ export function getDashboardExperience(user: CommandUser): DashboardExperience {
     volumeTitle: "Request Volume Heatmap",
     kpiLabels: {
       health: "Operational health",
-      risk: "SLA risk forecast",
+      risk: "Response risk forecast",
       speed: "Avg acknowledgement",
       satisfaction: "Guest satisfaction"
     },
-    panels: {
-      adminControls: true,
-      aiTriageQuality: true,
-      servicePointHotspots: true,
-      staffWorkload: true,
-      venuePerformance: true
-    }
+      panels: {
+        adminControls: true,
+        aiTriageQuality: false,
+        servicePointHotspots: true,
+        staffWorkload: true,
+        venuePerformance: true
+      }
   };
 }

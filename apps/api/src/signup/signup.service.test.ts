@@ -7,8 +7,8 @@ const setupInput = {
   email: "OWNER@example.com",
   venueName: "Main Venue",
   venueSlug: "main-venue",
-  workspaceName: "Madupe Group",
-  workspaceSlug: "madupe-group"
+  organizationName: "Madupe Group",
+  organizationSlug: "madupe-group"
 };
 
 describe("SetupService", () => {
@@ -30,23 +30,23 @@ describe("SetupService", () => {
         },
         $transaction: async (operation: any) =>
           operation({
-            workspace: {
-              create: async ({ data }: any) => ({ id: "workspace-1", ...data }),
-              findUnique: async () => null
-            },
-            staffProfile: {
-              create: async ({ data }: any) => ({ id: "staff-1", ...data })
-            },
-            venue: {
-              create: async ({ data }: any) => ({ id: "venue-1", ...data }),
-              findFirst: async () => null
-            },
-            staffMembership: {
-              create: async ({ data }: any) => {
-                membershipData = data;
-                return { id: "membership-1", ...data };
-              }
-            }
+        organization: {
+          create: async ({ data }: any) => ({ id: "organization-1", ...data }),
+          findUnique: async () => null
+        },
+        staffProfile: {
+          create: async ({ data }: any) => ({ id: "staff-1", ...data })
+        },
+        venue: {
+          create: async ({ data }: any) => ({ id: "venue-1", ...data }),
+          findFirst: async () => null
+        },
+        teamRole: {
+          create: async ({ data }: any) => {
+            membershipData = data;
+            return { id: "membership-1", ...data };
+          }
+        }
           })
       } as any,
       {
@@ -60,7 +60,7 @@ describe("SetupService", () => {
 
     assert.equal(result.venueId, "venue-1");
     assert.deepEqual(membershipData, {
-      workspaceId: "workspace-1",
+      organizationId: "organization-1",
       venueId: "venue-1",
       staffProfileId: "staff-1",
       role: "OWNER"
@@ -77,7 +77,7 @@ describe("SetupService", () => {
         staffProfile: {
           findUnique: async () => null
         },
-        workspace: {
+        organization: {
           findUnique: async () => null
         },
         venue: {

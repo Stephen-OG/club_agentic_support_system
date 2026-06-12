@@ -73,15 +73,17 @@ enum AuthEmailTokenType {
   STAFF_INVITATION   @map("staff_invitation")
 }
 
-model Workspace {
-  id               String            @id @default(uuid()) @db.Uuid
-  name             String
-  slug             String            @unique
-  venues           Venue[]
-  staffMemberships StaffMembership[]
-  billingAccount   BillingAccount?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+model Organization {
+  id             String          @id @default(uuid()) @db.Uuid
+  name           String
+  slug           String          @unique
+  venues         Venue[]
+  teamRoles      TeamRole[]
+  billingAccount BillingAccount?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@map("Workspace")
 }
 
 model AuthUser {
@@ -131,15 +133,15 @@ model AuthSession {
 
 model Venue {
   id                     String                 @id @default(uuid()) @db.Uuid
-  workspaceId            String                 @db.Uuid
-  workspace              Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organizationId         String                 @map("workspaceId") @db.Uuid
+  organization           Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name                   String
   slug                   String
   timezone               String                 @default("Europe/London")
   locations              VenueLocation[]
-  openingHours           VenueOpeningHour[]
-  servicePoints          ServicePoint[]
-  staffMemberships       StaffMembership[]
+  hours                  VenueHours[]
+  qrPoints               QrPoint[]
+  teamRoles              TeamRole[]
   conversations          Conversation[]
   messages               Message[]
   supportRequests        SupportRequest[]
@@ -155,11 +157,11 @@ model Venue {
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
 
-  @@unique([workspaceId, slug])
-  @@index([workspaceId])
+  @@unique([organizationId, slug])
+  @@index([organizationId])
 }
 
-model VenueOpeningHour {
+model VenueHours {
   id        String   @id @default(uuid()) @db.Uuid
   venueId   String   @db.Uuid
   venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
@@ -172,6 +174,7 @@ model VenueOpeningHour {
 
   @@unique([venueId, dayOfWeek])
   @@index([venueId])
+  @@map("VenueOpeningHour")
 }
 
 model VenueLocation {
@@ -180,7 +183,7 @@ model VenueLocation {
   venue         Venue          @relation(fields: [venueId], references: [id], onDelete: Cascade)
   name          String
   zone          String?
-  servicePoints ServicePoint[]
+  qrPoints      QrPoint[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -188,7 +191,7 @@ model VenueLocation {
   @@index([venueId])
 }
 
-model ServicePoint {
+model QrPoint {
   id              String           @id @default(uuid()) @db.Uuid
   venueId         String           @db.Uuid
   venue           Venue            @relation(fields: [venueId], references: [id], onDelete: Cascade)
@@ -207,6 +210,7 @@ model ServicePoint {
   @@unique([venueId, label])
   @@index([venueId, isActive])
   @@index([locationId])
+  @@map("ServicePoint")
 }
 
 model StaffProfile {
@@ -215,7 +219,7 @@ model StaffProfile {
   authUser                   AuthUser?           @relation(fields: [authUserId], references: [id], onDelete: SetNull)
   email                      String?             @unique
   displayName                String
-  memberships                StaffMembership[]
+  teamRoles                  TeamRole[]
   assignedRequests           SupportRequest[]    @relation("AssignedRequests")
   requestAssignments         RequestAssignment[] @relation("AssignmentStaff")
   assignedRequestAssignments RequestAssignment[] @relation("AssignmentActor")
@@ -225,10 +229,10 @@ model StaffProfile {
   updatedAt                  DateTime            @updatedAt
 }
 
-model StaffMembership {
+model TeamRole {
   id             String       @id @default(uuid()) @db.Uuid
-  workspaceId    String       @db.Uuid
-  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organizationId String       @map("workspaceId") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   venueId        String?      @db.Uuid
   venue          Venue?       @relation(fields: [venueId], references: [id], onDelete: Cascade)
   staffProfileId String       @db.Uuid
@@ -238,18 +242,19 @@ model StaffMembership {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  @@unique([workspaceId, staffProfileId, venueId])
-  @@index([workspaceId, role, isActive])
+  @@unique([organizationId, staffProfileId, venueId])
+  @@index([organizationId, role, isActive])
   @@index([venueId, role, isActive])
   @@index([staffProfileId, isActive])
+  @@map("StaffMembership")
 }
 
 model Conversation {
   id             String           @id @default(uuid()) @db.Uuid
   venueId        String           @db.Uuid
   venue          Venue            @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  servicePointId String           @db.Uuid
-  servicePoint   ServicePoint     @relation(fields: [servicePointId], references: [id], onDelete: Cascade)
+  qrPointId      String           @map("servicePointId") @db.Uuid
+  qrPoint        QrPoint          @relation(fields: [qrPointId], references: [id], onDelete: Cascade)
   guestSessionId String?
   guestLocationLabel String?
   guestLocationSource String?
@@ -261,15 +266,15 @@ model Conversation {
   updatedAt      DateTime         @updatedAt
 
   @@index([venueId, updatedAt])
-  @@index([servicePointId, updatedAt])
+  @@index([qrPointId, updatedAt])
 }
 
 model Message {
   id             String          @id @default(uuid()) @db.Uuid
   venueId        String          @db.Uuid
   venue          Venue           @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  servicePointId String          @db.Uuid
-  servicePoint   ServicePoint    @relation(fields: [servicePointId], references: [id], onDelete: Cascade)
+  qrPointId      String          @map("servicePointId") @db.Uuid
+  qrPoint        QrPoint         @relation(fields: [qrPointId], references: [id], onDelete: Cascade)
   conversationId String          @db.Uuid
   conversation   Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   requestId      String?         @db.Uuid
@@ -280,7 +285,7 @@ model Message {
   createdAt      DateTime        @default(now())
 
   @@index([venueId, createdAt])
-  @@index([servicePointId, createdAt])
+  @@index([qrPointId, createdAt])
   @@index([conversationId, createdAt])
   @@index([requestId, createdAt])
 }
@@ -289,8 +294,8 @@ model SupportRequest {
   id                    String              @id @default(uuid()) @db.Uuid
   venueId               String              @db.Uuid
   venue                 Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  servicePointId        String              @db.Uuid
-  servicePoint          ServicePoint        @relation(fields: [servicePointId], references: [id], onDelete: Cascade)
+  qrPointId             String              @map("servicePointId") @db.Uuid
+  qrPoint               QrPoint             @relation(fields: [qrPointId], references: [id], onDelete: Cascade)
   conversationId        String              @db.Uuid
   conversation          Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   assignedToId          String?             @db.Uuid
@@ -321,7 +326,7 @@ model SupportRequest {
   @@index([venueId, createdAt])
   @@index([assignedToId, status])
   @@index([conversationId, createdAt])
-  @@index([servicePointId, createdAt])
+  @@index([qrPointId, createdAt])
 }
 
 model RequestAssignment {
@@ -489,12 +494,12 @@ model RateLimitEvent {
 }
 
 model BillingAccount {
-  id                 String    @id @default(uuid()) @db.Uuid
-  workspaceId        String    @unique @db.Uuid
-  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  stripeCustomerId   String?   @unique
+  id                 String        @id @default(uuid()) @db.Uuid
+  organizationId     String        @unique @map("workspaceId") @db.Uuid
+  organization       Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stripeCustomerId   String?       @unique
   stripeSubscription String?
-  status             String    @default("trialing")
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  status             String        @default("trialing")
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 }

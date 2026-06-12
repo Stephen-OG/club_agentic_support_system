@@ -22,7 +22,7 @@ export const emailTemplateDefinitions: EmailTemplateDefinition[] = [
     key: "email_verification",
     name: "Email Verification",
     subject: ({ appName }) => `Verify your ${appName} email`,
-    preheader: "Use this one-time code to finish setting up your workspace.",
+    preheader: "Use this one-time code to finish setting up your organization.",
     ctaLabel: "Verification code",
     body: ({ appName, displayName, verificationCode }) => [
       `Hi ${displayName},`,

@@ -3,34 +3,34 @@ import { describe, it } from "node:test";
 import { ForbiddenException } from "@nestjs/common";
 import { StaffRole } from "@prisma/client";
 import type { AuthContext } from "../auth/auth-context";
-import { OnboardingService } from "./onboarding.service";
+import { LaunchService } from "./launch.service";
 
 const ownerAuth: AuthContext = {
   staffProfileId: "staff_owner",
-  workspaceId: "workspace_1",
+  organizationId: "organization_1",
   role: "owner"
 };
 
-describe("OnboardingService", () => {
-  it("derives launch checklist status from existing workspace data", async () => {
+describe("LaunchService", () => {
+  it("derives launch checklist status from existing organization data", async () => {
     const calls: Array<{ model: string; args: unknown }> = [];
-    const service = new OnboardingService({
+    const service = new LaunchService({
       venue: {
         count: async (args: unknown) => {
           calls.push({ model: "venue.count", args });
-          if ((args as any).where.openingHours) return 1;
+          if ((args as any).where.hours) return 1;
           return 1;
         }
       },
-      servicePoint: {
+      qrPoint: {
         count: async (args: unknown) => {
-          calls.push({ model: "servicePoint.count", args });
+          calls.push({ model: "qrPoint.count", args });
           return 2;
         }
       },
-      staffMembership: {
+      teamRole: {
         count: async (args: unknown) => {
-          calls.push({ model: "staffMembership.count", args });
+          calls.push({ model: "teamRole.count", args });
           if ((args as any).where.role) return 1;
           return 3;
         }
@@ -51,7 +51,7 @@ describe("OnboardingService", () => {
     assert.deepEqual(
       result.steps.map((step) => [step.id, step.complete, step.actionView]),
       [
-        ["workspace", true, "account"],
+        ["organization", true, "account"],
         ["venue", true, "venues"],
         ["opening_hours", true, "account"],
         ["qr_points", true, "venues"],
@@ -61,29 +61,29 @@ describe("OnboardingService", () => {
     );
     assert.deepEqual(calls[0], {
       model: "venue.count",
-      args: { where: { workspaceId: ownerAuth.workspaceId } }
+      args: { where: { organizationId: ownerAuth.organizationId } }
     });
     assert.deepEqual(calls[3], {
-      model: "staffMembership.count",
-      args: { where: { workspaceId: ownerAuth.workspaceId, isActive: true } }
+      model: "teamRole.count",
+      args: { where: { organizationId: ownerAuth.organizationId, isActive: true } }
     });
   });
 
   it("requires owner or admin access", async () => {
-    const service = new OnboardingService({} as never);
+    const service = new LaunchService({} as never);
 
     await assert.rejects(() => service.getStatus({ ...ownerAuth, role: "manager" }), ForbiddenException);
   });
 
   it("requires at least one operational staff role before marking team setup complete", async () => {
-    const service = new OnboardingService({
+    const service = new LaunchService({
       venue: {
         count: async () => 1
       },
-      servicePoint: {
+      qrPoint: {
         count: async () => 1
       },
-      staffMembership: {
+      teamRole: {
         count: async (args: unknown) => ((args as any).where.role?.in?.includes(StaffRole.STAFF) ? 0 : 2)
       },
       supportRequest: {

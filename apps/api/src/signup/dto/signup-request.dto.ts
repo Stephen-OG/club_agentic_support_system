@@ -11,15 +11,15 @@ export class SetupRequestDto {
   @MinLength(1)
   displayName!: string;
 
-  @ApiProperty({ description: "Workspace name (e.g. company or group name)" })
+  @ApiProperty({ description: "Organization name (e.g. company or group name)" })
   @IsString()
   @MinLength(1)
-  workspaceName!: string;
+  organizationName!: string;
 
-  @ApiProperty({ description: "Workspace slug (URL-friendly identifier)" })
+  @ApiProperty({ description: "Organization slug (URL-friendly identifier)" })
   @IsString()
   @MinLength(1)
-  workspaceSlug!: string;
+  organizationSlug!: string;
 
   @ApiProperty({ description: "First venue name" })
   @IsString()

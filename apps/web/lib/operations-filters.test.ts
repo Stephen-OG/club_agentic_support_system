@@ -16,7 +16,7 @@ const requests = [
     priority: "LOW",
     createdAt: "2026-06-03T09:00:00.000Z",
     satisfactionRating: null,
-    servicePoint: { label: "Table 1" }
+    qrPoint: { label: "Table 1" }
   },
   {
     id: "request-2",
@@ -25,7 +25,7 @@ const requests = [
     priority: "HIGH",
     createdAt: "2026-06-02T10:00:00.000Z",
     satisfactionRating: 2,
-    servicePoint: { label: "Table 5" }
+    qrPoint: { label: "Table 5" }
   },
   {
     id: "request-3",
@@ -34,7 +34,7 @@ const requests = [
     priority: "URGENT",
     createdAt: "2026-05-27T08:00:00.000Z",
     satisfactionRating: 5,
-    servicePoint: { label: "Bar" }
+    qrPoint: { label: "Bar" }
   },
   {
     id: "request-4",
@@ -43,7 +43,7 @@ const requests = [
     priority: "NORMAL",
     createdAt: "2026-06-01T12:00:00.000Z",
     satisfactionRating: 4,
-    servicePoint: { label: "Table 12" }
+    qrPoint: { label: "Table 12" }
   }
 ] as const;
 
@@ -106,7 +106,7 @@ describe("operations filters", () => {
           createdAt: "2026-06-02T09:00:00.000Z",
           completedAt: "2026-06-02T10:00:00.000Z",
           satisfactionRating: 5,
-          servicePoint: { label: "Table 1" }
+          qrPoint: { label: "Table 1" }
         },
         {
           id: "request-2",
@@ -116,7 +116,7 @@ describe("operations filters", () => {
           createdAt: "2026-06-02T09:05:00.000Z",
           completedAt: "2026-06-02T10:20:00.000Z",
           satisfactionRating: 4,
-          servicePoint: { label: "Table 2" }
+          qrPoint: { label: "Table 2" }
         }
       ],
       defaultOperationsFilters,
@@ -140,7 +140,7 @@ describe("operations filters", () => {
           priority: "NORMAL",
           createdAt: "2026-06-02T09:00:00.000Z",
           satisfactionRating: null,
-          servicePoint: { label: "Table 1" }
+          qrPoint: { label: "Table 1" }
         },
         {
           id: "request-2",
@@ -149,7 +149,7 @@ describe("operations filters", () => {
           priority: "URGENT",
           createdAt: "2026-06-02T09:05:00.000Z",
           satisfactionRating: null,
-          servicePoint: { label: "Table 2" }
+          qrPoint: { label: "Table 2" }
         }
       ],
       defaultOperationsFilters,

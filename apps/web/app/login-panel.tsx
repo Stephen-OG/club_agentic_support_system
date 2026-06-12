@@ -348,7 +348,7 @@ export function LoginPanel() {
                 ? resetToken
                   ? "Choose a new password for your account."
                   : `Enter the reset code sent to ${passwordResetEmail || "your email"} and choose a new password.`
-                : "Create your owner login first. We will email you a verification code before workspace setup."}
+                : "Create your owner login first. We will email you a verification code before organization setup."}
             </p>
           )}
         </div>

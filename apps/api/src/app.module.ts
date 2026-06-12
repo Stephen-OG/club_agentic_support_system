@@ -14,7 +14,7 @@ import { IntegrationsModule } from "./integrations/integrations.module";
 import { JobsModule } from "./jobs/jobs.module";
 import { LoggerModule } from "./common/logger/logger.module";
 import { NotificationsModule } from "./notifications/notifications.module";
-import { OnboardingModule } from "./onboarding/onboarding.module";
+import { LaunchModule } from "./launch/launch.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { RequestsModule } from "./requests/requests.module";
 import { getRateLimitConfig } from "./security/security-config";
@@ -44,7 +44,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     RealtimeModule,
     RequestsModule,
     TriageModule,
-    OnboardingModule,
+    LaunchModule,
     NotificationsModule,
     WebhooksModule,
     IntegrationsModule,

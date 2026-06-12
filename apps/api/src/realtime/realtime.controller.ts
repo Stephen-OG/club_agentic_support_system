@@ -37,14 +37,14 @@ export class RealtimeController {
   async streamVenueEvents(@CurrentAuth() auth: AuthContext, @Param("venueId") venueId: string): Promise<Observable<SseMessage>> {
     const venue = await this.prisma.venue.findFirst({
       where: { id: venueId },
-      select: { id: true, workspaceId: true }
+      select: { id: true, organizationId: true }
     });
 
     if (!venue) {
       throw new NotFoundException("Venue not found");
     }
 
-    this.venueAccess.assertCanReadVenue(auth, { workspaceId: venue.workspaceId, venueId: venue.id });
+    this.venueAccess.assertCanReadVenue(auth, { organizationId: venue.organizationId, venueId: venue.id });
 
     return this.events.streamForVenue(venueId).pipe(timeout(30 * 60 * 1000), map(toSseMessage));
   }
@@ -59,7 +59,7 @@ export class RealtimeController {
     const conversation = await this.prisma.conversation.findFirst({
       where: {
         id: conversationId,
-        servicePoint: {
+        qrPoint: {
           qrToken: token,
           isActive: true
         }

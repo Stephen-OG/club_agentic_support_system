@@ -3,10 +3,10 @@ import { describe, it } from "node:test";
 import { ForbiddenException } from "@nestjs/common";
 import { StaffService } from "./staff.service";
 
-const adminAuth = { staffProfileId: "admin-1", workspaceId: "workspace-1", role: "admin" as const };
-const staffAuth = { staffProfileId: "staff-1", workspaceId: "workspace-1", venueId: "venue-1", role: "staff" as const };
-const ownerAuth = { staffProfileId: "owner-1", workspaceId: "workspace-1", venueId: "venue-1", role: "owner" as const };
-const managerAuth = { staffProfileId: "manager-1", workspaceId: "workspace-1", venueId: "venue-1", role: "manager" as const };
+const adminAuth = { staffProfileId: "admin-1", organizationId: "organization-1", role: "admin" as const };
+const staffAuth = { staffProfileId: "staff-1", organizationId: "organization-1", venueId: "venue-1", role: "staff" as const };
+const ownerAuth = { staffProfileId: "owner-1", organizationId: "organization-1", venueId: "venue-1", role: "owner" as const };
+const managerAuth = { staffProfileId: "manager-1", organizationId: "organization-1", venueId: "venue-1", role: "manager" as const };
 
 describe("StaffService", () => {
   it("creates an app auth user, staff profile, and membership for admins", async () => {
@@ -16,14 +16,14 @@ describe("StaffService", () => {
           findUnique: async () => null
         },
         venue: {
-          findFirst: async () => ({ id: "venue-1", workspaceId: "workspace-1" })
+          findFirst: async () => ({ id: "venue-1", organizationId: "organization-1" })
         },
         $transaction: async (operation: any) =>
           operation({
             staffProfile: {
               create: async ({ data }: any) => ({ id: "profile-1", ...data })
             },
-            staffMembership: {
+            teamRole: {
               create: async ({ data }: any) => ({ id: "membership-1", ...data })
             }
           })
@@ -54,14 +54,14 @@ describe("StaffService", () => {
           findUnique: async () => null
         },
         venue: {
-          findFirst: async () => ({ id: "venue-1", workspaceId: "workspace-1" })
+          findFirst: async () => ({ id: "venue-1", organizationId: "workspace-1" })
         },
         $transaction: async (operation: any) =>
           operation({
             staffProfile: {
               create: async ({ data }: any) => ({ id: "profile-1", ...data })
             },
-            staffMembership: {
+            teamRole: {
               create: async ({ data }: any) => ({ id: "membership-1", ...data })
             }
           })
@@ -100,14 +100,14 @@ describe("StaffService", () => {
           findUnique: async () => null
         },
         venue: {
-          findFirst: async () => ({ id: "venue-1", workspaceId: "workspace-1" })
+          findFirst: async () => ({ id: "venue-1", organizationId: "organization-1" })
         },
         $transaction: async (operation: any) =>
           operation({
             staffProfile: {
               create: async ({ data }: any) => ({ id: "profile-owner", ...data })
             },
-            staffMembership: {
+            teamRole: {
               create: async ({ data }: any) => {
                 membershipData = data;
                 return { id: "membership-owner", ...data };
@@ -139,14 +139,14 @@ describe("StaffService", () => {
           findUnique: async () => null
         },
         venue: {
-          findFirst: async () => ({ id: "venue-1", workspaceId: "workspace-1" })
+          findFirst: async () => ({ id: "venue-1", organizationId: "organization-1" })
         },
         $transaction: async (operation: any) =>
           operation({
             staffProfile: {
               create: async ({ data }: any) => ({ id: `profile-${createdMemberships.length + 1}`, ...data })
             },
-            staffMembership: {
+            teamRole: {
               create: async ({ data }: any) => {
                 createdMemberships.push(data);
                 return { id: `membership-${createdMemberships.length}`, ...data };
@@ -180,8 +180,8 @@ describe("StaffService", () => {
     );
   });
 
-  it("allows workspace owners without a venue membership to manage venue-scoped staff", async () => {
-    const workspaceOwnerAuth = { staffProfileId: "owner-workspace", workspaceId: "workspace-1", role: "owner" as const };
+  it("allows organization owners without a venue membership to manage venue-scoped staff", async () => {
+    const organizationOwnerAuth = { staffProfileId: "owner-organization", organizationId: "organization-1", role: "owner" as const };
     const createdMemberships: any[] = [];
     const service = new StaffService(
       {
@@ -189,14 +189,14 @@ describe("StaffService", () => {
           findUnique: async () => null
         },
         venue: {
-          findFirst: async () => ({ id: "venue-1", workspaceId: "workspace-1" })
+          findFirst: async () => ({ id: "venue-1", organizationId: "organization-1" })
         },
         $transaction: async (operation: any) =>
           operation({
             staffProfile: {
               create: async ({ data }: any) => ({ id: `profile-${createdMemberships.length + 1}`, ...data })
             },
-            staffMembership: {
+            teamRole: {
               create: async ({ data }: any) => {
                 createdMemberships.push(data);
                 return { id: `membership-${createdMemberships.length}`, ...data };
@@ -209,7 +209,7 @@ describe("StaffService", () => {
       } as any
     );
 
-    await service.createStaffUser(workspaceOwnerAuth, {
+    await service.createStaffUser(organizationOwnerAuth, {
       email: "workspace-owner-created@example.com",
       displayName: "Workspace Owner Created",
       role: "staff",
@@ -320,7 +320,7 @@ describe("StaffService", () => {
           findUnique: async () => null
         },
         venue: {
-          findFirst: async () => ({ id: "venue-1", workspaceId: "workspace-1" })
+          findFirst: async () => ({ id: "venue-1", organizationId: "organization-1" })
         },
         $transaction: async () => {
           throw new Error("database write failed");

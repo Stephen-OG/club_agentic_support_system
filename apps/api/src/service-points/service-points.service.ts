@@ -39,7 +39,7 @@ const triageLocalCacheTtlMs = 60_000;
 const publicConversationMessageSelect = {
   id: true,
   venueId: true,
-  servicePointId: true,
+  qrPointId: true,
   conversationId: true,
   requestId: true,
   sender: true,
@@ -91,8 +91,8 @@ export class ServicePointsService {
     return `venue_support_${venueSlug}`;
   }
 
-  private async findOrCreateVenueSupportServicePoint(venue: { id: string; slug: string }) {
-    return this.prisma.servicePoint.upsert({
+  private async findOrCreateVenueSupportQrPoint(venue: { id: string; slug: string }) {
+    return this.prisma.qrPoint.upsert({
       where: {
         venueId_label: {
           venueId: venue.id,
@@ -129,7 +129,7 @@ export class ServicePointsService {
     const venue = await this.prisma.venue.findFirst({
       where: { slug: venueSlug },
       include: {
-        openingHours: {
+        hours: {
           orderBy: {
             dayOfWeek: "asc"
           }
@@ -143,7 +143,7 @@ export class ServicePointsService {
 
     const result = {
       chatAvailability: this.publicChatAvailability(venue),
-      openingHours: venue.openingHours,
+      openingHours: venue.hours,
       venue,
       quickActions: [
         "drink",
@@ -174,7 +174,7 @@ export class ServicePointsService {
     const inFlight = this.pendingCacheFills.get(cacheKey);
     if (inFlight) return inFlight;
 
-    const promise = this.fetchServicePointIntake(token, cacheKey);
+    const promise = this.fetchQrPointIntake(token, cacheKey);
     this.pendingCacheFills.set(cacheKey, promise);
     try {
       return await promise;
@@ -183,8 +183,8 @@ export class ServicePointsService {
     }
   }
 
-  private async fetchServicePointIntake(token: string, cacheKey: string) {
-    const servicePoint = await this.prisma.servicePoint.findFirst({
+  private async fetchQrPointIntake(token: string, cacheKey: string) {
+    const qrPoint = await this.prisma.qrPoint.findFirst({
       where: {
         isActive: true,
         qrToken: token
@@ -192,7 +192,7 @@ export class ServicePointsService {
       include: {
         venue: {
           include: {
-            openingHours: {
+            hours: {
               orderBy: {
                 dayOfWeek: "asc"
               }
@@ -202,14 +202,14 @@ export class ServicePointsService {
       }
     });
 
-    if (!servicePoint) {
-      throw new NotFoundException("Service point not found");
+    if (!qrPoint) {
+      throw new NotFoundException("QR point not found");
     }
 
     const result = {
-      chatAvailability: this.publicChatAvailability((servicePoint as any).venue),
-      servicePoint,
-      venue: this.publicVenueSummary((servicePoint as any).venue)
+      chatAvailability: this.publicChatAvailability((qrPoint as any).venue),
+      servicePoint: qrPoint,
+      venue: this.publicVenueSummary((qrPoint as any).venue)
     };
 
     await this.cache.set(cacheKey, result, 30);
@@ -217,15 +217,15 @@ export class ServicePointsService {
   }
 
   async createVenue(auth: AuthContext, input: CreateVenueDto) {
-    this.venueAccess.assertCanManageWorkspace(auth, auth.workspaceId);
+    this.venueAccess.assertCanManageOrganization(auth, auth.organizationId);
     const name = input.name.trim();
 
     return this.prisma.venue.create({
       data: {
-        openingHours: {
+        hours: {
           create: defaultVenueOpeningHours()
         },
-        workspaceId: auth.workspaceId,
+        organizationId: auth.organizationId,
         name,
         slug: input.slug,
         timezone: input.timezone || "Europe/London"
@@ -234,13 +234,13 @@ export class ServicePointsService {
   }
 
   async listVenues(auth: AuthContext) {
-    const canReadWorkspace = auth.role === "admin" || auth.role === "owner";
-    const where = canReadWorkspace
+    const canReadOrganization = auth.role === "admin" || auth.role === "owner";
+    const where = canReadOrganization
       ? {
-          workspaceId: auth.workspaceId
+          organizationId: auth.organizationId
         }
       : {
-          workspaceId: auth.workspaceId,
+          organizationId: auth.organizationId,
           id: auth.venueId ?? "00000000-0000-0000-0000-000000000000"
         };
 
@@ -252,12 +252,12 @@ export class ServicePointsService {
             name: "asc"
           }
         },
-        openingHours: {
+        hours: {
           orderBy: {
             dayOfWeek: "asc"
           }
         },
-        servicePoints: {
+        qrPoints: {
           where: {
             isActive: true
           },
@@ -276,7 +276,7 @@ export class ServicePointsService {
     const venue = await this.prisma.venue.findFirst({
       where: {
         id: venueId,
-        workspaceId: auth.workspaceId
+        organizationId: auth.organizationId
       }
     });
 
@@ -284,7 +284,7 @@ export class ServicePointsService {
       throw new NotFoundException("Venue not found");
     }
 
-    this.venueAccess.assertCanManageVenue(auth, { workspaceId: venue.workspaceId, venueId });
+    this.venueAccess.assertCanManageVenue(auth, { organizationId: venue.organizationId, venueId });
     const label = input.label.trim();
 
     if (input.locationId) {
@@ -300,7 +300,7 @@ export class ServicePointsService {
       }
     }
 
-    const servicePoint = await this.prisma.servicePoint.create({
+    const qrPoint = await this.prisma.qrPoint.create({
       data: {
         venueId,
         locationId: input.locationId || null,
@@ -309,15 +309,15 @@ export class ServicePointsService {
       }
     });
 
-    await this.invalidatePublicIntakeCaches(venue, servicePoint);
-    return servicePoint;
+    await this.invalidatePublicIntakeCaches(venue, qrPoint);
+    return qrPoint;
   }
 
   async createVenueLocation(auth: AuthContext, venueId: string, input: CreateVenueLocationDto) {
     const venue = await this.prisma.venue.findFirst({
       where: {
         id: venueId,
-        workspaceId: auth.workspaceId
+        organizationId: auth.organizationId
       }
     });
 
@@ -325,7 +325,7 @@ export class ServicePointsService {
       throw new NotFoundException("Venue not found");
     }
 
-    this.venueAccess.assertCanManageVenue(auth, { workspaceId: venue.workspaceId, venueId });
+    this.venueAccess.assertCanManageVenue(auth, { organizationId: venue.organizationId, venueId });
 
     const location = await this.prisma.venueLocation.create({
       data: {
@@ -339,11 +339,11 @@ export class ServicePointsService {
     return location;
   }
 
-  async updateServicePoint(auth: AuthContext, venueId: string, servicePointId: string, input: UpdateServicePointDto) {
+  async updateServicePoint(auth: AuthContext, venueId: string, qrPointId: string, input: UpdateServicePointDto) {
     const venue = await this.prisma.venue.findFirst({
       where: {
         id: venueId,
-        workspaceId: auth.workspaceId
+        organizationId: auth.organizationId
       }
     });
 
@@ -351,16 +351,16 @@ export class ServicePointsService {
       throw new NotFoundException("Venue not found");
     }
 
-    this.venueAccess.assertCanManageVenue(auth, { workspaceId: venue.workspaceId, venueId });
+    this.venueAccess.assertCanManageVenue(auth, { organizationId: venue.organizationId, venueId });
 
-    const servicePoint = await this.prisma.servicePoint.findFirst({
+    const qrPoint = await this.prisma.qrPoint.findFirst({
       where: {
-        id: servicePointId,
+        id: qrPointId,
         venueId
       }
     });
 
-    if (!servicePoint) {
+    if (!qrPoint) {
       throw new NotFoundException("QR point not found");
     }
 
@@ -385,21 +385,21 @@ export class ServicePointsService {
       data.locationId = input.locationId || null;
     }
 
-    const updatedServicePoint = await this.prisma.servicePoint.update({
-      where: { id: servicePointId },
+    const updatedQrPoint = await this.prisma.qrPoint.update({
+      where: { id: qrPointId },
       data
     });
 
-    await this.invalidatePublicIntakeCaches(venue, servicePoint);
-    await this.invalidatePublicIntakeCaches(venue, updatedServicePoint);
-    return updatedServicePoint;
+    await this.invalidatePublicIntakeCaches(venue, qrPoint);
+    await this.invalidatePublicIntakeCaches(venue, updatedQrPoint);
+    return updatedQrPoint;
   }
 
-  async deleteServicePoint(auth: AuthContext, venueId: string, servicePointId: string) {
+  async deleteServicePoint(auth: AuthContext, venueId: string, qrPointId: string) {
     const venue = await this.prisma.venue.findFirst({
       where: {
         id: venueId,
-        workspaceId: auth.workspaceId
+        organizationId: auth.organizationId
       }
     });
 
@@ -407,33 +407,33 @@ export class ServicePointsService {
       throw new NotFoundException("Venue not found");
     }
 
-    this.venueAccess.assertCanManageVenue(auth, { workspaceId: venue.workspaceId, venueId });
+    this.venueAccess.assertCanManageVenue(auth, { organizationId: venue.organizationId, venueId });
 
-    const servicePoint = await this.prisma.servicePoint.findFirst({
+    const qrPoint = await this.prisma.qrPoint.findFirst({
       where: {
-        id: servicePointId,
+        id: qrPointId,
         venueId
       }
     });
 
-    if (!servicePoint) {
+    if (!qrPoint) {
       throw new NotFoundException("QR point not found");
     }
 
-    const archivedServicePoint = await this.prisma.servicePoint.update({
-      where: { id: servicePointId },
+    const archivedQrPoint = await this.prisma.qrPoint.update({
+      where: { id: qrPointId },
       data: { isActive: false }
     });
 
-    await this.invalidatePublicIntakeCaches(venue, servicePoint);
-    return archivedServicePoint;
+    await this.invalidatePublicIntakeCaches(venue, qrPoint);
+    return archivedQrPoint;
   }
 
   async updateVenueOpeningHours(auth: AuthContext, venueId: string, input: UpdateVenueOpeningHoursDto) {
     const venue = await this.prisma.venue.findFirst({
       where: {
         id: venueId,
-        workspaceId: auth.workspaceId
+        organizationId: auth.organizationId
       }
     });
 
@@ -441,7 +441,7 @@ export class ServicePointsService {
       throw new NotFoundException("Venue not found");
     }
 
-    this.venueAccess.assertCanManageVenue(auth, { workspaceId: venue.workspaceId, venueId });
+    this.venueAccess.assertCanManageVenue(auth, { organizationId: venue.organizationId, venueId });
 
     const dayNumbers = new Set(input.openingHours.map((hours) => hours.dayOfWeek));
     if (input.openingHours.length !== 7 || dayNumbers.size !== 7) {
@@ -449,13 +449,13 @@ export class ServicePointsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.venueOpeningHour.deleteMany({
+      await tx.venueHours.deleteMany({
         where: {
           venueId
         }
       });
 
-      await tx.venueOpeningHour.createMany({
+      await tx.venueHours.createMany({
         data: input.openingHours
           .slice()
           .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
@@ -481,12 +481,12 @@ export class ServicePointsService {
             name: "asc"
           }
         },
-        openingHours: {
+        hours: {
           orderBy: {
             dayOfWeek: "asc"
           }
         },
-        servicePoints: {
+        qrPoints: {
           where: {
             isActive: true
           },
@@ -616,15 +616,15 @@ export class ServicePointsService {
   }
 
   private publicChatAvailability(
-    venue: { timezone: string; openingHours?: VenueOpeningHourWindow[] | null } | null | undefined
+    venue: { timezone: string; hours?: VenueOpeningHourWindow[] | null } | null | undefined
   ) {
     return getVenueChatAvailability({
-      openingHours: venue?.openingHours ?? [],
+      openingHours: venue?.hours ?? [],
       timezone: venue?.timezone || "Europe/London"
     });
   }
 
-  private assertVenueChatIsOpen(venue: { timezone: string; openingHours?: VenueOpeningHourWindow[] | null }) {
+  private assertVenueChatIsOpen(venue: { timezone: string; hours?: VenueOpeningHourWindow[] | null }) {
     const availability = this.publicChatAvailability(venue);
 
     if (!availability.isOpen) {
@@ -755,7 +755,7 @@ export class ServicePointsService {
    */
   private async retrySynchronousTriage(
     conversationId: string,
-    servicePoint: { id: string; label?: string | null; venueId: string },
+    qrPoint: { id: string; label?: string | null; venueId: string },
     deterministicPriority: RequestPriority,
     guestMessageBody: string,
     tokenOrSlug: string,
@@ -770,7 +770,7 @@ export class ServicePointsService {
       const triage = await this.triageGuestMessage({
         deterministicPriority,
         message: guestMessageBody,
-        servicePointLabel: servicePoint.label || "your location",
+        servicePointLabel: qrPoint.label || "your location",
         isFollowup: false
       });
 
@@ -782,8 +782,8 @@ export class ServicePointsService {
 
       await this.prisma.message.create({
         data: encryptMessageCreateData({
-          venueId: servicePoint.venueId,
-          servicePointId: servicePoint.id,
+          venueId: qrPoint.venueId,
+          qrPointId: qrPoint.id,
           conversationId,
           requestId: request?.id ?? null,
           sender: SenderType.ASSISTANT,
@@ -805,8 +805,8 @@ export class ServicePointsService {
       // If fallback also fails, write a simple reply so the guest doesn't hang
       await this.prisma.message.create({
         data: encryptMessageCreateData({
-          venueId: servicePoint.venueId,
-          servicePointId: servicePoint.id,
+          venueId: qrPoint.venueId,
+          qrPointId: qrPoint.id,
           conversationId,
           requestId: null,
           sender: SenderType.ASSISTANT,
@@ -818,7 +818,7 @@ export class ServicePointsService {
   }
 
   async createGuestMessage(token: string, input: PublicGuestMessageDto) {
-    const servicePoint = await this.prisma.servicePoint.findFirst({
+    const qrPoint = await this.prisma.qrPoint.findFirst({
       where: {
         qrToken: token,
         isActive: true
@@ -826,7 +826,7 @@ export class ServicePointsService {
       include: {
         venue: {
           include: {
-            openingHours: {
+            hours: {
               orderBy: {
                 dayOfWeek: "asc"
               }
@@ -836,19 +836,19 @@ export class ServicePointsService {
       }
     });
 
-    if (!servicePoint) {
-      throw new NotFoundException("Service point not found");
+    if (!qrPoint) {
+      throw new NotFoundException("QR point not found");
     }
 
-    this.assertVenueChatIsOpen((servicePoint as any).venue);
-    const venue = (servicePoint as any).venue;
+    this.assertVenueChatIsOpen((qrPoint as any).venue);
+    const venue = (qrPoint as any).venue;
 
     const existingConversation = input.conversationId
       ? await this.prisma.conversation.findFirst({
           where: {
             id: input.conversationId,
-            servicePointId: servicePoint.id,
-            venueId: servicePoint.venueId
+            qrPointId: qrPoint.id,
+            venueId: qrPoint.venueId
           },
           include: {
             requests: {
@@ -871,13 +871,13 @@ export class ServicePointsService {
     const hasOpenPreflightRequest = latestPreflightRequest ? this.isActiveRequestStatus(latestPreflightRequest.status) : false;
     const openRequestIntent = hasOpenPreflightRequest ? classifyOpenRequestGuestMessage(input.message) : null;
     const nonRequestReply = !hasOpenPreflightRequest
-      ? this.nonRequestReply(input.message, venue?.name || servicePoint.label)
+      ? this.nonRequestReply(input.message, venue?.name || qrPoint.label)
       : null;
     const shouldHandleGreeting = this.isGreetingMessage(input.message) && !hasOpenPreflightRequest;
 
     // --- Synchronous path: non-request messages (greetings, info questions) ---
     if (nonRequestReply && !hasOpenPreflightRequest) {
-      const assistantReply = shouldHandleGreeting ? this.greetingReply(servicePoint.label) : nonRequestReply;
+      const assistantReply = shouldHandleGreeting ? this.greetingReply(qrPoint.label) : nonRequestReply;
 
       const result = await this.prisma.$transaction(async (tx) => {
         const conversation =
@@ -885,15 +885,15 @@ export class ServicePointsService {
           (await tx.conversation.create({
             data: {
               guestSessionId: input.sessionId || null,
-              servicePointId: servicePoint.id,
-              venueId: servicePoint.venueId
+              qrPointId: qrPoint.id,
+              venueId: qrPoint.venueId
             }
           }));
 
         await tx.message.create({
           data: encryptMessageCreateData({
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
+            venueId: qrPoint.venueId,
+            qrPointId: qrPoint.id,
             conversationId: conversation.id,
             sender: SenderType.GUEST,
             body: input.message,
@@ -903,8 +903,8 @@ export class ServicePointsService {
 
         await tx.message.create({
           data: encryptMessageCreateData({
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
+            venueId: qrPoint.venueId,
+            qrPointId: qrPoint.id,
             conversationId: conversation.id,
             sender: SenderType.ASSISTANT,
             body: assistantReply,
@@ -917,7 +917,7 @@ export class ServicePointsService {
           orderBy: { createdAt: "asc" }
         });
 
-        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
+        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), qrPoint, venue, {
           replyPending: false
         });
       });
@@ -931,8 +931,8 @@ export class ServicePointsService {
 
         await tx.message.create({
           data: encryptMessageCreateData({
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
+            venueId: qrPoint.venueId,
+            qrPointId: qrPoint.id,
             conversationId: conversation.id,
             requestId: null,
             sender: SenderType.GUEST,
@@ -943,8 +943,8 @@ export class ServicePointsService {
 
         await tx.message.create({
           data: encryptMessageCreateData({
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
+            venueId: qrPoint.venueId,
+            qrPointId: qrPoint.id,
             conversationId: conversation.id,
             requestId: null,
             sender: SenderType.ASSISTANT,
@@ -958,7 +958,7 @@ export class ServicePointsService {
           orderBy: { createdAt: "asc" }
         });
 
-        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
+        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), qrPoint, venue, {
           replyPending: false,
           request: latestPreflightRequest
         });
@@ -970,12 +970,12 @@ export class ServicePointsService {
     if (hasOpenPreflightRequest && openRequestIntent === "conversation" && existingConversation && latestPreflightRequest) {
       const result = await this.prisma.$transaction(async (tx) => {
         const conversation = existingConversation;
-        const assistantReply = this.nonRequestReply(input.message, venue?.name || servicePoint.label) ?? this.openRequestConversationReply();
+        const assistantReply = this.nonRequestReply(input.message, venue?.name || qrPoint.label) ?? this.openRequestConversationReply();
 
         await tx.message.create({
           data: encryptMessageCreateData({
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
+            venueId: qrPoint.venueId,
+            qrPointId: qrPoint.id,
             conversationId: conversation.id,
             requestId: null,
             sender: SenderType.GUEST,
@@ -986,8 +986,8 @@ export class ServicePointsService {
 
         await tx.message.create({
           data: encryptMessageCreateData({
-            venueId: servicePoint.venueId,
-            servicePointId: servicePoint.id,
+            venueId: qrPoint.venueId,
+            qrPointId: qrPoint.id,
             conversationId: conversation.id,
             requestId: null,
             sender: SenderType.ASSISTANT,
@@ -1001,7 +1001,7 @@ export class ServicePointsService {
           orderBy: { createdAt: "asc" }
         });
 
-        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
+        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), qrPoint, venue, {
           replyPending: false,
           request: latestPreflightRequest
         });
@@ -1026,8 +1026,8 @@ export class ServicePointsService {
         (await tx.conversation.create({
           data: {
             guestSessionId: input.sessionId || null,
-            servicePointId: servicePoint.id,
-            venueId: servicePoint.venueId
+            qrPointId: qrPoint.id,
+            venueId: qrPoint.venueId
           }
         }));
 
@@ -1035,8 +1035,8 @@ export class ServicePointsService {
 
       const supportRequest = await tx.supportRequest.create({
         data: {
-          venueId: servicePoint.venueId,
-          servicePointId: servicePoint.id,
+          venueId: qrPoint.venueId,
+          qrPointId: qrPoint.id,
           conversationId: conversation.id,
           title: requestDraft.title,
           category: requestDraft.category,
@@ -1052,8 +1052,8 @@ export class ServicePointsService {
       // Save the guest message
       await tx.message.create({
         data: encryptMessageCreateData({
-          venueId: servicePoint.venueId,
-          servicePointId: servicePoint.id,
+          venueId: qrPoint.venueId,
+          qrPointId: qrPoint.id,
           conversationId: conversation.id,
           requestId: supportRequest.id,
           sender: SenderType.GUEST,
@@ -1064,19 +1064,19 @@ export class ServicePointsService {
 
       await tx.message.create({
         data: encryptMessageCreateData({
-          venueId: servicePoint.venueId,
-          servicePointId: servicePoint.id,
+          venueId: qrPoint.venueId,
+          qrPointId: qrPoint.id,
           conversationId: conversation.id,
           requestId: supportRequest.id,
           sender: SenderType.ASSISTANT,
-          body: this.requestAcknowledgementReply(deterministicPriority, servicePoint.label),
+          body: this.requestAcknowledgementReply(deterministicPriority, qrPoint.label),
           metadata: { source: "public_qr", qrToken: token, intent: "request_acknowledgement" }
         })
       });
 
       await tx.requestEvent.create({
         data: {
-          venueId: servicePoint.venueId,
+          venueId: qrPoint.venueId,
           requestId: supportRequest.id,
           type: "request.created",
           toStatus: supportRequest.status,
@@ -1089,7 +1089,7 @@ export class ServicePointsService {
         orderBy: { createdAt: "asc" }
       });
 
-      const response = this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
+      const response = this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), qrPoint, venue, {
         replyPending: false,
         request: supportRequest
       });
@@ -1109,9 +1109,9 @@ export class ServicePointsService {
     try {
       await this.enqueueTriageReply({
         conversationId: result.conversationId,
-        venueId: servicePoint.venueId,
-        servicePointId: servicePoint.id,
-        servicePointLabel: servicePoint.label,
+        venueId: qrPoint.venueId,
+        qrPointId: qrPoint.id,
+        qrPointLabel: qrPoint.label,
         guestMessageBody: input.message,
         qrToken: token,
         source: "public_qr",
@@ -1120,7 +1120,7 @@ export class ServicePointsService {
         deterministicPriority
       } satisfies TriageReplyJobData, { timeoutMs: 750 });
     } catch {
-      await this.retrySynchronousTriage(result.conversationId, servicePoint, deterministicPriority, input.message, token, "public_qr", {
+      await this.retrySynchronousTriage(result.conversationId, qrPoint, deterministicPriority, input.message, token, "public_qr", {
         skipAssistantReply: true
       });
     }
@@ -1132,7 +1132,7 @@ export class ServicePointsService {
     const venue = await this.prisma.venue.findFirst({
       where: { slug: venueSlug },
       include: {
-        openingHours: {
+        hours: {
           orderBy: {
             dayOfWeek: "asc"
           }
@@ -1145,13 +1145,13 @@ export class ServicePointsService {
     }
 
     this.assertVenueChatIsOpen(venue);
-    const servicePoint = await this.findOrCreateVenueSupportServicePoint(venue);
+    const qrPoint = await this.findOrCreateVenueSupportQrPoint(venue);
 
     const existingConversation = input.conversationId
       ? await this.prisma.conversation.findFirst({
           where: {
             id: input.conversationId,
-            servicePointId: servicePoint.id,
+            qrPointId: qrPoint.id,
             venueId: venue.id
           },
           include: {
@@ -1194,7 +1194,7 @@ export class ServicePointsService {
               guestLocationLabel: locationLabel,
               guestLocationSource: locationLabel ? "guest" : null,
               guestSessionId: input.sessionId || null,
-              servicePointId: servicePoint.id,
+              qrPointId: qrPoint.id,
               venueId: venue.id
             }
           }));
@@ -1210,7 +1210,7 @@ export class ServicePointsService {
             },
             requestId: null,
             sender: SenderType.GUEST,
-            servicePointId: servicePoint.id,
+            qrPointId: qrPoint.id,
             venueId: venue.id
           })
         });
@@ -1225,7 +1225,7 @@ export class ServicePointsService {
             },
             requestId: null,
             sender: SenderType.ASSISTANT,
-            servicePointId: servicePoint.id,
+            qrPointId: qrPoint.id,
             venueId: venue.id
           })
         });
@@ -1235,7 +1235,7 @@ export class ServicePointsService {
           orderBy: { createdAt: "asc" }
         });
 
-        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
+        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), qrPoint, venue, {
           replyPending: false
         });
       });
@@ -1261,7 +1261,7 @@ export class ServicePointsService {
               guestLocationLabel: null,
               guestLocationSource: null,
               guestSessionId: input.sessionId || null,
-              servicePointId: servicePoint.id,
+              qrPointId: qrPoint.id,
               venueId: venue.id
             }
           }));
@@ -1277,7 +1277,7 @@ export class ServicePointsService {
             },
             requestId: null,
             sender: SenderType.GUEST,
-            servicePointId: servicePoint.id,
+            qrPointId: qrPoint.id,
             venueId: venue.id
           })
         });
@@ -1292,7 +1292,7 @@ export class ServicePointsService {
             },
             requestId: null,
             sender: SenderType.ASSISTANT,
-            servicePointId: servicePoint.id,
+            qrPointId: qrPoint.id,
             venueId: venue.id
           })
         });
@@ -1302,7 +1302,7 @@ export class ServicePointsService {
           orderBy: { createdAt: "asc" }
         });
 
-        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
+        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), qrPoint, venue, {
           replyPending: false
         });
       });
@@ -1332,7 +1332,7 @@ export class ServicePointsService {
             },
             requestId: null,
             sender: SenderType.GUEST,
-            servicePointId: servicePoint.id,
+            qrPointId: qrPoint.id,
             venueId: venue.id
           })
         });
@@ -1347,7 +1347,7 @@ export class ServicePointsService {
             },
             requestId: null,
             sender: SenderType.ASSISTANT,
-            servicePointId: servicePoint.id,
+            qrPointId: qrPoint.id,
             venueId: venue.id
           })
         });
@@ -1357,7 +1357,7 @@ export class ServicePointsService {
           orderBy: { createdAt: "asc" }
         });
 
-        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
+        return this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), qrPoint, venue, {
           replyPending: false,
           request: latestPreflightRequest
         });
@@ -1384,7 +1384,7 @@ export class ServicePointsService {
             guestLocationLabel: locationLabel,
             guestLocationSource: locationLabel ? "guest" : null,
             guestSessionId: input.sessionId || null,
-            servicePointId: servicePoint.id,
+            qrPointId: qrPoint.id,
             venueId: venue.id
           }
         }));
@@ -1405,7 +1405,7 @@ export class ServicePointsService {
         supportRequest = await tx.supportRequest.create({
           data: {
             venueId: venue.id,
-            servicePointId: servicePoint.id,
+            qrPointId: qrPoint.id,
             conversationId: conversation.id,
             guestLocationLabel: locationLabel,
             guestLocationSource: locationLabel ? "guest" : null,
@@ -1436,7 +1436,7 @@ export class ServicePointsService {
           },
           requestId: supportRequest.id,
           sender: SenderType.GUEST,
-          servicePointId: servicePoint.id,
+          qrPointId: qrPoint.id,
           venueId: venue.id
         })
       });
@@ -1464,7 +1464,7 @@ export class ServicePointsService {
       return {
         eventType: hasOpenRequest ? "request.updated" : "request.created",
         messageId: this.latestMessageId(messages, SenderType.GUEST, supportRequest.id),
-        response: this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), servicePoint, venue, {
+        response: this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), qrPoint, venue, {
           replyPending: true,
           request: supportRequest
         })
@@ -1479,8 +1479,8 @@ export class ServicePointsService {
       await this.enqueueTriageReply({
         conversationId: result.conversationId,
         venueId: venue.id,
-        servicePointId: servicePoint.id,
-        servicePointLabel: servicePoint.label,
+        qrPointId: qrPoint.id,
+        qrPointLabel: qrPoint.label,
         guestMessageBody: input.message,
         qrToken: "",
         source: "public_venue_qr",
@@ -1493,7 +1493,7 @@ export class ServicePointsService {
     } catch {
       await this.retrySynchronousTriage(
         result.conversationId,
-        servicePoint,
+        qrPoint,
         deterministicPriority,
         input.message,
         venueSlug,
@@ -1505,7 +1505,7 @@ export class ServicePointsService {
   }
 
   async getGuestConversation(token: string, conversationId: string, sessionId?: string) {
-    const servicePoint = await this.prisma.servicePoint.findFirst({
+    const qrPoint = await this.prisma.qrPoint.findFirst({
       where: {
         qrToken: token,
         isActive: true
@@ -1513,7 +1513,7 @@ export class ServicePointsService {
       include: {
         venue: {
           include: {
-            openingHours: {
+            hours: {
               orderBy: {
                 dayOfWeek: "asc"
               }
@@ -1523,15 +1523,15 @@ export class ServicePointsService {
       }
     });
 
-    if (!servicePoint) {
-      throw new NotFoundException("Service point not found");
+    if (!qrPoint) {
+      throw new NotFoundException("QR point not found");
     }
 
     const conversation = await this.prisma.conversation.findFirst({
       where: {
         id: conversationId,
-        servicePointId: servicePoint.id,
-        venueId: servicePoint.venueId
+        qrPointId: qrPoint.id,
+        venueId: qrPoint.venueId
       },
       include: {
         messages: {
@@ -1544,7 +1544,7 @@ export class ServicePointsService {
         requests: {
           include: {
             assignedTo: true,
-            servicePoint: true
+            qrPoint: true
           },
           orderBy: {
             createdAt: "desc"
@@ -1571,9 +1571,9 @@ export class ServicePointsService {
       messages: this.publicConversationMessages(conversation.messages),
       replyPending: this.requiresAsyncReply(conversation.messages),
       request: conversation.requests[0] ?? null,
-      servicePoint: this.publicServicePoint(servicePoint),
-      chatAvailability: this.publicChatAvailability((servicePoint as any).venue),
-      ...(this.publicVenueSummary((servicePoint as any).venue) ? { venue: this.publicVenueSummary((servicePoint as any).venue) } : {})
+      servicePoint: this.publicServicePoint(qrPoint),
+      chatAvailability: this.publicChatAvailability((qrPoint as any).venue),
+      ...(this.publicVenueSummary((qrPoint as any).venue) ? { venue: this.publicVenueSummary((qrPoint as any).venue) } : {})
     };
   }
 
@@ -1582,7 +1582,7 @@ export class ServicePointsService {
     const venue = await this.prisma.venue.findFirst({
       where: { slug: venueSlug },
       include: {
-        openingHours: {
+        hours: {
           orderBy: {
             dayOfWeek: "asc"
           }
@@ -1594,11 +1594,11 @@ export class ServicePointsService {
       throw new NotFoundException("Venue not found");
     }
 
-    const servicePoint = await this.findOrCreateVenueSupportServicePoint(venue);
+    const qrPoint = await this.findOrCreateVenueSupportQrPoint(venue);
     const conversation = await this.prisma.conversation.findFirst({
       where: {
         id: conversationId,
-        servicePointId: servicePoint.id,
+        qrPointId: qrPoint.id,
         venueId: venue.id
       },
       include: {
@@ -1612,7 +1612,7 @@ export class ServicePointsService {
         requests: {
           include: {
             assignedTo: true,
-            servicePoint: true
+            qrPoint: true
           },
           orderBy: {
             createdAt: "desc"
@@ -1639,7 +1639,7 @@ export class ServicePointsService {
       messages: this.publicConversationMessages(conversation.messages),
       replyPending: this.requiresAsyncReply(conversation.messages),
       request: conversation.requests[0] ?? null,
-      servicePoint: this.publicServicePoint(servicePoint),
+      servicePoint: this.publicServicePoint(qrPoint),
       chatAvailability: this.publicChatAvailability(venue),
       venue: this.publicVenueSummary(venue)
     };

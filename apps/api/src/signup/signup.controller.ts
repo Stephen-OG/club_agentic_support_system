@@ -16,7 +16,7 @@ export class SetupController {
 
   @Post()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  @ApiCreatedResponse({ description: "Creates workspace, owner profile, and first venue" })
+  @ApiCreatedResponse({ description: "Creates organization, owner profile, and first venue" })
   async initialize(
     @Body() input: SetupRequestDto,
     @Headers("authorization") authorization?: string
@@ -29,7 +29,7 @@ export class SetupController {
     const { user } = await this.appAuth.verifyBearerToken(token);
 
     if (!user.emailVerifiedAt) {
-      throw new UnauthorizedException("Email must be verified before workspace setup");
+      throw new UnauthorizedException("Email must be verified before organization setup");
     }
 
     if (user.email?.toLowerCase() !== input.email.trim().toLowerCase()) {

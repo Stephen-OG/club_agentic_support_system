@@ -38,7 +38,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const httpContext = context.switchToHttp();
-    const request = httpContext.getRequest<Request & { requestId?: string; auth?: { staffProfileId?: string; workspaceId?: string; venueId?: string } }>();
+    const request = httpContext.getRequest<Request & { requestId?: string; auth?: { staffProfileId?: string; organizationId?: string; venueId?: string } }>();
     const response = httpContext.getResponse<Response>();
 
     const requestId = (request.headers["x-request-id"] as string) || randomUUID();
@@ -57,7 +57,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
             requestId,
             statusCode: response.statusCode,
             userId: request.auth?.staffProfileId,
-            workspaceId: request.auth?.workspaceId,
+            organizationId: request.auth?.organizationId,
             venueId: request.auth?.venueId
           });
         },
@@ -81,7 +81,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
             requestId,
             statusCode,
             userId: request.auth?.staffProfileId,
-            workspaceId: request.auth?.workspaceId,
+            organizationId: request.auth?.organizationId,
             venueId: request.auth?.venueId,
             ...(extraMetadata ? { metadata: extraMetadata } : {})
           });

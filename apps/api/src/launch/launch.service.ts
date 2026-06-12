@@ -3,32 +3,32 @@ import { StaffRole } from "@prisma/client";
 import type { AuthContext } from "../auth/auth-context";
 import { PrismaService } from "../database/prisma.service";
 
-export type OnboardingStepId = "workspace" | "venue" | "opening_hours" | "qr_points" | "team" | "test_request";
-export type OnboardingActionView = "account" | "venues" | "team" | "operations";
+export type LaunchStepId = "organization" | "venue" | "opening_hours" | "qr_points" | "team" | "test_request";
+export type LaunchActionView = "account" | "venues" | "team" | "operations";
 
-export type OnboardingStep = {
-  id: OnboardingStepId;
+export type LaunchStep = {
+  id: LaunchStepId;
   label: string;
   detail: string;
   complete: boolean;
   actionLabel: string;
-  actionView: OnboardingActionView;
+  actionView: LaunchActionView;
 };
 
-export type OnboardingStatus = {
+export type LaunchStatus = {
   isComplete: boolean;
   completedCount: number;
   totalCount: number;
-  steps: OnboardingStep[];
+  steps: LaunchStep[];
 };
 
 @Injectable()
-export class OnboardingService {
+export class LaunchService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getStatus(auth: AuthContext): Promise<OnboardingStatus> {
+  async getStatus(auth: AuthContext): Promise<LaunchStatus> {
     if (auth.role !== "owner" && auth.role !== "admin") {
-      throw new ForbiddenException("Only workspace owners and admins can view onboarding status");
+      throw new ForbiddenException("Only organization owners and admins can view launch status");
     }
 
     const [
@@ -39,32 +39,32 @@ export class OnboardingService {
       operationalMembershipCount,
       requestCount
     ] = await Promise.all([
-      this.prisma.venue.count({ where: { workspaceId: auth.workspaceId } }),
+      this.prisma.venue.count({ where: { organizationId: auth.organizationId } }),
       this.prisma.venue.count({
         where: {
-          workspaceId: auth.workspaceId,
-          openingHours: {
+          organizationId: auth.organizationId,
+          hours: {
             some: { dayOfWeek: { gte: 0 } }
           }
         }
       }),
-      this.prisma.servicePoint.count({
+      this.prisma.qrPoint.count({
         where: {
           isActive: true,
           venue: {
-            workspaceId: auth.workspaceId
+            organizationId: auth.organizationId
           }
         }
       }),
-      this.prisma.staffMembership.count({
+      this.prisma.teamRole.count({
         where: {
-          workspaceId: auth.workspaceId,
+          organizationId: auth.organizationId,
           isActive: true
         }
       }),
-      this.prisma.staffMembership.count({
+      this.prisma.teamRole.count({
         where: {
-          workspaceId: auth.workspaceId,
+          organizationId: auth.organizationId,
           isActive: true,
           role: {
             in: [StaffRole.MANAGER, StaffRole.STAFF, StaffRole.SECURITY]
@@ -74,18 +74,18 @@ export class OnboardingService {
       this.prisma.supportRequest.count({
         where: {
           venue: {
-            workspaceId: auth.workspaceId
+            organizationId: auth.organizationId
           }
         }
       })
     ]);
 
-    const steps: OnboardingStep[] = [
+    const steps: LaunchStep[] = [
       {
-        id: "workspace",
-        label: "Workspace created",
-        detail: "Your workspace profile is active.",
-        complete: Boolean(auth.workspaceId),
+        id: "organization",
+        label: "Organization created",
+        detail: "Your organization profile is active.",
+        complete: Boolean(auth.organizationId),
         actionLabel: "Review settings",
         actionView: "account"
       },

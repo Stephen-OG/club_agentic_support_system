@@ -10,10 +10,10 @@ const baseUser = (role: CommandUser["memberships"][number]["role"], venueId: str
   memberships: [
     {
       id: `membership_${role}`,
-      workspaceId: "workspace_1",
+      organizationId: "workspace_1",
       venueId,
       role,
-      workspace: { id: "workspace_1", name: "Workspace", slug: "workspace" },
+      organization: { id: "workspace_1", name: "Workspace", slug: "workspace" },
       venue: venueId ? { id: venueId, name: "Main Room", slug: "main-room" } : null
     }
   ]

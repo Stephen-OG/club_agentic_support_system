@@ -8,12 +8,12 @@ const setupInput = {
   email: "owner@example.com",
   venueName: "Main Venue",
   venueSlug: "main-venue",
-  workspaceName: "Madupe Group",
-  workspaceSlug: "madupe-group"
+  organizationName: "Madupe Group",
+  organizationSlug: "madupe-group"
 };
 
 describe("SetupController", () => {
-  it("requires a verified app auth email before workspace setup", async () => {
+  it("requires a verified app auth email before organization setup", async () => {
     const controller = new SetupController(
       {
         initialize: async () => {

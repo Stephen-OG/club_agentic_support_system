@@ -20,7 +20,7 @@ export class StaffController {
   }
 
   @Get("team")
-  @ApiOkResponse({ description: "Lists staff in the authenticated workspace" })
+  @ApiOkResponse({ description: "Lists staff in the authenticated organization" })
   listTeam(@CurrentAuth() auth: AuthContext) {
     return this.staff.listTeam(auth);
   }

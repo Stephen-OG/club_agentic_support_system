@@ -1,4 +1,4 @@
-type ServicePointDraft = {
+type QrPointDraft = {
   label: string;
   locationId?: string | null;
 };
@@ -29,22 +29,6 @@ export function defaultOpeningHours(): OpeningHourDraft[] {
 export function normalizeOpeningHours(hours: OpeningHourDraft[] | undefined) {
   const byDay = new Map((hours || []).map((item) => [item.dayOfWeek, item]));
   return defaultOpeningHours().map((fallback) => byDay.get(fallback.dayOfWeek) ?? fallback);
-}
-
-export function copyMondayHoursToWeekdays(openingHours: OpeningHourDraft[]) {
-  const normalized = normalizeOpeningHours(openingHours);
-  const monday = normalized[1] ?? defaultOpeningHours()[1];
-
-  return normalized.map((hours) =>
-    hours.dayOfWeek >= 1 && hours.dayOfWeek <= 5
-      ? {
-          ...hours,
-          closesAt: monday.closesAt,
-          isClosed: monday.isClosed,
-          opensAt: monday.opensAt
-        }
-      : hours
-  );
 }
 
 export function getVenueChatAvailabilityPreview(openingHours: OpeningHourDraft[], timeZone: string, now: Date = new Date()) {
@@ -125,11 +109,11 @@ export function venueWideGuestUrl(origin: string, slug: string) {
   return `${trimTrailingSlash(origin)}/venue/${slug}`;
 }
 
-export function servicePointGuestUrl(origin: string, qrToken: string) {
+export function qrPointGuestUrl(origin: string, qrToken: string) {
   return `${trimTrailingSlash(origin)}/qr/${qrToken}`;
 }
 
-export function createServicePointPayload(draft: ServicePointDraft) {
+export function createQrPointPayload(draft: QrPointDraft) {
   const label = draft.label.trim();
   const locationId = draft.locationId?.trim();
 
@@ -139,7 +123,7 @@ export function createServicePointPayload(draft: ServicePointDraft) {
   };
 }
 
-export function createServicePointUpdatePayload(draft: ServicePointDraft) {
+export function createQrPointUpdatePayload(draft: QrPointDraft) {
   const label = draft.label.trim();
   const locationId = draft.locationId?.trim();
 
@@ -157,7 +141,7 @@ export function createLocationPayload(draft: LocationDraft) {
 
 export function createOpeningHoursPayload(openingHours: OpeningHourDraft[]) {
   return {
-    openingHours: openingHours.map((hours) => ({
+    hours: openingHours.map((hours) => ({
       dayOfWeek: hours.dayOfWeek,
       opensAt: hours.opensAt,
       closesAt: hours.closesAt,

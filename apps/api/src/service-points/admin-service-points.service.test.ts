@@ -44,12 +44,12 @@ describe("ServicePointsService admin helpers", () => {
       {} as never,
       {
         venue: {
-          findFirst: async () => ({ id: "venue_1", workspaceId: "workspace_1" })
+          findFirst: async () => ({ id: "venue_1", organizationId: "workspace_1" })
         },
         venueLocation: {
           findFirst: async () => null
         },
-        servicePoint: {
+        qrPoint: {
           create: async () => {
             created = true;
           }
@@ -62,7 +62,7 @@ describe("ServicePointsService admin helpers", () => {
 
     await assert.rejects(
       service.createServicePoint(
-        { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+        { role: "admin", staffProfileId: "staff_1", organizationId: "workspace_1" },
         "venue_1",
         { label: "Main Bar", locationId: "location_1" }
       ),
@@ -82,7 +82,7 @@ describe("ServicePointsService admin helpers", () => {
             assert.deepEqual(query, {
               where: {
                 id: "venue_1",
-                workspaceId: "workspace_1"
+                organizationId: "workspace_1"
               }
             });
             return null;
@@ -98,7 +98,7 @@ describe("ServicePointsService admin helpers", () => {
 
     await assert.rejects(
       service.createServicePoint(
-        { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+        { role: "admin", staffProfileId: "staff_1", organizationId: "workspace_1" },
         "venue_1",
         { label: "Main Bar" }
       ),
@@ -111,10 +111,10 @@ describe("ServicePointsService admin helpers", () => {
     const venues = [
       {
         id: "venue_1",
-        workspaceId: "workspace_1",
+        organizationId: "workspace_1",
         name: "Main Room",
         locations: [{ id: "location_1", name: "Floor", venueId: "venue_1" }],
-        servicePoints: [{ id: "service_point_1", label: "Table 1", venueId: "venue_1" }]
+        qrPoints: [{ id: "service_point_1", label: "Table 1", venueId: "venue_1" }]
       }
     ];
     const calls: unknown[] = [];
@@ -135,14 +135,14 @@ describe("ServicePointsService admin helpers", () => {
     const result = await service.listVenues({
       role: "admin",
       staffProfileId: "staff_1",
-      workspaceId: "workspace_1"
+      organizationId: "workspace_1"
     });
 
     assert.deepEqual(result, venues);
     assert.deepEqual(calls, [
       {
         where: {
-          workspaceId: "workspace_1"
+          organizationId: "workspace_1"
         },
         include: {
           locations: {
@@ -150,12 +150,12 @@ describe("ServicePointsService admin helpers", () => {
               name: "asc"
             }
           },
-          openingHours: {
+          hours: {
             orderBy: {
               dayOfWeek: "asc"
             }
           },
-          servicePoints: {
+          qrPoints: {
             where: {
               isActive: true
             },
@@ -190,7 +190,7 @@ describe("ServicePointsService admin helpers", () => {
     await service.listVenues({
       role: "staff",
       staffProfileId: "staff_1",
-      workspaceId: "workspace_1",
+      organizationId: "workspace_1",
       venueId: "venue_1"
     });
 
@@ -221,7 +221,7 @@ describe("ServicePointsService admin helpers", () => {
   });
 
   it("creates a venue zone after checking workspace scope and manage permission", async () => {
-    const venue = { id: "venue_1", workspaceId: "workspace_1" };
+    const venue = { id: "venue_1", organizationId: "workspace_1" };
     const createdLocation = { id: "location_1", venueId: "venue_1", name: "Balcony", zone: null };
     let authorizeCalled = false;
     const service = createService(
@@ -252,7 +252,7 @@ describe("ServicePointsService admin helpers", () => {
     );
 
     const result = await service.createVenueLocation(
-      { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+      { role: "admin", staffProfileId: "staff_1", organizationId: "workspace_1" },
       "venue_1",
       { name: "  Balcony  " }
     );
@@ -262,7 +262,7 @@ describe("ServicePointsService admin helpers", () => {
   });
 
   it("updates a QR point label and location inside the venue", async () => {
-    const venue = { id: "venue_1", workspaceId: "workspace_1" };
+    const venue = { id: "venue_1", organizationId: "workspace_1" };
     const point = { id: "point_1", venueId: "venue_1", label: "Table 1" };
     const updatedPoint = { ...point, label: "VIP Booth", locationId: "location_1" };
     const service = createService(
@@ -272,7 +272,7 @@ describe("ServicePointsService admin helpers", () => {
         venue: {
           findFirst: async () => venue
         },
-        servicePoint: {
+        qrPoint: {
           findFirst: async () => point,
           update: async (args: unknown) => {
             assert.deepEqual(args, {
@@ -295,7 +295,7 @@ describe("ServicePointsService admin helpers", () => {
     );
 
     const result = await service.updateServicePoint(
-      { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+      { role: "admin", staffProfileId: "staff_1", organizationId: "workspace_1" },
       "venue_1",
       "point_1",
       { label: "  VIP Booth  ", locationId: "location_1" }
@@ -310,9 +310,9 @@ describe("ServicePointsService admin helpers", () => {
       {} as never,
       {
         venue: {
-          findFirst: async () => ({ id: "venue_1", workspaceId: "workspace_1" })
+          findFirst: async () => ({ id: "venue_1", organizationId: "workspace_1" })
         },
-        servicePoint: {
+        qrPoint: {
           findFirst: async () => ({ id: "point_1", venueId: "venue_1", isActive: true }),
           update: async (args: unknown) => {
             assert.deepEqual(args, {
@@ -329,7 +329,7 @@ describe("ServicePointsService admin helpers", () => {
     );
 
     const result = await service.deleteServicePoint(
-      { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+      { role: "admin", staffProfileId: "staff_1", organizationId: "workspace_1" },
       "venue_1",
       "point_1"
     );
@@ -355,10 +355,10 @@ describe("updateVenueOpeningHours", () => {
   }));
 
   it("persists updated opening hours and returns the venue with them", async () => {
-    const venue = { id: "venue_hours_1", workspaceId: "workspace_1", name: "Blue Note", slug: "blue-note" };
+    const venue = { id: "venue_hours_1", organizationId: "workspace_1", name: "Blue Note", slug: "blue-note" };
     const updatedVenue = {
       ...venue,
-      openingHours: [
+      hours: [
         { closesAt: "22:00", dayOfWeek: 0, isClosed: false, opensAt: "10:00" },
         { closesAt: "22:00", dayOfWeek: 1, isClosed: false, opensAt: "10:00" },
         { closesAt: "22:00", dayOfWeek: 2, isClosed: false, opensAt: "10:00" },
@@ -376,13 +376,13 @@ describe("updateVenueOpeningHours", () => {
       },
       $transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
         return callback({
-          venueOpeningHour: {
+          venueHours: {
             deleteMany: async (args: unknown) => {
-              txCalls.push({ model: "venueOpeningHour.deleteMany", args });
+              txCalls.push({ model: "venueHours.deleteMany", args });
               return { count: 7 };
             },
             createMany: async (args: unknown) => {
-              txCalls.push({ model: "venueOpeningHour.createMany", args });
+              txCalls.push({ model: "venueHours.createMany", args });
               return { count: 7 };
             }
           }
@@ -399,7 +399,7 @@ describe("updateVenueOpeningHours", () => {
     );
 
     const result = await service.updateVenueOpeningHours(
-      { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+      { role: "admin", staffProfileId: "staff_1", organizationId: "workspace_1" },
       "venue_hours_1",
       { openingHours: standardOpeningHours }
     );
@@ -407,13 +407,13 @@ describe("updateVenueOpeningHours", () => {
     assert.deepEqual(result, updatedVenue);
     assert.deepEqual(txCalls, [
       {
-        model: "venueOpeningHour.deleteMany",
+        model: "venueHours.deleteMany",
         args: {
           where: { venueId: "venue_hours_1" }
         }
       },
       {
-        model: "venueOpeningHour.createMany",
+        model: "venueHours.createMany",
         args: {
           data: standardOpeningHours.map((hours) => ({
             closesAt: hours.closesAt,
@@ -428,7 +428,7 @@ describe("updateVenueOpeningHours", () => {
   });
 
   it("invalidates public intake caches after opening hours change", async () => {
-    const venue = { id: "venue_hours_cache", workspaceId: "workspace_1", slug: "venue-cache" };
+    const venue = { id: "venue_hours_cache", organizationId: "workspace_1", slug: "venue-cache" };
     const deletedPatterns: string[] = [];
     const service = createService(
       {} as never,
@@ -440,7 +440,7 @@ describe("updateVenueOpeningHours", () => {
         },
         $transaction: async (operation: any) =>
           operation({
-            venueOpeningHour: {
+            venueHours: {
               createMany: async () => undefined,
               deleteMany: async () => undefined
             }
@@ -460,7 +460,7 @@ describe("updateVenueOpeningHours", () => {
     );
 
     await service.updateVenueOpeningHours(
-      { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+      { role: "admin", staffProfileId: "staff_1", organizationId: "workspace_1" },
       "venue_hours_cache",
       { openingHours: standardOpeningHours }
     );
@@ -469,7 +469,7 @@ describe("updateVenueOpeningHours", () => {
   });
 
   it("throws BadRequestException when fewer than 7 days are provided", async () => {
-    const venue = { id: "venue_hours_2", workspaceId: "workspace_1" };
+    const venue = { id: "venue_hours_2", organizationId: "workspace_1" };
     const service = createService(
       {} as never,
       {} as never,
@@ -485,7 +485,7 @@ describe("updateVenueOpeningHours", () => {
 
     await assert.rejects(
       service.updateVenueOpeningHours(
-        { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+        { role: "admin", staffProfileId: "staff_1", organizationId: "workspace_1" },
         "venue_hours_2",
         { openingHours: standardOpeningHours.slice(0, 6) }
       ),
@@ -494,7 +494,7 @@ describe("updateVenueOpeningHours", () => {
   });
 
   it("throws BadRequestException when duplicate dayOfWeek values are present", async () => {
-    const venue = { id: "venue_hours_3", workspaceId: "workspace_1" };
+    const venue = { id: "venue_hours_3", organizationId: "workspace_1" };
     const duplicateDays = [
       { closesAt: "23:00", dayOfWeek: 0, isClosed: false, opensAt: "09:00" },
       { closesAt: "23:00", dayOfWeek: 1, isClosed: false, opensAt: "09:00" },
@@ -519,7 +519,7 @@ describe("updateVenueOpeningHours", () => {
 
     await assert.rejects(
       service.updateVenueOpeningHours(
-        { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+        { role: "admin", staffProfileId: "staff_1", organizationId: "workspace_1" },
         "venue_hours_3",
         { openingHours: duplicateDays }
       ),
@@ -543,7 +543,7 @@ describe("updateVenueOpeningHours", () => {
 
     await assert.rejects(
       service.updateVenueOpeningHours(
-        { role: "admin", staffProfileId: "staff_1", workspaceId: "workspace_1" },
+        { role: "admin", staffProfileId: "staff_1", organizationId: "workspace_1" },
         "venue_missing",
         { openingHours: standardOpeningHours }
       ),

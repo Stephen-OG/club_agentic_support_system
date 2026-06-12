@@ -49,12 +49,9 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
 
   useEffect(() => {
     const nextView = resolveCommandView(currentUser, requestedView, initialView || defaultView);
-
-    if (view !== nextView) {
-      setView(nextView);
-    }
+    setView(nextView);
     setVisitedViews((current) => getNextVisitedCommandViews(current, nextView));
-  }, [currentUser, defaultView, initialView, requestedView, view]);
+  }, [currentUser, defaultView, initialView, requestedView]);
 
   function selectView(nextView: CommandView) {
     if (nextView === view) {
@@ -99,7 +96,7 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
         </nav>
         <div className="sidebar-footer">
           <span className="live-pill">{primaryMembership?.role.replace("_", " ") || "Profile"}</span>
-          <small>{primaryMembership?.venue?.name || primaryMembership?.workspace.name || "Workspace access"}.</small>
+          <small>{primaryMembership?.venue?.name || primaryMembership?.organization.name || "Organization access"}.</small>
           <button className="command-button danger" onClick={signOut} type="button">
             <LogOut size={14} />
             Sign out
@@ -129,7 +126,7 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
         ) : null}
         {visitedViews.includes("account") ? (
           <div {...panelProps("account")}>
-            <AccountCommand currentUser={currentUser} />
+            <AccountCommand currentUser={currentUser} initialSection={searchParams.get("section") ?? undefined} />
           </div>
         ) : null}
       </section>

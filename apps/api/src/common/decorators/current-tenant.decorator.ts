@@ -2,7 +2,7 @@ import { createParamDecorator, ExecutionContext } from "@nestjs/common";
 
 export type TenantContext = {
   venueId?: string;
-  workspaceId?: string;
+  organizationId?: string;
 };
 
 export const CurrentTenant = createParamDecorator((_data: unknown, context: ExecutionContext): TenantContext => {
