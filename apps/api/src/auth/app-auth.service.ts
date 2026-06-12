@@ -249,20 +249,33 @@ export class AppAuthService {
       return;
     }
 
-    const token = await this.createEmailToken(user.id, AuthEmailTokenType.PASSWORD_RESET, passwordResetTtlMs);
+    await this.prisma.authEmailToken.updateMany({
+      where: {
+        authUserId: user.id,
+        type: AuthEmailTokenType.PASSWORD_RESET,
+        usedAt: null
+      },
+      data: {
+        usedAt: new Date()
+      }
+    });
+
+    const code = await this.createEmailCode(user.id, AuthEmailTokenType.PASSWORD_RESET, passwordResetTtlMs);
     await this.mail.sendTemplate({
       template: "password_reset",
       to: user.email,
       variables: {
-        actionUrl: this.buildAppUrl(`/login?resetToken=${encodeURIComponent(token)}`),
         appName: "Madupe",
-        displayName: user.displayName
+        displayName: user.displayName,
+        verificationCode: code
       }
     });
   }
 
-  async resetPassword(input: { token: string; password: string }) {
-    const token = await this.consumeEmailToken(input.token, AuthEmailTokenType.PASSWORD_RESET);
+  async resetPassword(input: { token?: string; email?: string; code?: string; password: string }) {
+    const token = input.token
+      ? await this.consumeEmailToken(input.token, AuthEmailTokenType.PASSWORD_RESET)
+      : await this.consumePasswordResetCode(input);
     const updated = await this.prisma.authUser.update({
       where: { id: token.authUserId },
       data: {
@@ -505,6 +518,41 @@ export class AppAuthService {
       !record ||
       record.authUserId !== authUserId ||
       record.type !== AuthEmailTokenType.EMAIL_VERIFICATION ||
+      record.usedAt ||
+      record.expiresAt <= new Date()
+    ) {
+      throw new UnauthorizedException("Invalid or expired code");
+    }
+
+    await this.prisma.authEmailToken.update({
+      where: { id: record.id },
+      data: { usedAt: new Date() }
+    });
+
+    return record;
+  }
+
+  private async consumePasswordResetCode(input: { email?: string; code?: string }) {
+    const email = input.email ? this.normalizeEmail(input.email) : "";
+    const code = input.code?.trim() ?? "";
+
+    if (!email || !/^\d{6}$/.test(code)) {
+      throw new UnauthorizedException("Invalid or expired code");
+    }
+
+    const user = await this.prisma.authUser.findUnique({ where: { email } });
+    if (!user) {
+      throw new UnauthorizedException("Invalid or expired code");
+    }
+
+    const record = await this.prisma.authEmailToken.findUnique({
+      where: { tokenHash: this.hashToken(code) }
+    });
+
+    if (
+      !record ||
+      record.authUserId !== user.id ||
+      record.type !== AuthEmailTokenType.PASSWORD_RESET ||
       record.usedAt ||
       record.expiresAt <= new Date()
     ) {

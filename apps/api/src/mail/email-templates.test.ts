@@ -26,4 +26,17 @@ describe("email templates", () => {
     assert.doesNotMatch(rendered.text, /https:\/\//);
     assert.match(rendered.html, /123456/);
   });
+
+  it("renders password reset as a code without a link", () => {
+    const rendered = renderEmailTemplate("password_reset", {
+      appName: "Madupe",
+      displayName: "Alex",
+      verificationCode: "654321"
+    });
+
+    assert.match(rendered.subject, /Reset your Madupe password/);
+    assert.match(rendered.text, /654321/);
+    assert.doesNotMatch(rendered.text, /https:\/\//);
+    assert.match(rendered.html, /654321/);
+  });
 });

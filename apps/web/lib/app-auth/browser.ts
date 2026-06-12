@@ -37,7 +37,7 @@ export type AppAuthClient = {
     verifyEmailCode: (input: { email: string; code: string }) => Promise<{ error: Error | null }>;
     updatePassword: (input: { oldPassword: string; password: string }) => Promise<{ error: Error | null }>;
     requestPasswordReset: (input: { email: string }) => Promise<{ error: Error | null }>;
-    resetPassword: (input: { token: string; password: string }) => Promise<{ error: Error | null }>;
+    resetPassword: (input: { token?: string; email?: string; code?: string; password: string }) => Promise<{ error: Error | null }>;
     onAuthStateChange: (
       callback: (event: "SIGNED_IN" | "SIGNED_OUT" | "TOKEN_REFRESHED", session: AppAuthSession | null) => void
     ) => { data: { subscription: { unsubscribe: () => void } } };
@@ -97,7 +97,7 @@ export function createBrowserAuthClient() {
       changeUnverifiedEmail: async ({ currentEmail, newEmail }) => commandRequest("/auth/signup/email", { currentEmail, newEmail }),
       verifyEmailCode: async ({ email, code }) => commandRequest("/auth/verify-email", { email, code }),
       requestPasswordReset: async ({ email }) => commandRequest("/auth/password-reset/request", { email }),
-      resetPassword: async ({ token, password }) => commandRequest("/auth/password-reset/confirm", { token, password }),
+      resetPassword: async ({ token, email, code, password }) => commandRequest("/auth/password-reset/confirm", { token, email, code, password }),
       updatePassword: async ({ oldPassword, password }) => {
         const session = await readValidSession();
 

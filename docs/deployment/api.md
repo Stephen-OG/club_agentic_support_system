@@ -58,7 +58,7 @@ openssl rand -base64 48
 The API owns transactional email rendering in `apps/api/src/mail/email-templates.ts`.
 
 - `email_verification`: sends a one-time code to confirm a new account email before workspace setup.
-- `password_reset`: sends a secure password reset link.
+- `password_reset`: sends a one-time code for choosing a new password.
 - `staff_invitation`: sends staff their command-center invite and temporary credential.
 
 ## Pre-Deploy Checks

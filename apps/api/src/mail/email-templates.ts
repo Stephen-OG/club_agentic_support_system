@@ -34,12 +34,13 @@ export const emailTemplateDefinitions: EmailTemplateDefinition[] = [
     key: "password_reset",
     name: "Password Reset",
     subject: ({ appName }) => `Reset your ${appName} password`,
-    preheader: "Use this secure link to set a new password.",
-    ctaLabel: "Reset password",
-    body: ({ displayName }) => [
+    preheader: "Use this one-time code to set a new password.",
+    ctaLabel: "Reset code",
+    body: ({ displayName, verificationCode }) => [
       `Hi ${displayName},`,
       "We received a request to reset your password.",
-      "Use the secure link below to choose a new password. If you did not request this, you can ignore this email."
+      `Enter this code to choose a new password: ${verificationCode || "your reset code"}`,
+      "If you did not request this, you can ignore this email."
     ]
   },
   {

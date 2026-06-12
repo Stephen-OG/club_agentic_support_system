@@ -76,7 +76,7 @@ export class AuthController {
 
   @Post("password-reset/confirm")
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  async resetPassword(@Body() input: { token: string; password: string }) {
+  async resetPassword(@Body() input: { token?: string; email?: string; code?: string; password: string }) {
     await this.appAuth.resetPassword(input);
     return { ok: true };
   }

@@ -32,6 +32,8 @@ export function LoginPanel() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [resetToken, setResetToken] = useState("");
+  const [passwordResetEmail, setPasswordResetEmail] = useState("");
+  const [passwordResetCode, setPasswordResetCode] = useState("");
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
   const [verificationCode, setVerificationCode] = useState("");
   const [changingVerificationEmail, setChangingVerificationEmail] = useState(false);
@@ -48,6 +50,7 @@ export function LoginPanel() {
 
     if (nextResetToken) {
       setResetToken(nextResetToken);
+      setPasswordResetCode("");
       setMode("reset_confirm");
       return;
     }
@@ -90,11 +93,21 @@ export function LoginPanel() {
         setError(result.error.message);
         return;
       }
-      setNotice("If an account exists for that email, a reset link has been sent.");
+      setPasswordResetEmail(email.trim().toLowerCase());
+      setPasswordResetCode("");
+      setMode("reset_confirm");
+      setNotice("If an account exists for that email, a reset code has been sent.");
       return;
     }
 
     if (mode === "reset_confirm") {
+      const resetCode = passwordResetCode.trim();
+      if (!resetToken && !/^\d{6}$/.test(resetCode)) {
+        setError("Enter the 6-digit reset code from your email.");
+        setLoading(false);
+        return;
+      }
+
       if (password.length < 10) {
         setError("Use at least 10 characters for the password.");
         setLoading(false);
@@ -107,7 +120,11 @@ export function LoginPanel() {
         return;
       }
 
-      const result = await authClient.auth.resetPassword({ token: resetToken, password });
+      const result = await authClient.auth.resetPassword(
+        resetToken
+          ? { token: resetToken, password }
+          : { email: passwordResetEmail || email.trim().toLowerCase(), code: resetCode, password }
+      );
       setLoading(false);
       if (result.error) {
         setError(result.error.message);
@@ -116,6 +133,9 @@ export function LoginPanel() {
       setMode("signin");
       setPassword("");
       setConfirmPassword("");
+      setPasswordResetCode("");
+      setPasswordResetEmail("");
+      setResetToken("");
       setNotice("Password updated. You can sign in now.");
       return;
     }
@@ -297,9 +317,11 @@ export function LoginPanel() {
               {mode === "signin"
                 ? "Sign in with your email and password."
                 : mode === "reset_request"
-                ? "Enter your account email and we will send a secure reset link."
+                ? "Enter your account email and we will send a secure reset code."
                 : mode === "reset_confirm"
-                ? "Choose a new password for your account."
+                ? resetToken
+                  ? "Choose a new password for your account."
+                  : `Enter the reset code sent to ${passwordResetEmail || "your email"} and choose a new password.`
                 : "Create your owner login first. We will email you a verification code before workspace setup."}
             </p>
           )}
@@ -388,6 +410,24 @@ export function LoginPanel() {
               <input autoComplete="email" onChange={(event) => setEmail(event.target.value.trim())} required type="email" value={email} />
             </span>
           </label> : null}
+          {mode === "reset_confirm" && !resetToken ? (
+            <label>
+              <span>Reset code</span>
+              <span className="input-shell">
+                <LockKeyhole size={16} />
+                <input
+                  autoComplete="one-time-code"
+                  inputMode="numeric"
+                  maxLength={6}
+                  onChange={(event) => setPasswordResetCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  pattern="[0-9]{6}"
+                  required
+                  type="text"
+                  value={passwordResetCode}
+                />
+              </span>
+            </label>
+          ) : null}
           {mode !== "reset_request" ? <label>
             <span>Password</span>
             <span className="input-shell">
@@ -424,7 +464,7 @@ export function LoginPanel() {
               : mode === "signin"
               ? "Enter command center"
               : mode === "reset_request"
-              ? "Send reset link"
+              ? "Send reset code"
               : mode === "reset_confirm"
               ? "Save new password"
               : "Create account"}

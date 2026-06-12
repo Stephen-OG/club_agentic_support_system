@@ -331,6 +331,111 @@ describe("AppAuthService", () => {
     );
   });
 
+  it("sends password reset as a one-time code", async () => {
+    const user = {
+      id: "auth-1",
+      email: "alex@example.com",
+      displayName: "Alex",
+      emailVerifiedAt: new Date(),
+      mustChangePassword: false,
+      tokenVersion: 1
+    };
+    const tokenUpdates: any[] = [];
+    const createdTokens: any[] = [];
+    const sentEmails: any[] = [];
+    const service = new AppAuthService(
+      {
+        authUser: {
+          findUnique: async ({ where }: any) => (where.email === "alex@example.com" ? user : null)
+        },
+        authEmailToken: {
+          updateMany: async ({ where, data }: any) => {
+            tokenUpdates.push({ where, data });
+            return { count: 1 };
+          },
+          create: async ({ data }: any) => {
+            createdTokens.push(data);
+            return { id: "token-1", ...data };
+          }
+        }
+      } as any,
+      {
+        sendTemplate: async (message: any) => {
+          sentEmails.push(message);
+        }
+      } as any
+    );
+
+    await service.requestPasswordReset({ email: "ALEX@example.com" });
+
+    assert.equal(tokenUpdates[0].where.authUserId, "auth-1");
+    assert.equal(tokenUpdates[0].where.type, "PASSWORD_RESET");
+    assert.equal(tokenUpdates[0].where.usedAt, null);
+    assert.ok(tokenUpdates[0].data.usedAt);
+    assert.equal(createdTokens[0].type, "PASSWORD_RESET");
+    assert.equal(sentEmails[0].template, "password_reset");
+    assert.equal(sentEmails[0].to, "alex@example.com");
+    assert.match(sentEmails[0].variables.verificationCode, /^\d{6}$/);
+    assert.equal(sentEmails[0].variables.actionUrl, undefined);
+  });
+
+  it("resets a password with a one-time code", async () => {
+    const serviceForHash = new AppAuthService({} as any);
+    const codeHash = (serviceForHash as any).hashToken("654321");
+    const user = {
+      id: "auth-1",
+      email: "alex@example.com",
+      displayName: "Alex",
+      emailVerifiedAt: new Date(),
+      mustChangePassword: false,
+      tokenVersion: 1,
+      passwordHash: await (serviceForHash as any).hashPassword("old-password")
+    };
+    const tokenUpdates: any[] = [];
+    const userUpdates: any[] = [];
+    const service = new AppAuthService({
+      authUser: {
+        findUnique: async ({ where }: any) => (where.email === "alex@example.com" ? user : null),
+        update: async ({ where, data }: any) => {
+          userUpdates.push({ where, data });
+          return { ...user, ...data };
+        }
+      },
+      authEmailToken: {
+        findUnique: async ({ where }: any) =>
+          where.tokenHash === codeHash
+            ? {
+                id: "token-1",
+                authUserId: user.id,
+                type: "PASSWORD_RESET",
+                tokenHash: codeHash,
+                usedAt: null,
+                expiresAt: new Date(Date.now() + 60_000)
+              }
+            : null,
+        update: async ({ where, data }: any) => {
+          tokenUpdates.push({ where, data });
+          return { id: where.id, ...data };
+        },
+        updateMany: async () => ({ count: 1 })
+      },
+      authSession: {
+        updateMany: async () => ({ count: 1 })
+      }
+    } as any);
+
+    await service.resetPassword({
+      email: "alex@example.com",
+      code: "654321",
+      password: "new-secure-password"
+    });
+
+    assert.equal(userUpdates[0].where.id, "auth-1");
+    assert.equal(await (serviceForHash as any).verifyPassword("new-secure-password", userUpdates[0].data.passwordHash), true);
+    assert.equal(tokenUpdates[0].where.id, "token-1");
+    assert.ok(tokenUpdates[0].data.usedAt);
+  });
+
   it("signs in with a short-lived JWT access token and hashed refresh token", async () => {
     const restore = withJwtSecret();
     const createdSessions: any[] = [];

@@ -155,4 +155,28 @@ describe("createBrowserAuthClient", () => {
 
     assert.equal(result.error, null);
   });
+
+  it("resets a password with an OTP code", async () => {
+    const { createBrowserAuthClient } = loadBrowserModule();
+
+    globalThis.fetch = async (input, init) => {
+      assert.equal(input, "http://127.0.0.1:4000/auth/password-reset/confirm");
+      assert.deepEqual(init?.headers, { "Content-Type": "application/json" });
+      assert.deepEqual(JSON.parse(String(init?.body)), {
+        email: "alex@example.com",
+        code: "654321",
+        password: "new-secure-password"
+      });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    };
+
+    const client = createBrowserAuthClient();
+    const result = await client.auth.resetPassword({
+      email: "alex@example.com",
+      code: "654321",
+      password: "new-secure-password"
+    });
+
+    assert.equal(result.error, null);
+  });
 });
