@@ -67,6 +67,11 @@ describe("LaunchService", () => {
       model: "teamRole.count",
       args: { where: { organizationId: ownerAuth.organizationId, isActive: true } }
     });
+
+    const servicePointStep = result.steps.find((step) => step.id === "qr_points");
+    assert.equal(servicePointStep?.label, "Generate guest service points");
+    assert.equal(servicePointStep?.detail, "2 active service points ready.");
+    assert.equal(servicePointStep?.actionLabel, "Manage service points");
   });
 
   it("requires owner or admin access", async () => {

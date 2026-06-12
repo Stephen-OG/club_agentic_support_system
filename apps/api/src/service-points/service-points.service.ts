@@ -203,12 +203,14 @@ export class ServicePointsService {
     });
 
     if (!qrPoint) {
-      throw new NotFoundException("QR point not found");
+      throw new NotFoundException("Service point not found");
     }
 
+    const publicServicePoint = this.publicServicePoint(qrPoint);
     const result = {
       chatAvailability: this.publicChatAvailability((qrPoint as any).venue),
-      servicePoint: qrPoint,
+      qrPoint: publicServicePoint,
+      servicePoint: publicServicePoint,
       venue: this.publicVenueSummary((qrPoint as any).venue)
     };
 
@@ -361,7 +363,7 @@ export class ServicePointsService {
     });
 
     if (!qrPoint) {
-      throw new NotFoundException("QR point not found");
+      throw new NotFoundException("Service point not found");
     }
 
     if (input.locationId) {
@@ -417,7 +419,7 @@ export class ServicePointsService {
     });
 
     if (!qrPoint) {
-      throw new NotFoundException("QR point not found");
+      throw new NotFoundException("Service point not found");
     }
 
     const archivedQrPoint = await this.prisma.qrPoint.update({
@@ -702,12 +704,14 @@ export class ServicePointsService {
     venue: { id: string; name: string; slug: string } | null | undefined,
     options?: { request?: unknown; replyPending?: boolean }
   ) {
+    const publicServicePoint = this.publicServicePoint(servicePoint);
     return {
       conversationId,
       messages,
       replyPending: options?.replyPending ?? false,
       request: options?.request ?? null,
-      servicePoint: this.publicServicePoint(servicePoint),
+      qrPoint: publicServicePoint,
+      servicePoint: publicServicePoint,
       chatAvailability: this.publicChatAvailability((venue as any)),
       ...(this.publicVenueSummary(venue) ? { venue: this.publicVenueSummary(venue) } : {})
     };
@@ -837,7 +841,7 @@ export class ServicePointsService {
     });
 
     if (!qrPoint) {
-      throw new NotFoundException("QR point not found");
+      throw new NotFoundException("Service point not found");
     }
 
     this.assertVenueChatIsOpen((qrPoint as any).venue);
@@ -1524,7 +1528,7 @@ export class ServicePointsService {
     });
 
     if (!qrPoint) {
-      throw new NotFoundException("QR point not found");
+      throw new NotFoundException("Service point not found");
     }
 
     const conversation = await this.prisma.conversation.findFirst({
@@ -1566,12 +1570,14 @@ export class ServicePointsService {
       throw new NotFoundException("Conversation not found");
     }
 
+    const publicServicePoint = this.publicServicePoint(qrPoint);
     return {
       conversationId: conversation.id,
       messages: this.publicConversationMessages(conversation.messages),
       replyPending: this.requiresAsyncReply(conversation.messages),
       request: conversation.requests[0] ?? null,
-      servicePoint: this.publicServicePoint(qrPoint),
+      qrPoint: publicServicePoint,
+      servicePoint: publicServicePoint,
       chatAvailability: this.publicChatAvailability((qrPoint as any).venue),
       ...(this.publicVenueSummary((qrPoint as any).venue) ? { venue: this.publicVenueSummary((qrPoint as any).venue) } : {})
     };
@@ -1634,12 +1640,14 @@ export class ServicePointsService {
       throw new NotFoundException("Conversation not found");
     }
 
+    const publicServicePoint = this.publicServicePoint(qrPoint);
     return {
       conversationId: conversation.id,
       messages: this.publicConversationMessages(conversation.messages),
       replyPending: this.requiresAsyncReply(conversation.messages),
       request: conversation.requests[0] ?? null,
-      servicePoint: this.publicServicePoint(qrPoint),
+      qrPoint: publicServicePoint,
+      servicePoint: publicServicePoint,
       chatAvailability: this.publicChatAvailability(venue),
       venue: this.publicVenueSummary(venue)
     };

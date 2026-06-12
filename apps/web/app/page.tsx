@@ -165,7 +165,7 @@ export default function LandingPage() {
         <div>
           <h2 id="venues-heading">For live hospitality teams.</h2>
           <p>
-            Run venue-wide QR intake or attach QR points to rooms, tables, booths, bars, zones, and VIP areas. Staff see
+            Run venue-wide QR intake or attach service points to rooms, tables, booths, bars, zones, and VIP areas. Staff see
             structured requests instead of scattered verbal handoffs.
           </p>
         </div>
@@ -194,7 +194,7 @@ export default function LandingPage() {
           </div>
           <div className="command-row">
             <QrCode size={18} />
-            <span>QR points for service zones</span>
+            <span>Service points for zones</span>
           </div>
           <div className="command-row">
             <MessageSquareText size={18} />

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { LoginPanel } from "../login-panel";
 import { PasswordChangePanel } from "../password-change-panel";
 import { createBrowserAuthClient } from "@/lib/app-auth/browser";
-import { apiRequest } from "@/lib/api/client";
+import { ApiRequestError, apiRequest } from "@/lib/api/client";
 import { getSignedInRouteAction, mustChangePassword } from "@/lib/auth/session-route-policy";
 import type { CommandUser } from "@/lib/auth/types";
 import { useAuthSession } from "@/lib/app-auth/use-session";
@@ -57,15 +57,18 @@ export default function LoginPage() {
           safeReplace(router, action.path);
         }
       })
-      .catch(async () => {
+      .catch(async (error) => {
         if (cancelled) {
           return;
         }
 
         // /me failed — user has no staff profile yet, redirect to setup
-        if (!cancelled) {
+        if (error instanceof ApiRequestError && error.status === 401) {
           safeReplace(router, "/signup");
+          return;
         }
+
+        setSessionValidated(false);
       })
       .finally(() => {
         if (!cancelled) {
@@ -96,4 +99,3 @@ export default function LoginPage() {
 
   return null;
 }
-

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LockKeyhole, Mail, Radar, UserPlus } from "lucide-react";
 import { createBrowserAuthClient } from "@/lib/app-auth/browser";
-import { apiRequest } from "@/lib/api/client";
+import { ApiRequestError, apiRequest } from "@/lib/api/client";
 import { getSignedInRouteAction, mustChangePassword } from "@/lib/auth/session-route-policy";
 import {
   getAuthEntryHref,
@@ -242,9 +242,14 @@ export function LoginPanel() {
       if (action.kind === "redirect") {
         router.replace(action.path);
       }
-    } catch {
-      // /me failed — staff profile not found, redirect to signup
-      router.replace("/signup");
+    } catch (error) {
+      // /me returned the configured "no staff profile" status; send new users to setup.
+      if (error instanceof ApiRequestError && error.status === 401) {
+        router.replace("/signup");
+        return;
+      }
+
+      setError(error instanceof Error ? error.message : "Could not load your staff profile.");
     }
   }
 

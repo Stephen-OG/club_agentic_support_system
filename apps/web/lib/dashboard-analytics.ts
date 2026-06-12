@@ -54,7 +54,7 @@ export function calculateAdminDashboardControls(venues: DashboardVenue[], reques
       gaps.push("opening hours");
     }
     if (!activeCount) {
-      gaps.push("active QR points");
+      gaps.push("active service points");
     }
     if (gaps.length) {
       venueSetupGaps.push({ gaps, venueId: venue.id, venueName: venue.name });

@@ -347,7 +347,7 @@ export function VenueSupportChat({ venueSlug }: { venueSlug: string }) {
       <div className="panel chat">
         <div className="chat-header">
           <div>
-            <strong>{venueName || "Venue support"}</strong>
+            <h1>{venueName || "Venue support"}</h1>
             <div className="meta">
               {chatClosed ? "Closed for now" : locationLabel ? `Lily has your location as ${locationLabel}` : "Tell Lily where you are and what you need"}
             </div>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { apiRequest, getValidAccessToken, publicApiRequest } from "./client";
+import { ApiRequestError, apiRequest, getValidAccessToken, publicApiRequest } from "./client";
 
 const originalFetch = globalThis.fetch;
 
@@ -63,6 +63,27 @@ describe("apiRequest", () => {
     };
 
     await assert.rejects(() => apiRequest(authClient as unknown as Parameters<typeof apiRequest>[0], "/team"), /API server is unreachable/);
+  });
+
+  it("preserves HTTP status on failed API responses", async () => {
+    globalThis.fetch = async () => new Response(JSON.stringify({ message: "Staff account is not configured" }), { status: 401 });
+
+    const authClient = {
+      auth: {
+        getSession: async () => ({
+          data: {
+            session: {
+              access_token: "token"
+            }
+          }
+        })
+      }
+    };
+
+    await assert.rejects(
+      () => apiRequest(authClient as unknown as Parameters<typeof apiRequest>[0], "/me"),
+      (error) => error instanceof ApiRequestError && error.status === 401 && error.message === "Staff account is not configured"
+    );
   });
 });
 

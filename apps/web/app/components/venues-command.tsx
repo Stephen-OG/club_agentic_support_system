@@ -154,7 +154,7 @@ export function VenuesCommand() {
       );
       setQrPointDrafts((current) => ({ ...current, [venue.id]: { label: "", locationId: "" } }));
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Could not create QR point");
+      setError(nextError instanceof Error ? nextError.message : "Could not create service point");
     } finally {
       setCreatingPointId(null);
     }
@@ -228,7 +228,7 @@ export function VenuesCommand() {
         return next;
       });
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Could not update QR point");
+      setError(nextError instanceof Error ? nextError.message : "Could not update service point");
     } finally {
       setSavingPointId(null);
     }
@@ -258,7 +258,7 @@ export function VenuesCommand() {
         )
       );
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Could not delete QR point");
+      setError(nextError instanceof Error ? nextError.message : "Could not delete service point");
     } finally {
       setDeletingPointId(null);
     }
@@ -324,7 +324,7 @@ export function VenuesCommand() {
             </div>
             <div className="venue-stats">
               <span>{venue.locations.length} zones</span>
-              <span>{venue.qrPoints.length} QR points</span>
+              <span>{venue.qrPoints.length} service points</span>
             </div>
             <div className="qr-point-row venue-wide-row">
               <QrCode size={18} />
@@ -368,7 +368,7 @@ export function VenuesCommand() {
             </form>
             <form className="qr-point-form" onSubmit={(event) => void createQrPoint(event, venue)}>
               <label className="field-group qr-point-name-field">
-                <span>New QR point</span>
+                <span>New service point</span>
                 <input
                   className="truncate-input"
                   onChange={(event) => updateQrPointDraft(venue.id, { label: event.target.value })}
@@ -394,7 +394,7 @@ export function VenuesCommand() {
               </label>
               <button className="command-button primary" disabled={creatingPointId === venue.id} type="submit">
                 <Plus size={15} />
-                {creatingPointId === venue.id ? "Creating..." : "Add QR point"}
+                {creatingPointId === venue.id ? "Creating..." : "Add service point"}
               </button>
             </form>
             <div className="qr-point-list">
@@ -410,7 +410,7 @@ export function VenuesCommand() {
                         <QrCode size={18} />
                         <div className="qr-point-edit-grid">
                           <label className="field-group qr-point-name-field">
-                            <span>QR point</span>
+                            <span>Service point</span>
                             <input
                               className="truncate-input"
                               onChange={(event) => updateEditingPointDraft(point.id, { label: event.target.value })}
@@ -436,7 +436,7 @@ export function VenuesCommand() {
                         </div>
                         <div className="qr-point-actions">
                           <button
-                            aria-label={`Save QR point ${point.label}`}
+                            aria-label={`Save service point ${point.label}`}
                             className="icon-button success"
                             disabled={savingPointId === point.id}
                             onClick={() => void updateQrPoint(venue, point)}
@@ -480,7 +480,7 @@ export function VenuesCommand() {
                             <Copy size={15} />
                           </button>
                           <button
-                            aria-label={`Edit QR point ${point.label}`}
+                            aria-label={`Edit service point ${point.label}`}
                             className="icon-button"
                             onClick={() => startEditingPoint(point)}
                             type="button"
@@ -488,7 +488,7 @@ export function VenuesCommand() {
                             <Edit3 size={15} />
                           </button>
                           <button
-                            aria-label={`Delete QR point ${point.label}`}
+                            aria-label={`Delete service point ${point.label}`}
                             className="icon-button danger"
                             disabled={deletingPointId === point.id}
                             onClick={() => void deleteQrPoint(venue, point)}

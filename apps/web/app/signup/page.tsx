@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Building2, ChevronRight, Globe, Hash, Loader2, MapPinned, User, Users } from "lucide-react";
 import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 import { useAuthSession } from "@/lib/app-auth/use-session";
-import { mustChangePassword } from "@/lib/auth/session-route-policy";
+import { getSignedInRouteAction, mustChangePassword } from "@/lib/auth/session-route-policy";
+import type { CommandUser } from "@/lib/auth/types";
 import { getSignupSlugError, normalizeSignupSlug } from "@/lib/auth/signup-flow";
 import { apiBaseUrl, createApiUnreachableError } from "@/lib/api/client";
 import { safeReplace } from "@/lib/navigation";
@@ -53,10 +54,20 @@ export default function SetupPage() {
         Authorization: `Bearer ${session.access_token}`
       }
     })
-      .then((res) => {
+      .then(async (res) => {
         if (res.ok) {
-          // Already has a profile, redirect to the command center.
-          safeReplace(router, "/command");
+          const user = (await res.json().catch(() => null)) as CommandUser | null;
+          if (user) {
+            const action = getSignedInRouteAction({
+              user,
+              userMetadata: session.user.user_metadata
+            });
+            if (action.kind === "redirect") {
+              safeReplace(router, action.path);
+            }
+          } else {
+            safeReplace(router, "/command");
+          }
         }
         // If 401/403, proceed with setup
       })

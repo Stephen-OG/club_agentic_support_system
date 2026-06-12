@@ -395,7 +395,7 @@ function AdminControls({ controls }: { controls: ReturnType<typeof calculateAdmi
   const topSetupGap = controls.venueSetupGaps[0];
   const setupGapDetail = topSetupGap
     ? `${topSetupGap.venueName}: ${topSetupGap.gaps.join(", ")}`
-    : "All venues have opening hours and active QR points.";
+    : "All venues have opening hours and active service points.";
   const controlsList = [
     {
       detail: `${controls.urgentUnassignedRequests} urgent/high need owner assignment`,
@@ -414,7 +414,7 @@ function AdminControls({ controls }: { controls: ReturnType<typeof calculateAdmi
       value: `${controls.escalatedRequests} escalated`
     },
     {
-      detail: `${controls.inactiveServicePoints} inactive QR point${controls.inactiveServicePoints === 1 ? "" : "s"} across managed venues`,
+      detail: `${controls.inactiveServicePoints} inactive service point${controls.inactiveServicePoints === 1 ? "" : "s"} across managed venues`,
       href: "?view=venues",
       icon: QrCode,
       label: "QR coverage",
@@ -438,7 +438,7 @@ function AdminControls({ controls }: { controls: ReturnType<typeof calculateAdmi
           <h2>Management</h2>
           <span className="panel-subtle">Operational access, queue ownership, and venue readiness controls</span>
         </div>
-        <span className="data-chip">{controls.activeServicePoints} live QR points</span>
+        <span className="data-chip">{controls.activeServicePoints} live service points</span>
       </div>
       <div className="admin-control-grid">
         {controlsList.map((item) => {

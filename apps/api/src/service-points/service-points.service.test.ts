@@ -38,6 +38,7 @@ type PublicGuestMessageResult = {
   messages: unknown[];
   replyPending: boolean;
   request: unknown;
+  qrPoint: unknown;
   servicePoint: unknown;
 };
 
@@ -173,6 +174,7 @@ describe("ServicePointsService public QR workflow", () => {
     assert.deepEqual(result.messages, storedMessages);
     assert.deepEqual(result.request, supportRequest);
     assert.deepEqual(result.servicePoint, publicServicePoint);
+    assert.deepEqual(result.qrPoint, publicServicePoint);
     assert.deepEqual(
       published.map((event) => ({ ...(event as any), occurredAt: "Any<Date>" })),
       [
@@ -629,6 +631,7 @@ describe("ServicePointsService public QR workflow", () => {
     assert.deepEqual(result.messages, storedMessages);
     assert.deepEqual(result.request, supportRequest);
     assert.deepEqual(result.servicePoint, publicServicePoint);
+    assert.deepEqual(result.qrPoint, publicServicePoint);
     assert.equal(calls.some((call) => call.model === "conversation.create"), false);
     assert.equal(calls.some((call) => call.model === "supportRequest.create"), true);
     assert.deepEqual(
@@ -1106,6 +1109,7 @@ describe("ServicePointsService public QR workflow", () => {
       messages,
       replyPending: true,
       request,
+      qrPoint: publicServicePoint,
       servicePoint: publicServicePoint
     });
     assert.deepEqual(calls, [
@@ -1332,6 +1336,7 @@ describe("ServicePointsService public QR workflow", () => {
       messages,
       replyPending: false,
       request,
+      qrPoint: publicServicePoint,
       servicePoint: publicServicePoint,
       venue: { id: venue.id, name: venue.name, slug: venue.slug }
     });

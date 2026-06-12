@@ -3452,7 +3452,7 @@ body {
   align-items: start;
   display: grid;
   gap: 18px;
-  grid-template-columns: 230px minmax(0, 1fr);
+  grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
 }
 
 .settings-nav {
@@ -3497,6 +3497,7 @@ body {
   align-content: start;
   display: grid;
   gap: var(--space-4);
+  min-width: 0;
 }
 
 .settings-facts {
@@ -3586,7 +3587,13 @@ body {
   background: #0a100e;
   border: 1px solid var(--line);
   border-radius: 8px;
+  grid-template-columns: 46px minmax(120px, 1fr) minmax(120px, 1fr) minmax(74px, auto);
   padding: 10px;
+}
+
+.settings-hours-row .closed-toggle {
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .service-point-row {
@@ -3700,6 +3707,10 @@ body {
     position: static;
   }
 
+  .settings-hours-row {
+    grid-template-columns: 42px minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+
   .donut-row,
   .satisfaction-layout,
   .workload-grid,
@@ -3800,6 +3811,22 @@ body {
   .modal-actions {
     align-items: stretch;
     display: grid;
+  }
+}
+
+@media (max-width: 640px) {
+  .settings-hours-row {
+    align-items: stretch;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .settings-hours-row > strong {
+    grid-column: 1;
+  }
+
+  .settings-hours-row .closed-toggle {
+    grid-column: 2;
+    justify-self: end;
   }
 }
 
@@ -3911,9 +3938,10 @@ body {
   min-width: 0;
 }
 
-.qr-chat-page .chat-header strong {
+.qr-chat-page .chat-header h1 {
   display: block;
   font-size: 18px;
+  margin: 0;
 }
 
 .qr-chat-page .chat-header .meta {
@@ -4372,7 +4400,7 @@ body {
 }
 
 @media (max-width: 430px) {
-  .qr-chat-page .chat-header strong {
+  .qr-chat-page .chat-header h1 {
     font-size: 16px;
   }
 

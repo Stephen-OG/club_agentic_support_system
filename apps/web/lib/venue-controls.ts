@@ -161,7 +161,7 @@ export function createLocationPayload(draft: LocationDraft) {
 
 export function createOpeningHoursPayload(openingHours: OpeningHourDraft[]) {
   return {
-    hours: openingHours.map((hours) => ({
+    openingHours: openingHours.map((hours) => ({
       dayOfWeek: hours.dayOfWeek,
       opensAt: hours.opensAt,
       closesAt: hours.closesAt,

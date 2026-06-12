@@ -9,6 +9,7 @@ import { formatClientChatTimestamp } from "@/lib/chat-time";
 import { reconcileGuestConversationMessages } from "@/lib/guest-chat-state";
 import { shouldShowGuestIntroActions, shouldShowGuestMessageTimestamp } from "@/lib/guest-chat-ui";
 import { createGuestSessionHeaders, getOrCreateGuestSessionId } from "@/lib/guest-session";
+import { getPublicQrServicePoint } from "@/lib/public-qr-state";
 import { connectGuestConversationEvents } from "@/lib/realtime-events";
 import type { ClientRequestAction, SatisfactionRating } from "@/lib/request-actions";
 import { createGuestRequestStatusLabel } from "@/lib/request-display";
@@ -63,6 +64,15 @@ function createSessionEndedMessage(): LocalMessage {
   };
 }
 
+function createIntakeLoadErrorMessage(): LocalMessage {
+  return {
+    id: "service-point-load-error",
+    sender: "system",
+    body: "I could not load this service point. Please refresh, scan the QR code again, or speak to a team member nearby.",
+    createdAt: new Date().toISOString()
+  };
+}
+
 function normalizeMessage(message: CommandMessage): LocalMessage {
   return {
     id: message.id,
@@ -98,6 +108,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   const [chatAvailability, setChatAvailability] = useState<PublicChatAvailability | null>(null);
   const [guestSessionId, setGuestSessionId] = useState("");
   const [intakeLoaded, setIntakeLoaded] = useState(false);
+  const [intakeError, setIntakeError] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const isSendingRef = useRef(false);
@@ -117,6 +128,15 @@ export function QrChat({ qrToken }: { qrToken: string }) {
     messages,
     requestStatus: request?.status ?? null
   });
+
+  const applyIntakeLoadError = useCallback(() => {
+    setIntakeError(true);
+    setIntakeLoaded(true);
+    setServicePointLabel("Service point unavailable");
+    setMessages((current) =>
+      current.some((message) => message.id === "service-point-load-error") ? current : [createIntakeLoadErrorMessage()]
+    );
+  }, []);
 
   useEffect(() => {
     isSendingRef.current = isSending;
@@ -166,18 +186,28 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       }).catch(() => null);
 
       if (!result || cancelled) {
+        if (!result && !cancelled) {
+          applyIntakeLoadError();
+        }
         return;
       }
 
-      setServicePointLabel(result.qrPoint.label);
+      const servicePoint = getPublicQrServicePoint(result);
+      if (!servicePoint) {
+        applyIntakeLoadError();
+        return;
+      }
+
+      setIntakeError(false);
+      setServicePointLabel(servicePoint.label);
       setVenueName(result.venue?.name ?? null);
       setChatAvailability(result.chatAvailability);
       setIntakeLoaded(true);
 
       if (!result.chatAvailability.isOpen) {
-        applyClosedState(result.qrPoint.label);
+        applyClosedState(servicePoint.label);
       } else if (!conversationId) {
-        setMessages([createWelcomeMessage(result.qrPoint.label)]);
+        setMessages([createWelcomeMessage(servicePoint.label)]);
       }
     }
 
@@ -188,7 +218,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [applyClosedState, conversationId, qrToken]);
+  }, [applyClosedState, applyIntakeLoadError, conversationId, qrToken]);
 
   useEffect(() => {
     const storedConversationId = window.localStorage.getItem(conversationStorageKey);
@@ -228,7 +258,9 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         return;
       }
 
-      const label = result.qrPoint.label || servicePointLabel;
+      const servicePoint = getPublicQrServicePoint(result);
+      const label = servicePoint?.label || servicePointLabel;
+      setIntakeError(false);
       setServicePointLabel(label);
       setVenueName(result.venue?.name ?? null);
       setChatAvailability(result.chatAvailability ?? null);
@@ -275,7 +307,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
 
   async function sendMessage(nextMessage?: string) {
     const body = (nextMessage || input).trim();
-    if (!body || isSending || chatClosed || !guestSessionId || !intakeLoaded) {
+    if (!body || isSending || chatClosed || !guestSessionId || !intakeLoaded || intakeError) {
       return;
     }
 
@@ -289,24 +321,27 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         body: JSON.stringify({ message: body, conversationId, sessionId: guestSessionId })
       });
 
-      setServicePointLabel(result.qrPoint.label);
+      const servicePoint = getPublicQrServicePoint(result);
+      const label = servicePoint?.label || servicePointLabel;
+      setIntakeError(false);
+      setServicePointLabel(label);
       setVenueName(result.venue?.name ?? null);
       setChatAvailability(result.chatAvailability ?? null);
 
       if (result.chatAvailability?.isOpen === false) {
-        applyClosedState(result.qrPoint.label);
+        applyClosedState(label);
         return;
       }
 
       if (result.request && endedRequestStatuses.has(result.request.status)) {
-        applyEndedState(result.qrPoint.label);
+        applyEndedState(label);
         return;
       }
 
       setMessages((current) =>
         reconcileConversationMessages({
           currentMessages: current,
-          label: result.qrPoint.label,
+          label,
           replyPending: Boolean(result.replyPending),
           serverMessages: result.messages
         })
@@ -387,7 +422,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       <div className="panel chat">
         <div className="chat-header">
           <div>
-            <strong>{intakeLoaded ? servicePointLabel : "Loading service point"}</strong>
+            <h1>{intakeLoaded ? servicePointLabel : "Loading service point"}</h1>
             <div className="meta">{chatClosed ? "Closed for now" : venueName ? `${venueName} support with Lily` : "Guest support with Lily"}</div>
           </div>
           <span className={statusClassName}>{statusText}</span>
@@ -416,7 +451,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
                   {supportQuickActions.map((action) => (
                     <button
                       className={action.id === "safety" ? "urgent-action" : undefined}
-                      disabled={isSending}
+                      disabled={isSending || intakeError}
                       key={`intro-${action.id}`}
                       onClick={() => void sendMessage(action.prompt)}
                       type="button"
@@ -480,10 +515,10 @@ export function QrChat({ qrToken }: { qrToken: string }) {
               }
             }}
             placeholder="Tell us what you need..."
-            disabled={chatClosed || !intakeLoaded}
+            disabled={chatClosed || !intakeLoaded || intakeError}
             value={input}
           />
-          <button className="button" disabled={isSending || chatClosed || !intakeLoaded} type="submit" title="Send message">
+          <button className="button" disabled={isSending || chatClosed || !intakeLoaded || intakeError} type="submit" title="Send message">
             <Send size={18} />
           </button>
         </form>

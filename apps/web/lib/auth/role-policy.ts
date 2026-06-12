@@ -55,7 +55,7 @@ export function resolveCommandView(user: CommandUser, requestedView: string | nu
     return requestedView;
   }
 
-  return visibleIds.has(fallbackView) ? fallbackView : getRoleDashboardMode(user) === "staff" ? "staff" : "dashboard";
+  return visibleIds.has(fallbackView) ? fallbackView : getRoleDashboardMode(user) === "staff" ? "operations" : "dashboard";
 }
 
 export function getCommandViewHref(pathname: string, view: CommandView) {

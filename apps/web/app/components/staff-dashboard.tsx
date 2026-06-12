@@ -262,7 +262,7 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
                   <span className={`severity-dot severity-${getPriorityClassName(request.priority)}`} />
                   <div>
                     <strong>{request.title}</strong>
-                    <span>{request.qrPoint?.label || "QR point"} · {request.summary || request.category}</span>
+                    <span>{request.qrPoint?.label || "Service point"} · {request.summary || request.category}</span>
                   </div>
                 </div>
                 <div className="pill-row compact">

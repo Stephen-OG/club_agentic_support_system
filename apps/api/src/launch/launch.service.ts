@@ -107,10 +107,10 @@ export class LaunchService {
       },
       {
         id: "qr_points",
-        label: "Generate guest QR points",
-        detail: servicePointCount ? `${servicePointCount} active QR point${servicePointCount === 1 ? "" : "s"} ready.` : "Create venue or service-point QR codes.",
+        label: "Generate guest service points",
+        detail: servicePointCount ? `${servicePointCount} active service point${servicePointCount === 1 ? "" : "s"} ready.` : "Create venue or service-point QR codes.",
         complete: servicePointCount > 0,
-        actionLabel: "Manage QR points",
+        actionLabel: "Manage service points",
         actionView: "venues"
       },
       {

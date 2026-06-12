@@ -352,7 +352,7 @@ describe("dashboard analytics", () => {
       openUnassignedRequests: 2,
       urgentUnassignedRequests: 2,
       venueSetupGaps: [
-        { venueId: "venue-b", venueName: "Roof Bar", gaps: ["opening hours", "active QR points"] }
+        { venueId: "venue-b", venueName: "Roof Bar", gaps: ["opening hours", "active service points"] }
       ]
     });
   });

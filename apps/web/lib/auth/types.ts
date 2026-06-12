@@ -99,6 +99,9 @@ export type CommandVenue = {
 
 export type PublicVenueSummary = Pick<CommandVenue, "id" | "name" | "slug">;
 
+export type PublicServicePointSummary = Pick<CommandQrPoint, "id" | "label" | "venueId"> &
+  Partial<Omit<CommandQrPoint, "id" | "label" | "qrToken" | "venueId">>;
+
 export type PublicChatAvailability = {
   isOpen: boolean;
   reason: "open" | "closed" | "hours_not_configured";
@@ -164,12 +167,14 @@ export type PublicQrConversationState = {
   messages: CommandMessage[];
   replyPending?: boolean;
   request: CommandSupportRequest | null;
-  qrPoint: CommandQrPoint;
+  qrPoint?: PublicServicePointSummary;
+  servicePoint?: PublicServicePointSummary;
   venue?: PublicVenueSummary;
 };
 
 export type PublicQrIntakeState = {
   chatAvailability: PublicChatAvailability;
-  qrPoint: CommandQrPoint;
+  qrPoint?: PublicServicePointSummary;
+  servicePoint?: PublicServicePointSummary;
   venue?: PublicVenueSummary;
 };

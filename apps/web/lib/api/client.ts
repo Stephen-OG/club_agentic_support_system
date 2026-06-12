@@ -7,6 +7,16 @@ type ApiErrorBody = {
   message?: string;
 };
 
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
 export type ApiRequestInit = RequestInit & {
   accessToken?: string;
 };
@@ -23,7 +33,7 @@ async function parseResponse<T>(response: Response) {
   const body = (await response.json().catch(() => null)) as (ApiErrorBody & T) | null;
 
   if (!response.ok) {
-    throw new Error(body?.message || body?.error || "Request failed");
+    throw new ApiRequestError(body?.message || body?.error || "Request failed", response.status);
   }
 
   return body as T;

@@ -85,7 +85,7 @@ describe("venue controls", () => {
         }
       ]),
       {
-        hours: [
+        openingHours: [
           {
             dayOfWeek: 1,
             opensAt: "10:00",

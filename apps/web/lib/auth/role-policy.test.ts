@@ -35,6 +35,9 @@ assert.equal(getRoleDashboardMode(baseUser("staff")), "staff");
 
 assert.equal(resolveCommandView(baseUser("admin", null), "operations", "dashboard"), "operations");
 assert.equal(resolveCommandView(baseUser("staff"), "operations", "operations"), "operations");
+assert.equal(resolveCommandView(baseUser("staff"), undefined, "staff"), "operations");
+assert.equal(resolveCommandView(baseUser("security"), undefined, "staff"), "operations");
+assert.equal(resolveCommandView(baseUser("read_only"), undefined, "staff"), "operations");
 assert.equal(resolveCommandView(baseUser("manager"), "team", "dashboard"), "team");
 assert.equal(getCommandViewHref("/command", "operations"), "/command?view=operations");
 
