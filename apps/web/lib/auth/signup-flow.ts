@@ -29,10 +29,6 @@ export function getSignupSlugError(label: string, slug: string) {
   return null;
 }
 
-export function getSignupEmailRedirectTo(origin: string) {
-  return `${origin.replace(/\/$/, "")}/login`;
-}
-
 export function getAuthEntryHref(entry: AuthEntry) {
   return entry === "signup" ? "/login?mode=signup" : "/login";
 }

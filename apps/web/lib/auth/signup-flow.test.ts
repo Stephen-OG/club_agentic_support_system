@@ -4,7 +4,6 @@ import {
   getAuthEntryHref,
   getLoginModeFromSearchParams,
   getSignupCompletionAction,
-  getSignupEmailRedirectTo,
   getSignupSlugError,
   normalizeSignupSlug
 } from "./signup-flow";
@@ -35,10 +34,6 @@ describe("signup flow", () => {
       getSignupSlugError("Venue", "bad--slug"),
       "Venue slug can only use lowercase letters, numbers, and single hyphens."
     );
-  });
-
-  it("redirects verification emails back to login", () => {
-    assert.equal(getSignupEmailRedirectTo("https://app.example.com/"), "https://app.example.com/login");
   });
 
   it("points public signup entry to the create account mode on login", () => {

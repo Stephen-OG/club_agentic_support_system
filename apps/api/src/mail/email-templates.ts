@@ -1,10 +1,11 @@
 export type EmailTemplateKey = "email_verification" | "password_reset" | "staff_invitation";
 
 type TemplateVariables = {
-  actionUrl: string;
+  actionUrl?: string;
   appName: string;
   displayName: string;
   temporaryPassword?: string;
+  verificationCode?: string;
 };
 
 type EmailTemplateDefinition = {
@@ -21,12 +22,12 @@ export const emailTemplateDefinitions: EmailTemplateDefinition[] = [
     key: "email_verification",
     name: "Email Verification",
     subject: ({ appName }) => `Verify your ${appName} email`,
-    preheader: "Confirm your email address to finish setting up your workspace.",
-    ctaLabel: "Verify email",
-    body: ({ appName, displayName }) => [
+    preheader: "Use this one-time code to finish setting up your workspace.",
+    ctaLabel: "Verification code",
+    body: ({ appName, displayName, verificationCode }) => [
       `Hi ${displayName},`,
-      `Confirm this email address to finish creating your ${appName} account.`,
-      "This link expires soon. If you did not create an account, you can ignore this email."
+      `Enter this code to finish creating your ${appName} account: ${verificationCode || "your verification code"}`,
+      "This code expires soon. If you did not create an account, you can ignore this email."
     ]
   },
   {
@@ -63,12 +64,13 @@ export function renderEmailTemplate(key: EmailTemplateKey, variables: TemplateVa
     throw new Error(`Unknown email template: ${key}`);
   }
 
+  const actionLine = variables.actionUrl ? [`${template.ctaLabel}: ${variables.actionUrl}`] : [];
   const textLines = [
     template.preheader,
     "",
     ...template.body(variables),
     "",
-    `${template.ctaLabel}: ${variables.actionUrl}`
+    ...actionLine
   ];
 
   const paragraphs = template
@@ -95,10 +97,10 @@ export function renderEmailTemplate(key: EmailTemplateKey, variables: TemplateVa
             <tr>
               <td style="padding:16px 28px 28px;">
                 ${paragraphs}
-                <p style="margin:24px 0;">
+                ${variables.actionUrl ? `<p style="margin:24px 0;">
                   <a href="${escapeAttribute(variables.actionUrl)}" style="display:inline-block;background:#153f34;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700;">${escapeHtml(template.ctaLabel)}</a>
                 </p>
-                <p style="margin:16px 0 0;color:#5b7068;font-size:13px;line-height:1.5;">If the button does not work, paste this link into your browser:<br>${escapeHtml(variables.actionUrl)}</p>
+                <p style="margin:16px 0 0;color:#5b7068;font-size:13px;line-height:1.5;">If the button does not work, paste this link into your browser:<br>${escapeHtml(variables.actionUrl)}</p>` : ""}
               </td>
             </tr>
           </table>

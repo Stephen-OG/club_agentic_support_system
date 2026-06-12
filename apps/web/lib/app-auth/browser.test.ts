@@ -133,4 +133,26 @@ describe("createBrowserAuthClient", () => {
 
     assert.equal(result.error, null);
   });
+
+  it("verifies an email address with an OTP code", async () => {
+    const { createBrowserAuthClient } = loadBrowserModule();
+
+    globalThis.fetch = async (input, init) => {
+      assert.equal(input, "http://127.0.0.1:4000/auth/verify-email");
+      assert.deepEqual(init?.headers, { "Content-Type": "application/json" });
+      assert.deepEqual(JSON.parse(String(init?.body)), {
+        email: "alex@example.com",
+        code: "123456"
+      });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    };
+
+    const client = createBrowserAuthClient();
+    const result = await client.auth.verifyEmailCode({
+      email: "alex@example.com",
+      code: "123456"
+    });
+
+    assert.equal(result.error, null);
+  });
 });

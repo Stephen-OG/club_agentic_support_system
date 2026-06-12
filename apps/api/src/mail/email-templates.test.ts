@@ -16,13 +16,14 @@ describe("email templates", () => {
 
   it("renders email verification with explicit text and html bodies", () => {
     const rendered = renderEmailTemplate("email_verification", {
-      actionUrl: "https://madupe.com/verify?token=abc",
       appName: "Madupe",
-      displayName: "Alex"
+      displayName: "Alex",
+      verificationCode: "123456"
     });
 
     assert.match(rendered.subject, /Verify your Madupe email/);
-    assert.match(rendered.text, /https:\/\/madupe\.com\/verify\?token=abc/);
-    assert.match(rendered.html, /Verify email/);
+    assert.match(rendered.text, /123456/);
+    assert.doesNotMatch(rendered.text, /https:\/\//);
+    assert.match(rendered.html, /123456/);
   });
 });

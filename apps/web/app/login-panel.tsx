@@ -10,8 +10,7 @@ import { getSignedInRouteAction, mustChangePassword } from "@/lib/auth/session-r
 import {
   getAuthEntryHref,
   getLoginModeFromSearchParams,
-  getSignupCompletionAction,
-  getSignupEmailRedirectTo
+  getSignupCompletionAction
 } from "@/lib/auth/signup-flow";
 import type { CommandUser } from "@/lib/auth/types";
 
@@ -34,6 +33,7 @@ export function LoginPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   const [resetToken, setResetToken] = useState("");
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
   const [changingVerificationEmail, setChangingVerificationEmail] = useState(false);
   const [replacementEmail, setReplacementEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -64,6 +64,7 @@ export function LoginPanel() {
     setError(null);
     setNotice(null);
     setVerificationEmail(null);
+    setVerificationCode("");
 
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", getAuthEntryHref(nextMode));
@@ -136,7 +137,6 @@ export function LoginPanel() {
         email,
         password,
         options: {
-          emailRedirectTo: typeof window === "undefined" ? undefined : getSignupEmailRedirectTo(window.location.origin),
           data: { mustChangePassword: false }
         }
       });
@@ -155,6 +155,7 @@ export function LoginPanel() {
       }
 
       setVerificationEmail(email.trim().toLowerCase());
+      setVerificationCode("");
       setChangingVerificationEmail(false);
       setReplacementEmail("");
       setNotice(null);
@@ -234,8 +235,44 @@ export function LoginPanel() {
 
     setVerificationEmail(nextEmail);
     setEmail(nextEmail);
+    setVerificationCode("");
     setReplacementEmail("");
     setChangingVerificationEmail(false);
+  }
+
+  async function submitVerificationCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!authClient || !verificationEmail) {
+      setError("app auth is not configured for this environment.");
+      return;
+    }
+
+    const code = verificationCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      setError("Enter the 6-digit code from your email.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+
+    const result = await authClient.auth.verifyEmailCode({
+      email: verificationEmail,
+      code
+    });
+
+    setLoading(false);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    setMode("signin");
+    setVerificationEmail(null);
+    setVerificationCode("");
+    setNotice("Email verified. You can sign in now.");
   }
 
   return (
@@ -254,7 +291,7 @@ export function LoginPanel() {
           <div className="eyebrow">Secure access</div>
           <h2>{mode === "signup" ? "Create account" : mode === "reset_request" ? "Reset password" : mode === "reset_confirm" ? "Set new password" : "Sign in"}</h2>
           {verificationEmail ? (
-            <p className="muted">Check {verificationEmail} to verify your account. After confirming, sign in here to finish workspace setup.</p>
+            <p className="muted">Enter the 6-digit code sent to {verificationEmail} to verify your account.</p>
           ) : (
             <p className="muted">
               {mode === "signin"
@@ -263,7 +300,7 @@ export function LoginPanel() {
                 ? "Enter your account email and we will send a secure reset link."
                 : mode === "reset_confirm"
                 ? "Choose a new password for your account."
-                : "Create your owner login first. We will email you a verification link before workspace setup."}
+                : "Create your owner login first. We will email you a verification code before workspace setup."}
             </p>
           )}
         </div>
@@ -302,15 +339,31 @@ export function LoginPanel() {
               </button>
             </form>
           ) : (
-            <div className="auth-form">
+            <form className="auth-form" onSubmit={submitVerificationCode}>
+              <label>
+                <span>Verification code</span>
+                <span className="input-shell">
+                  <LockKeyhole size={16} />
+                  <input
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    maxLength={6}
+                    onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    pattern="[0-9]{6}"
+                    required
+                    type="text"
+                    value={verificationCode}
+                  />
+                </span>
+              </label>
               {notice ? <div className="form-success">{notice}</div> : null}
               {error ? <div className="form-error">{error}</div> : null}
               <button
                 className="command-button primary"
-                onClick={() => showAuthMode("signin")}
-                type="button"
+                disabled={loading}
+                type="submit"
               >
-                Sign in after confirming
+                {loading ? "Checking..." : "Verify email"}
               </button>
               <button
                 className="link-button"
@@ -324,7 +377,7 @@ export function LoginPanel() {
               >
                 Use a different email
               </button>
-            </div>
+            </form>
           )
         ) : (
         <form className="auth-form" onSubmit={submit}>

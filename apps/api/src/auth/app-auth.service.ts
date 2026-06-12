@@ -1,9 +1,9 @@
-import { createHash, createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt, scrypt, timingSafeEqual } from "node:crypto";
 import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { AuthEmailTokenType } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service";
 import { MailService } from "../mail/mail.service";
-import { getPublicApiBaseUrl, getPublicAppBaseUrl } from "../security/security-config";
+import { getPublicAppBaseUrl } from "../security/security-config";
 
 const passwordHashParams = { keyLength: 64, cost: 16_384, blockSize: 8, parallelization: 1 };
 const accessTokenTtlSeconds = 60 * 15;
@@ -42,10 +42,18 @@ export class AppAuthService {
 
     if (existing) {
       if (!existing.emailVerifiedAt) {
-        await this.sendEmailVerification(existing);
+        const updated = await this.prisma.authUser.update({
+          where: { id: existing.id },
+          data: {
+            passwordHash: await this.hashPassword(input.password),
+            displayName: input.displayName?.trim() || existing.displayName
+          }
+        });
+
+        await this.sendEmailVerification(updated);
         return {
           session: null,
-          user: this.serializeUser(existing)
+          user: this.serializeUser(updated)
         };
       }
 
@@ -278,6 +286,28 @@ export class AppAuthService {
     return this.serializeUser(updated);
   }
 
+  async verifyEmailCode(input: { email: string; code: string }) {
+    const email = this.normalizeEmail(input.email);
+    const code = input.code.trim();
+
+    if (!/^\d{6}$/.test(code)) {
+      throw new UnauthorizedException("Invalid or expired code");
+    }
+
+    const user = await this.prisma.authUser.findUnique({ where: { email } });
+    if (!user) {
+      throw new UnauthorizedException("Invalid or expired code");
+    }
+
+    const token = await this.consumeEmailCodeForUser(user.id, code);
+    const updated = await this.prisma.authUser.update({
+      where: { id: token.authUserId },
+      data: { emailVerifiedAt: new Date() }
+    });
+
+    return this.serializeUser(updated);
+  }
+
   async signOut(token: string) {
     const payload = this.verifyAccessToken(token);
     await this.revokeUserRefreshSessions(payload.sub);
@@ -396,16 +426,42 @@ export class AppAuthService {
       return;
     }
 
-    const token = await this.createEmailToken(user.id, AuthEmailTokenType.EMAIL_VERIFICATION, emailVerificationTtlMs);
+    await this.prisma.authEmailToken.updateMany({
+      where: {
+        authUserId: user.id,
+        type: AuthEmailTokenType.EMAIL_VERIFICATION,
+        usedAt: null
+      },
+      data: {
+        usedAt: new Date()
+      }
+    });
+
+    const code = await this.createEmailCode(user.id, AuthEmailTokenType.EMAIL_VERIFICATION, emailVerificationTtlMs);
     await this.mail.sendTemplate({
       template: "email_verification",
       to: user.email,
       variables: {
-        actionUrl: this.buildApiUrl(`/auth/verify-email?token=${encodeURIComponent(token)}`),
         appName: "Madupe",
-        displayName: user.displayName
+        displayName: user.displayName,
+        verificationCode: code
       }
     });
+  }
+
+  private async createEmailCode(authUserId: string, type: AuthEmailTokenType, ttlMs: number) {
+    const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+
+    await this.prisma.authEmailToken.create({
+      data: {
+        authUserId,
+        type,
+        tokenHash: this.hashToken(code),
+        expiresAt: new Date(Date.now() + ttlMs)
+      }
+    });
+
+    return code;
   }
 
   private async createEmailToken(authUserId: string, type: AuthEmailTokenType, ttlMs: number) {
@@ -440,12 +496,31 @@ export class AppAuthService {
     return record;
   }
 
-  private buildAppUrl(path: string) {
-    return new URL(path, getPublicAppBaseUrl()).toString();
+  private async consumeEmailCodeForUser(authUserId: string, code: string) {
+    const record = await this.prisma.authEmailToken.findUnique({
+      where: { tokenHash: this.hashToken(code) }
+    });
+
+    if (
+      !record ||
+      record.authUserId !== authUserId ||
+      record.type !== AuthEmailTokenType.EMAIL_VERIFICATION ||
+      record.usedAt ||
+      record.expiresAt <= new Date()
+    ) {
+      throw new UnauthorizedException("Invalid or expired code");
+    }
+
+    await this.prisma.authEmailToken.update({
+      where: { id: record.id },
+      data: { usedAt: new Date() }
+    });
+
+    return record;
   }
 
-  private buildApiUrl(path: string) {
-    return new URL(path, getPublicApiBaseUrl()).toString();
+  private buildAppUrl(path: string) {
+    return new URL(path, getPublicAppBaseUrl()).toString();
   }
 
   private async hashPassword(password: string) {

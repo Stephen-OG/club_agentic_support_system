@@ -101,6 +101,13 @@ export class AuthController {
     };
   }
 
+  @Post("verify-email")
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async verifyEmailCode(@Body() input: { email: string; code: string }) {
+    await this.appAuth.verifyEmailCode(input);
+    return { ok: true };
+  }
+
   @Post("signout")
   async signOut(@Headers("authorization") authorization?: string) {
     const token = this.getBearerToken(authorization);

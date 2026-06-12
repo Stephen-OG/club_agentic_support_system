@@ -60,7 +60,7 @@ describe("AppAuthService", () => {
     assert.equal(createdUser?.mustChangePassword, true);
   });
 
-  it("signs up an unverified user and sends a verification email token", async () => {
+  it("signs up an unverified user and sends a verification email code", async () => {
     const restoreEnv = withEnv({ PUBLIC_API_URL: "https://api.madupe.com" });
     const createdTokens: any[] = [];
     const sentEmails: any[] = [];
@@ -71,6 +71,7 @@ describe("AppAuthService", () => {
           create: async ({ data }: any) => ({ id: "auth-1", ...data })
         },
         authEmailToken: {
+          updateMany: async () => ({ count: 0 }),
           create: async ({ data }: any) => {
             createdTokens.push(data);
             return { id: "token-1", ...data };
@@ -95,8 +96,8 @@ describe("AppAuthService", () => {
       assert.equal(createdTokens[0].type, "EMAIL_VERIFICATION");
       assert.equal(sentEmails[0].template, "email_verification");
       assert.equal(sentEmails[0].to, "alex@example.com");
-      assert.match(sentEmails[0].variables.actionUrl, /^https:\/\/api\.madupe\.com\/auth\/verify-email\?token=/);
-      assert.doesNotMatch(sentEmails[0].variables.actionUrl, /127\.0\.0\.1|localhost/);
+      assert.match(sentEmails[0].variables.verificationCode, /^\d{6}$/);
+      assert.equal(sentEmails[0].variables.actionUrl, undefined);
     } finally {
       restoreEnv();
     }
@@ -105,6 +106,7 @@ describe("AppAuthService", () => {
   it("resends verification email when an unverified account signs up again", async () => {
     const createdTokens: any[] = [];
     const sentEmails: any[] = [];
+    const tokenUpdates: any[] = [];
     const existingUser = {
       id: "auth-1",
       email: "alex@example.com",
@@ -115,9 +117,14 @@ describe("AppAuthService", () => {
     const service = new AppAuthService(
       {
         authUser: {
-          findUnique: async () => existingUser
+          findUnique: async () => existingUser,
+          update: async ({ data }: any) => ({ ...existingUser, ...data })
         },
         authEmailToken: {
+          updateMany: async ({ where, data }: any) => {
+            tokenUpdates.push({ where, data });
+            return { count: 1 };
+          },
           create: async ({ data }: any) => {
             createdTokens.push(data);
             return { id: "token-1", ...data };
@@ -139,12 +146,110 @@ describe("AppAuthService", () => {
 
     assert.equal(result.session, null);
     assert.equal(result.user.id, "auth-1");
+    assert.equal(tokenUpdates[0].where.authUserId, "auth-1");
+    assert.equal(tokenUpdates[0].where.type, "EMAIL_VERIFICATION");
+    assert.equal(tokenUpdates[0].where.usedAt, null);
+    assert.ok(tokenUpdates[0].data.usedAt);
     assert.equal(createdTokens[0].type, "EMAIL_VERIFICATION");
     assert.equal(sentEmails[0].template, "email_verification");
     assert.equal(sentEmails[0].to, "alex@example.com");
   });
 
-  it("changes an unverified signup email and sends a fresh verification link", async () => {
+  it("verifies an email address with its one-time code", async () => {
+    const service = new AppAuthService({} as any);
+    const codeHash = (service as any).hashToken("123456");
+    const user = {
+      id: "auth-1",
+      email: "alex@example.com",
+      displayName: "Alex",
+      emailVerifiedAt: null,
+      mustChangePassword: false,
+      tokenVersion: 1
+    };
+    const tokenUpdates: any[] = [];
+    const userUpdates: any[] = [];
+    const serviceWithPrisma = new AppAuthService({
+      authUser: {
+        findUnique: async ({ where }: any) => (where.email === "alex@example.com" ? user : null),
+        update: async ({ where, data }: any) => {
+          userUpdates.push({ where, data });
+          return { ...user, ...data };
+        }
+      },
+      authEmailToken: {
+        findUnique: async ({ where }: any) =>
+          where.tokenHash === codeHash
+            ? {
+                id: "token-1",
+                authUserId: user.id,
+                type: "EMAIL_VERIFICATION",
+                tokenHash: codeHash,
+                usedAt: null,
+                expiresAt: new Date(Date.now() + 60_000)
+              }
+            : null,
+        update: async ({ where, data }: any) => {
+          tokenUpdates.push({ where, data });
+          return { id: where.id, ...data };
+        }
+      }
+    } as any);
+
+    const result = await serviceWithPrisma.verifyEmailCode({
+      email: "ALEX@example.com",
+      code: "123456"
+    });
+
+    assert.equal(result.id, "auth-1");
+    assert.equal(userUpdates[0].where.id, "auth-1");
+    assert.ok(userUpdates[0].data.emailVerifiedAt);
+    assert.equal(tokenUpdates[0].where.id, "token-1");
+    assert.ok(tokenUpdates[0].data.usedAt);
+  });
+
+  it("updates the password when an unverified account signs up again", async () => {
+    const existingUser = {
+      id: "auth-1",
+      email: "alex@example.com",
+      displayName: "Alex",
+      emailVerifiedAt: null,
+      mustChangePassword: false,
+      tokenVersion: 1,
+      passwordHash: await (new AppAuthService({} as any) as any).hashPassword("old-signup-password")
+    };
+    let updatedPasswordHash = "";
+    const service = new AppAuthService(
+      {
+        authUser: {
+          findUnique: async () => existingUser,
+          update: async ({ data }: any) => {
+            updatedPasswordHash = data.passwordHash;
+            return { ...existingUser, ...data };
+          }
+        },
+        authEmailToken: {
+          updateMany: async () => ({ count: 0 }),
+          create: async ({ data }: any) => ({ id: "token-1", ...data })
+        }
+      } as any,
+      {
+        sendTemplate: async () => undefined
+      } as any
+    );
+
+    const result = await service.signUp({
+      email: "alex@example.com",
+      password: "new-signup-password",
+      displayName: "New Name"
+    });
+
+    assert.equal(result.session, null);
+    assert.equal(result.user.id, "auth-1");
+    assert.equal(await (service as any).verifyPassword("new-signup-password", updatedPasswordHash), true);
+    assert.equal(await (service as any).verifyPassword("old-signup-password", updatedPasswordHash), false);
+  });
+
+  it("changes an unverified signup email and sends a fresh verification code", async () => {
     const user = {
       id: "auth-1",
       email: "wrong@example.com",

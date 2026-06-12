@@ -74,10 +74,11 @@ export class MailService {
     template: EmailTemplateKey;
     to: string;
     variables: {
-      actionUrl: string;
+      actionUrl?: string;
       appName: string;
       displayName: string;
       temporaryPassword?: string;
+      verificationCode?: string;
     };
   }) {
     const from = this.config.get<string>("MAIL_FROM") || this.config.get<string>("SMTP_FROM");
