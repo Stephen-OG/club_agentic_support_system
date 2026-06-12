@@ -2193,27 +2193,44 @@ body {
   width: 38px;
 }
 
-.command-sidebar nav {
+.command-nav {
   display: grid;
   gap: 8px;
 }
 
-.command-sidebar button {
+.command-nav-button {
   align-items: center;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
+  box-sizing: border-box;
   color: var(--muted);
   cursor: pointer;
   display: flex;
+  font-size: 14px;
+  font-weight: 650;
   gap: 10px;
+  justify-content: flex-start;
+  line-height: 1.25;
   min-height: 40px;
   padding: 0 10px;
   text-align: left;
+  width: 100%;
 }
 
-.command-sidebar button.active,
-.command-sidebar button:hover {
+.command-nav-button svg {
+  flex: 0 0 auto;
+}
+
+.command-nav-button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-nav-button.active,
+.command-nav-button:hover {
   background: var(--surface-2);
   border-color: var(--line);
   color: var(--ink);
@@ -3198,7 +3215,8 @@ body {
 }
 
 .zone-create-form,
-.service-point-form {
+.service-point-form,
+.qr-point-form {
   align-items: end;
   border-bottom: 1px solid var(--line);
   display: grid;
@@ -3213,6 +3231,7 @@ body {
 }
 
 .service-point-form label span,
+.qr-point-form label span,
 .zone-create-form label span {
   color: var(--muted);
   font-size: var(--text-caption);
@@ -3221,9 +3240,13 @@ body {
 
 .service-point-form input,
 .service-point-form select,
+.qr-point-form input,
+.qr-point-form select,
 .zone-create-form input,
 .service-point-edit-grid input,
-.service-point-edit-grid select {
+.service-point-edit-grid select,
+.qr-point-edit-grid input,
+.qr-point-edit-grid select {
   background: #0a100e;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
@@ -3243,7 +3266,9 @@ body {
 
 .truncate-input,
 .service-point-copy strong,
-.service-point-copy span {
+.service-point-copy span,
+.qr-point-copy strong,
+.qr-point-copy span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3254,7 +3279,8 @@ body {
 }
 
 .directory-row,
-.service-point-row {
+.service-point-row,
+.qr-point-row {
   align-items: center;
   background: #0a100e;
   border: 1px solid var(--line);
@@ -3263,6 +3289,42 @@ body {
   gap: 12px;
   grid-template-columns: minmax(0, 1fr) auto;
   padding: 13px;
+}
+
+.qr-point-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.qr-point-row > svg {
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.qr-point-row.editing {
+  align-items: end;
+}
+
+.qr-point-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.qr-point-edit-grid {
+  align-items: end;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(220px, 280px) minmax(160px, 1fr);
+  min-width: 0;
+}
+
+.qr-point-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .directory-meta {
@@ -3584,9 +3646,32 @@ body {
   .request-row,
   .staff-task,
   .service-point-form,
+  .qr-point-form,
   .zone-create-form,
-  .service-point-edit-grid {
+  .service-point-edit-grid,
+  .qr-point-edit-grid {
     grid-template-columns: 1fr;
+  }
+
+  .command-heading,
+  .qr-preview-header {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .command-heading > .command-button {
+    justify-self: start;
+  }
+
+  .qr-point-row,
+  .qr-point-row.editing {
+    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .qr-point-actions {
+    grid-column: 2;
+    justify-content: flex-start;
   }
 
   .command-sidebar {

@@ -14,6 +14,8 @@ import {
 } from "@/lib/request-notification-alerts";
 import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 import {
+  adminVenueOpeningHoursPath,
+  adminVenuesPath,
   createOpeningHoursPayload,
   getVenueChatAvailabilityPreview,
   normalizeOpeningHours,
@@ -76,7 +78,7 @@ export function AccountCommand({ currentUser, initialSection }: { currentUser: C
     setSettingsError(null);
 
     try {
-      const nextVenues = await apiRequest<CommandVenue[]>(authClient, "/admin/venues");
+      const nextVenues = await apiRequest<CommandVenue[]>(authClient, adminVenuesPath());
       setVenues(nextVenues);
       setSelectedVenueId((current) => current || nextVenues[0]?.id || "");
       setHourDrafts((current) => {
@@ -125,7 +127,7 @@ export function AccountCommand({ currentUser, initialSection }: { currentUser: C
 
     try {
       const openingHours = hourDrafts[venue.id] ?? normalizeOpeningHours(venue.hours);
-      const updated = await apiRequest<CommandVenue>(authClient, `/admin/venues/${venue.id}/opening-hours`, {
+      const updated = await apiRequest<CommandVenue>(authClient, adminVenueOpeningHoursPath(venue.id), {
         method: "PATCH",
         body: JSON.stringify(createOpeningHoursPayload(openingHours))
       });
