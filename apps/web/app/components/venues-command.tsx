@@ -8,6 +8,7 @@ import type { CommandQrPoint, CommandVenue, CommandVenueLocation } from "@/lib/a
 import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 import { generateQrCodeDataUrl } from "@/lib/qr";
 import {
+  adminVenueServicePointsPath,
   createLocationPayload,
   createQrPointPayload,
   createQrPointUpdatePayload,
@@ -134,7 +135,7 @@ export function VenuesCommand() {
 
     try {
       const draft = qrPointDrafts[venue.id] ?? { label: "", locationId: "" };
-      const point = await apiRequest<CommandQrPoint>(authClient, `/admin/venues/${venue.id}/qr-points`, {
+      const point = await apiRequest<CommandQrPoint>(authClient, adminVenueServicePointsPath(venue.id), {
         method: "POST",
         body: JSON.stringify(createQrPointPayload(draft))
       });

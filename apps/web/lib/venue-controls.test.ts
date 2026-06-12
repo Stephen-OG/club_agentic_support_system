@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  adminVenueServicePointsPath,
   createLocationPayload,
   createOpeningHoursPayload,
   createQrPointPayload,
@@ -22,6 +23,10 @@ describe("venue controls", () => {
   it("builds guest URLs for venue-wide and service-point QR codes", () => {
     assert.equal(venueWideGuestUrl("https://app.example.com", "blue-note"), "https://app.example.com/venue/blue-note");
     assert.equal(qrPointGuestUrl("https://app.example.com/", "qr_table_1"), "https://app.example.com/qr/qr_table_1");
+  });
+
+  it("builds the admin service-point creation path used by the API", () => {
+    assert.equal(adminVenueServicePointsPath("venue_1"), "/admin/venues/venue_1/service-points");
   });
 
   it("trims service-point labels and omits blank location IDs", () => {

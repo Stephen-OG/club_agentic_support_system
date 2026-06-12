@@ -113,6 +113,10 @@ export function qrPointGuestUrl(origin: string, qrToken: string) {
   return `${trimTrailingSlash(origin)}/qr/${qrToken}`;
 }
 
+export function adminVenueServicePointsPath(venueId: string) {
+  return `/admin/venues/${venueId}/service-points`;
+}
+
 export function createQrPointPayload(draft: QrPointDraft) {
   const label = draft.label.trim();
   const locationId = draft.locationId?.trim();
