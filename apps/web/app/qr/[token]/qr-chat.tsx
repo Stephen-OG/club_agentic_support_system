@@ -92,11 +92,12 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   const [isSending, setIsSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [request, setRequest] = useState<CommandSupportRequest | null>(null);
-  const [servicePointLabel, setServicePointLabel] = useState("this QR point");
+  const [servicePointLabel, setServicePointLabel] = useState("your location");
   const [venueName, setVenueName] = useState<string | null>(null);
-  const [messages, setMessages] = useState<LocalMessage[]>(() => [createWelcomeMessage("this QR point")]);
+  const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [chatAvailability, setChatAvailability] = useState<PublicChatAvailability | null>(null);
   const [guestSessionId, setGuestSessionId] = useState("");
+  const [intakeLoaded, setIntakeLoaded] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const isSendingRef = useRef(false);
@@ -134,10 +135,10 @@ export function QrChat({ qrToken }: { qrToken: string }) {
     setGuestSessionId(getOrCreateGuestSessionId(sessionStorageKey));
   }, [conversationStorageKey, sessionStorageKey]);
 
-  const applyClosedState = useCallback(() => {
+  const applyClosedState = useCallback((label: string) => {
     resetGuestSession();
     setMessages([
-      createWelcomeMessage(servicePointLabel),
+      createWelcomeMessage(label),
       {
         id: "closed",
         sender: "system",
@@ -145,7 +146,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         createdAt: new Date().toISOString()
       }
     ]);
-  }, [resetGuestSession, servicePointLabel]);
+  }, [resetGuestSession]);
 
   const applyEndedState = useCallback((label: string) => {
     resetGuestSession();
@@ -171,9 +172,10 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       setServicePointLabel(result.qrPoint.label);
       setVenueName(result.venue?.name ?? null);
       setChatAvailability(result.chatAvailability);
+      setIntakeLoaded(true);
 
       if (!result.chatAvailability.isOpen) {
-        applyClosedState();
+        applyClosedState(result.qrPoint.label);
       } else if (!conversationId) {
         setMessages([createWelcomeMessage(result.qrPoint.label)]);
       }
@@ -230,9 +232,10 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       setServicePointLabel(label);
       setVenueName(result.venue?.name ?? null);
       setChatAvailability(result.chatAvailability ?? null);
+      setIntakeLoaded(true);
 
       if (result.chatAvailability?.isOpen === false) {
-        applyClosedState();
+        applyClosedState(label);
         return;
       }
 
@@ -272,7 +275,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
 
   async function sendMessage(nextMessage?: string) {
     const body = (nextMessage || input).trim();
-    if (!body || isSending || chatClosed || !guestSessionId) {
+    if (!body || isSending || chatClosed || !guestSessionId || !intakeLoaded) {
       return;
     }
 
@@ -291,7 +294,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       setChatAvailability(result.chatAvailability ?? null);
 
       if (result.chatAvailability?.isOpen === false) {
-        applyClosedState();
+        applyClosedState(result.qrPoint.label);
         return;
       }
 
@@ -384,8 +387,8 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       <div className="panel chat">
         <div className="chat-header">
           <div>
-            <strong>{venueName || servicePointLabel}</strong>
-            <div className="meta">{chatClosed ? "Closed for now" : venueName ? `${servicePointLabel} support with Lily` : "Guest support with Lily"}</div>
+            <strong>{intakeLoaded ? servicePointLabel : "Loading service point"}</strong>
+            <div className="meta">{chatClosed ? "Closed for now" : venueName ? `${venueName} support with Lily` : "Guest support with Lily"}</div>
           </div>
           <span className={statusClassName}>{statusText}</span>
         </div>
@@ -477,10 +480,10 @@ export function QrChat({ qrToken }: { qrToken: string }) {
               }
             }}
             placeholder="Tell us what you need..."
-            disabled={chatClosed}
+            disabled={chatClosed || !intakeLoaded}
             value={input}
           />
-          <button className="button" disabled={isSending || chatClosed} type="submit" title="Send message">
+          <button className="button" disabled={isSending || chatClosed || !intakeLoaded} type="submit" title="Send message">
             <Send size={18} />
           </button>
         </form>

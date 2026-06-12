@@ -77,7 +77,6 @@ export class MailService {
       actionUrl?: string;
       appName: string;
       displayName: string;
-      temporaryPassword?: string;
       verificationCode?: string;
     };
   }) {

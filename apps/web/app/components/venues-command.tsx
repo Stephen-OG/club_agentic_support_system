@@ -328,7 +328,7 @@ export function VenuesCommand() {
             </div>
             <div className="qr-point-row venue-wide-row">
               <QrCode size={18} />
-              <div>
+              <div className="venue-wide-copy">
                 <strong>Venue-wide QR</strong>
                 <span>{venueUrl}</span>
               </div>

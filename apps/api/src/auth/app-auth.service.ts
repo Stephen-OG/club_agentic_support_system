@@ -164,20 +164,31 @@ export class AppAuthService {
     });
   }
 
-  async sendStaffInvitationEmail(input: { authUserId: string; email: string; displayName: string; temporaryPassword: string }) {
+  async sendStaffInvitationEmail(input: { authUserId: string; email: string; displayName: string }) {
     if (!this.mail) {
       return;
     }
 
-    const token = await this.createEmailToken(input.authUserId, AuthEmailTokenType.STAFF_INVITATION, staffInvitationTtlMs);
+    await this.prisma.authEmailToken.updateMany({
+      where: {
+        authUserId: input.authUserId,
+        type: AuthEmailTokenType.PASSWORD_RESET,
+        usedAt: null
+      },
+      data: {
+        usedAt: new Date()
+      }
+    });
+
+    const code = await this.createEmailCode(input.authUserId, AuthEmailTokenType.PASSWORD_RESET, staffInvitationTtlMs);
     await this.mail.sendTemplate({
       template: "staff_invitation",
       to: input.email,
       variables: {
-        actionUrl: this.buildAppUrl(`/login?inviteToken=${encodeURIComponent(token)}`),
+        actionUrl: this.buildAppUrl(`/login?mode=reset_confirm&email=${encodeURIComponent(input.email)}`),
         appName: "Madupe",
         displayName: input.displayName,
-        temporaryPassword: input.temporaryPassword
+        verificationCode: code
       }
     });
   }

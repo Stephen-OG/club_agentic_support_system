@@ -38,7 +38,7 @@ export type CreatedStaffCredential = {
     email: string;
     displayName: string;
   };
-  temporaryPassword: string;
+  invitationSent: boolean;
 };
 
 export type CommandTeamMember = {

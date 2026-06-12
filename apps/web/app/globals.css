@@ -3225,6 +3225,10 @@ body {
   padding: var(--space-4) 0;
 }
 
+.qr-point-form {
+  grid-template-columns: minmax(220px, 360px) minmax(180px, 1fr) auto;
+}
+
 .zone-create-form {
   grid-template-columns: minmax(240px, 360px) auto;
   justify-content: start;
@@ -3276,6 +3280,20 @@ body {
 
 .venue-wide-row {
   margin-bottom: 14px;
+}
+
+.venue-wide-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.venue-wide-copy span {
+  color: var(--muted);
+  font-size: var(--text-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .directory-row,

@@ -149,14 +149,13 @@ export class StaffService {
     await this.appAuth.sendStaffInvitationEmail?.({
       authUserId: authUser.id,
       email,
-      displayName: input.displayName.trim(),
-      temporaryPassword
+      displayName: input.displayName.trim()
     });
 
     return {
       staff: result.staff,
       membership: result.membership,
-      temporaryPassword
+      invitationSent: true
     };
   }
 

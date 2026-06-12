@@ -39,4 +39,18 @@ describe("email templates", () => {
     assert.doesNotMatch(rendered.text, /https:\/\//);
     assert.match(rendered.html, /654321/);
   });
+
+  it("renders staff invitations as password setup OTP emails", () => {
+    const rendered = renderEmailTemplate("staff_invitation", {
+      actionUrl: "https://madupe.com/login?mode=reset_confirm&email=sam%40example.com",
+      appName: "Madupe",
+      displayName: "Sam",
+      verificationCode: "246810"
+    });
+
+    assert.match(rendered.subject, /invited to Madupe/);
+    assert.match(rendered.text, /246810/);
+    assert.match(rendered.text, /Set password: https:\/\/madupe\.com\/login/);
+    assert.doesNotMatch(rendered.text, /Temporary password/);
+  });
 });

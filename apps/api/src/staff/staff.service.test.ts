@@ -43,7 +43,7 @@ describe("StaffService", () => {
     assert.equal(result.staff.authUserId, "auth-1");
     assert.equal(result.staff.email, "sam@example.com");
     assert.equal(result.membership.role, "STAFF");
-    assert.match(result.temporaryPassword, /^Madupe-/);
+    assert.equal(result.invitationSent, true);
   });
 
   it("sends a staff invitation email after creating app auth credentials", async () => {
@@ -86,8 +86,7 @@ describe("StaffService", () => {
       {
         authUserId: "auth-1",
         email: "sam@example.com",
-        displayName: "Sam Service",
-        temporaryPassword: "Madupe-temporary-1!"
+        displayName: "Sam Service"
       }
     ]);
   });

@@ -1,5 +1,6 @@
 export type SignupCompletionAction = { kind: "setup" } | { kind: "verify-email" };
 export type AuthEntry = "signin" | "signup";
+export type LoginMode = AuthEntry | "reset_request" | "reset_confirm";
 
 export function getSignupCompletionAction(input: { hasSession: boolean }): SignupCompletionAction {
   return input.hasSession ? { kind: "setup" } : { kind: "verify-email" };
@@ -33,6 +34,12 @@ export function getAuthEntryHref(entry: AuthEntry) {
   return entry === "signup" ? "/login?mode=signup" : "/login";
 }
 
-export function getLoginModeFromSearchParams(params: URLSearchParams): AuthEntry {
-  return params.get("mode") === "signup" ? "signup" : "signin";
+export function getLoginModeFromSearchParams(params: URLSearchParams): LoginMode {
+  const mode = params.get("mode");
+
+  if (mode === "signup" || mode === "reset_request" || mode === "reset_confirm") {
+    return mode;
+  }
+
+  return "signin";
 }

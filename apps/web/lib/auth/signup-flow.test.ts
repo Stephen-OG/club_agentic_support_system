@@ -40,6 +40,7 @@ describe("signup flow", () => {
     assert.equal(getAuthEntryHref("signin"), "/login");
     assert.equal(getAuthEntryHref("signup"), "/login?mode=signup");
     assert.equal(getLoginModeFromSearchParams(new URLSearchParams("mode=signup")), "signup");
+    assert.equal(getLoginModeFromSearchParams(new URLSearchParams("mode=reset_confirm&email=sam%40example.com")), "reset_confirm");
     assert.equal(getLoginModeFromSearchParams(new URLSearchParams("")), "signin");
   });
 });

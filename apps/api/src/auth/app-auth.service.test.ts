@@ -441,6 +441,56 @@ describe("AppAuthService", () => {
     assert.equal(sentEmails[0].variables.actionUrl, undefined);
   });
 
+  it("sends staff invitations as one-time password setup codes", async () => {
+    const user = {
+      id: "auth-1",
+      email: "sam@example.com",
+      displayName: "Sam Service",
+      emailVerifiedAt: new Date(),
+      mustChangePassword: true,
+      tokenVersion: 1
+    };
+    const tokenUpdates: any[] = [];
+    const createdTokens: any[] = [];
+    const sentEmails: any[] = [];
+    const service = new AppAuthService(
+      {
+        authEmailToken: {
+          updateMany: async ({ where, data }: any) => {
+            tokenUpdates.push({ where, data });
+            return { count: 0 };
+          },
+          create: async ({ data }: any) => {
+            createdTokens.push(data);
+            return { id: "token-1", ...data };
+          }
+        }
+      } as any,
+      {
+        sendTemplate: async (message: any) => {
+          sentEmails.push(message);
+        }
+      } as any
+    );
+
+    await service.sendStaffInvitationEmail({
+      authUserId: user.id,
+      email: user.email,
+      displayName: user.displayName
+    });
+
+    assert.equal(tokenUpdates[0].where.authUserId, "auth-1");
+    assert.equal(tokenUpdates[0].where.type, "PASSWORD_RESET");
+    assert.equal(tokenUpdates[0].where.usedAt, null);
+    assert.ok(tokenUpdates[0].data.usedAt);
+    assert.equal(createdTokens[0].type, "PASSWORD_RESET");
+    assert.equal(sentEmails[0].template, "staff_invitation");
+    assert.equal(sentEmails[0].to, "sam@example.com");
+    assert.match(sentEmails[0].variables.verificationCode, /^\d{6}$/);
+    assert.equal(sentEmails[0].variables.temporaryPassword, undefined);
+    assert.match(sentEmails[0].variables.actionUrl, /\/login\?mode=reset_confirm&email=sam%40example\.com$/);
+  });
+
   it("does not send password reset codes for unverified emails", async () => {
     const tokenUpdates: any[] = [];
     const createdTokens: any[] = [];

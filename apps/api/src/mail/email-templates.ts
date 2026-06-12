@@ -4,7 +4,6 @@ type TemplateVariables = {
   actionUrl?: string;
   appName: string;
   displayName: string;
-  temporaryPassword?: string;
   verificationCode?: string;
 };
 
@@ -47,13 +46,13 @@ export const emailTemplateDefinitions: EmailTemplateDefinition[] = [
     key: "staff_invitation",
     name: "Staff Invitation",
     subject: ({ appName }) => `You have been invited to ${appName}`,
-    preheader: "Your team account is ready. Sign in and set a new password.",
-    ctaLabel: "Open command center",
-    body: ({ appName, displayName, temporaryPassword }) => [
+    preheader: "Your team account is ready. Use this one-time code to set your password.",
+    ctaLabel: "Set password",
+    body: ({ appName, displayName, verificationCode }) => [
       `Hi ${displayName},`,
       `Your ${appName} staff account is ready.`,
-      `Temporary password: ${temporaryPassword || "provided by your manager"}`,
-      "You will be asked to set a new password after signing in."
+      `Enter this one-time code to set your password: ${verificationCode || "your invitation code"}`,
+      "This code expires soon. If you were not expecting this invitation, you can ignore this email."
     ]
   }
 ];

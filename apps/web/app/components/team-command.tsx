@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, RefreshCw, UserPlus } from "lucide-react";
+import { MailCheck, RefreshCw, UserPlus } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
 import type { CommandRole, CommandTeamMember, CommandUser, CommandVenue, CreatedStaffCredential } from "@/lib/auth/types";
@@ -201,13 +201,12 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
       </div>
       {created ? (
         <div className="command-panel credential-panel">
-          <h2>Temporary password</h2>
-          <p>This password is shown once. The user must change it at first login.</p>
-          <code>{created.temporaryPassword}</code>
-          <button className="command-button" onClick={() => void navigator.clipboard.writeText(created.temporaryPassword)} type="button">
-            <Copy size={16} />
-            Copy password
-          </button>
+          <h2>Invitation sent</h2>
+          <p>{created.staff.displayName} will receive a one-time code by email to set a password and access this account.</p>
+          <div className="data-chip">
+            <MailCheck size={14} />
+            OTP email sent to {created.staff.email}
+          </div>
         </div>
       ) : null}
     </section>

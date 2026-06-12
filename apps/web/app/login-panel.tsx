@@ -10,11 +10,10 @@ import { getSignedInRouteAction, mustChangePassword } from "@/lib/auth/session-r
 import {
   getAuthEntryHref,
   getLoginModeFromSearchParams,
-  getSignupCompletionAction
+  getSignupCompletionAction,
+  type LoginMode
 } from "@/lib/auth/signup-flow";
 import type { CommandUser } from "@/lib/auth/types";
-
-type LoginMode = "signin" | "signup" | "reset_request" | "reset_confirm";
 
 export function LoginPanel() {
   const router = useRouter();
@@ -48,6 +47,12 @@ export function LoginPanel() {
 
     const params = new URLSearchParams(window.location.search);
     const nextResetToken = params.get("resetToken");
+    const nextEmail = params.get("email")?.trim().toLowerCase() ?? "";
+
+    if (nextEmail) {
+      setEmail(nextEmail);
+      setPasswordResetEmail(nextEmail);
+    }
 
     if (nextResetToken) {
       setResetToken(nextResetToken);
