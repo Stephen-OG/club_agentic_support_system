@@ -286,7 +286,7 @@ export function VenuesCommand() {
     <section className="command-grid">
       <div className="command-heading">
         <div>
-          <div className="eyebrow">Organization topology</div>
+          <div className="eyebrow">Organization</div>
           <h1>Venues & service points</h1>
         </div>
         <button className="command-button" disabled={loading} onClick={() => void refresh()} type="button">

@@ -83,13 +83,19 @@ export function AppShell({ currentUser, initialView }: { currentUser: CommandUse
             <span>Command Center</span>
           </div>
         </div>
-        <nav aria-label="Command center navigation">
+        <nav aria-label="Command center navigation" className="command-nav">
           {visibleViews.map((item) => {
             const Icon = iconByView[item.id];
             return (
-              <button className={view === item.id ? "active" : ""} key={item.id} onClick={() => selectView(item.id)} type="button">
+              <button
+                aria-current={view === item.id ? "page" : undefined}
+                className={view === item.id ? "command-nav-button active" : "command-nav-button"}
+                key={item.id}
+                onClick={() => selectView(item.id)}
+                type="button"
+              >
                 <Icon size={17} />
-                {item.label}
+                <span>{item.label}</span>
               </button>
             );
           })}
