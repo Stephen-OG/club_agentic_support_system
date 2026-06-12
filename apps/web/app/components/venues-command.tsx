@@ -8,6 +8,9 @@ import type { CommandQrPoint, CommandVenue, CommandVenueLocation } from "@/lib/a
 import { createBrowserAuthClient } from "@/lib/app-auth/browser";
 import { generateQrCodeDataUrl } from "@/lib/qr";
 import {
+  adminVenueLocationsPath,
+  adminVenuesPath,
+  adminVenueServicePointPath,
   adminVenueServicePointsPath,
   createLocationPayload,
   createQrPointPayload,
@@ -58,7 +61,7 @@ export function VenuesCommand() {
     setLoading(true);
 
     try {
-      setVenues(await apiRequest<CommandVenue[]>(authClient, "/admin/venues"));
+      setVenues(await apiRequest<CommandVenue[]>(authClient, adminVenuesPath()));
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not load venues");
     } finally {
@@ -170,7 +173,7 @@ export function VenuesCommand() {
 
     try {
       const draft = locationDrafts[venue.id] ?? { name: "" };
-      const location = await apiRequest<CommandVenueLocation>(authClient, `/admin/venues/${venue.id}/locations`, {
+      const location = await apiRequest<CommandVenueLocation>(authClient, adminVenueLocationsPath(venue.id), {
         method: "POST",
         body: JSON.stringify(createLocationPayload(draft))
       });
@@ -203,7 +206,7 @@ export function VenuesCommand() {
     setError(null);
 
     try {
-      const updated = await apiRequest<CommandQrPoint>(authClient, `/admin/venues/${venue.id}/service-points/${point.id}`, {
+      const updated = await apiRequest<CommandQrPoint>(authClient, adminVenueServicePointPath(venue.id, point.id), {
         method: "PATCH",
         body: JSON.stringify(createQrPointUpdatePayload(draft))
       });
@@ -241,7 +244,7 @@ export function VenuesCommand() {
     setError(null);
 
     try {
-      await apiRequest<CommandQrPoint>(authClient, `/admin/venues/${venue.id}/service-points/${point.id}`, {
+      await apiRequest<CommandQrPoint>(authClient, adminVenueServicePointPath(venue.id, point.id), {
         method: "DELETE"
       });
       setVenues((current) =>

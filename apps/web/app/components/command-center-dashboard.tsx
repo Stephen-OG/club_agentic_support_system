@@ -7,6 +7,7 @@ import type { CommandSupportRequest, CommandUser, CommandVenue, LaunchStatus } f
 import { type DashboardVolumeWindow, calculateAdminDashboardControls, calculateDashboardAnalytics, getRequestVolumeSeries } from "@/lib/dashboard-analytics";
 import { getDashboardExperience } from "@/lib/dashboard-experience";
 import { createBrowserAuthClient } from "@/lib/app-auth/browser";
+import { adminVenuesPath } from "@/lib/venue-controls";
 
 function formatMinutes(value: number | null) {
   if (value === null) {
@@ -64,7 +65,7 @@ export function CommandCenterDashboard({ currentUser }: { currentUser: CommandUs
     setLoading(true);
 
     try {
-      const nextVenues = await apiRequest<CommandVenue[]>(authClient, "/admin/venues");
+      const nextVenues = await apiRequest<CommandVenue[]>(authClient, adminVenuesPath());
       const visibleVenues = experience.scopeVenueIds ? nextVenues.filter((venue) => experience.scopeVenueIds?.includes(venue.id)) : nextVenues;
       const requestGroups = await Promise.all(
         visibleVenues.map((venue) => apiRequest<CommandSupportRequest[]>(authClient, `/venues/${venue.id}/requests`).catch(() => []))

@@ -113,8 +113,24 @@ export function qrPointGuestUrl(origin: string, qrToken: string) {
   return `${trimTrailingSlash(origin)}/qr/${qrToken}`;
 }
 
+export function adminVenuesPath() {
+  return "/admin/venues";
+}
+
+export function adminVenueLocationsPath(venueId: string) {
+  return `/admin/venues/${venueId}/locations`;
+}
+
+export function adminVenueOpeningHoursPath(venueId: string) {
+  return `/admin/venues/${venueId}/opening-hours`;
+}
+
 export function adminVenueServicePointsPath(venueId: string) {
   return `/admin/venues/${venueId}/service-points`;
+}
+
+export function adminVenueServicePointPath(venueId: string, servicePointId: string) {
+  return `${adminVenueServicePointsPath(venueId)}/${servicePointId}`;
 }
 
 export function createQrPointPayload(draft: QrPointDraft) {

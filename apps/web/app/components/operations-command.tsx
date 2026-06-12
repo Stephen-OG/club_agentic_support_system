@@ -42,6 +42,7 @@ import {
   requestRequestNotificationPermission
 } from "@/lib/request-notification-alerts";
 import { createBrowserAuthClient } from "@/lib/app-auth/browser";
+import { adminVenuesPath } from "@/lib/venue-controls";
 
 function sharedStatus(status: CommandRequestStatus) {
   return status.toLowerCase() as Lowercase<CommandRequestStatus>;
@@ -148,7 +149,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
       return [];
     }
 
-    const nextVenues = await apiRequest<CommandVenue[]>(authClient, "/admin/venues");
+    const nextVenues = await apiRequest<CommandVenue[]>(authClient, adminVenuesPath());
     setVenues(nextVenues);
     setSelectedVenueId((current) => current || primaryVenueId || nextVenues[0]?.id || "");
     return nextVenues;

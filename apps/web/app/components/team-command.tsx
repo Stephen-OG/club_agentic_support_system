@@ -6,6 +6,7 @@ import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
 import type { CommandRole, CommandTeamMember, CommandUser, CommandVenue, CreatedStaffCredential } from "@/lib/auth/types";
 import { createBrowserAuthClient } from "@/lib/app-auth/browser";
+import { adminVenuesPath } from "@/lib/venue-controls";
 
 const roles: Array<{ label: string; value: CommandRole }> = [
   { label: "Staff", value: "staff" },
@@ -53,7 +54,7 @@ export function TeamCommand({ currentUser }: { currentUser: CommandUser }) {
     try {
       const [nextTeam, nextVenues] = await Promise.all([
         apiRequest<CommandTeamMember[]>(authClient, "/team"),
-        apiRequest<CommandVenue[]>(authClient, "/admin/venues")
+        apiRequest<CommandVenue[]>(authClient, adminVenuesPath())
       ]);
       setTeam(nextTeam);
       setVenues(nextVenues);
