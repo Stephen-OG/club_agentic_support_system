@@ -1,6 +1,7 @@
 "use client";
 
 import { apiBaseUrl, createApiUnreachableError } from "@/lib/api/client";
+import { createIdempotencyKey, claimIdempotencyKey, releaseIdempotencyKey } from "@/lib/idempotency";
 
 export type AppAuthUser = {
   id: string;
@@ -80,13 +81,17 @@ export function createBrowserAuthClient() {
         const session = readStoredSession();
 
         if (session) {
+          const idempotencyKey = createIdempotencyKey();
+          claimIdempotencyKey(idempotencyKey);
           await fetch(`${apiBaseUrl}/auth/signout`, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${session.access_token}`,
-              "Content-Type": "application/json"
+              "Content-Type": "application/json",
+              "Idempotency-Key": idempotencyKey
             }
           }).catch(() => undefined);
+          releaseIdempotencyKey(idempotencyKey);
         }
 
         writeSession(null, "SIGNED_OUT");
@@ -105,12 +110,16 @@ export function createBrowserAuthClient() {
           return { error: new Error("You are not signed in") };
         }
 
+        const idempotencyKey = createIdempotencyKey();
+        claimIdempotencyKey(idempotencyKey);
+
         try {
           const response = await fetch(`${apiBaseUrl}/auth/password`, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${session.access_token}`,
-              "Content-Type": "application/json"
+              "Content-Type": "application/json",
+              "Idempotency-Key": idempotencyKey
             },
             body: JSON.stringify({ oldPassword, password })
           });
@@ -130,6 +139,8 @@ export function createBrowserAuthClient() {
           return { error: null };
         } catch {
           return { error: createApiUnreachableError() };
+        } finally {
+          releaseIdempotencyKey(idempotencyKey);
         }
       },
       onAuthStateChange: (callback) => {
@@ -149,10 +160,13 @@ export function createBrowserAuthClient() {
 }
 
 async function commandRequest(path: string, body: Record<string, unknown>) {
+  const idempotencyKey = createIdempotencyKey();
+  claimIdempotencyKey(idempotencyKey);
+
   try {
     const response = await fetch(`${apiBaseUrl}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
       body: JSON.stringify(body)
     });
 
@@ -164,14 +178,19 @@ async function commandRequest(path: string, body: Record<string, unknown>) {
     return { error: null };
   } catch {
     return { error: createApiUnreachableError() };
+  } finally {
+    releaseIdempotencyKey(idempotencyKey);
   }
 }
 
 async function authRequest(path: string, body: Record<string, unknown>) {
+  const idempotencyKey = createIdempotencyKey();
+  claimIdempotencyKey(idempotencyKey);
+
   try {
     const response = await fetch(`${apiBaseUrl}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
       body: JSON.stringify(body)
     });
     const data = await response.json().catch(() => null);
@@ -189,6 +208,8 @@ async function authRequest(path: string, body: Record<string, unknown>) {
     return { data: { session }, error: null };
   } catch {
     return { data: { session: null }, error: createApiUnreachableError() };
+  } finally {
+    releaseIdempotencyKey(idempotencyKey);
   }
 }
 

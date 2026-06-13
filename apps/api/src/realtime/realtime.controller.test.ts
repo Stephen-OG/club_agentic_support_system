@@ -4,6 +4,10 @@ import { firstValueFrom, take } from "rxjs";
 import { DomainEventsService } from "./domain-events.service";
 import { RealtimeController } from "./realtime.controller";
 
+function mockPrisma() {
+  return { eventOutbox: { create: async () => ({}) } } as never;
+}
+
 describe("RealtimeController", () => {
   function withoutGeneratedEventId(message: unknown) {
     const sseMessage = message as { type: string; data: Record<string, unknown> };
@@ -12,7 +16,7 @@ describe("RealtimeController", () => {
   }
 
   it("authorizes venue streams before returning SSE events", async () => {
-    const events = new DomainEventsService();
+    const events = new DomainEventsService(mockPrisma());
     const accessCalls: unknown[] = [];
     const controller = new RealtimeController(
       events,
@@ -63,7 +67,7 @@ describe("RealtimeController", () => {
   });
 
   it("requires the guest session to match before streaming conversation events", async () => {
-    const events = new DomainEventsService();
+    const events = new DomainEventsService(mockPrisma());
     const controller = new RealtimeController(
       events,
       {

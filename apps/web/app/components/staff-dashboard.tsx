@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Clock3, LogOut, Play, RefreshCw, ShieldCheck, UserCheck } from "lucide-react";
+import { CheckCircle2, Clock3, LogOut, Play, RefreshCw, ShieldCheck, UserCheck, Wifi, WifiOff } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import { getPrimaryMembership, getPrimaryRole } from "@/lib/auth/role-policy";
 import type { CommandRequestStatus, CommandSupportRequest, CommandUser } from "@/lib/auth/types";
 import { getOperationsNotifications } from "@/lib/operations-workflow";
 import { getPriorityClassName, getPriorityLabel } from "@/lib/priority-display";
-import { connectStaffVenueEvents } from "@/lib/realtime-events";
+import { connectStaffVenueEvents, type SseStatus } from "@/lib/realtime-events";
 import { deliverRequestNotificationAlerts, initializeRequestNotificationAlerts } from "@/lib/request-notification-alerts";
 import {
   getStaffNextStatus,
@@ -41,8 +41,11 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
   const [loading, setLoading] = useState(Boolean(venueId));
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [activeBucket, setActiveBucket] = useState<StaffQueueBucket>("active");
+  const [sseStatus, setSseStatus] = useState<SseStatus>("connecting");
   const knownRequestIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedRequestsRef = useRef(false);
+  const loadGenRef = useRef(0);
+  const loadAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     initializeRequestNotificationAlerts();
@@ -114,25 +117,30 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
     }
 
     const client = authClient;
-    let cancelled = false;
     async function loadQueue(options: { showLoading: boolean }) {
+      const generation = ++loadGenRef.current;
+
+      loadAbortRef.current?.abort();
+      const abortController = new AbortController();
+      loadAbortRef.current = abortController;
+
       if (options.showLoading) {
         setLoading(true);
       }
       setError(null);
 
       try {
-        const nextRequests = await apiRequest<CommandSupportRequest[]>(client, `/venues/${venueId}/requests`);
-        if (!cancelled) {
-          notifyForNewRequests(nextRequests);
-          setRequests(nextRequests);
-        }
+        const nextRequests = await apiRequest<CommandSupportRequest[]>(client, `/venues/${venueId}/requests`, {
+          signal: abortController.signal
+        });
+        if (generation !== loadGenRef.current) return;
+        notifyForNewRequests(nextRequests);
+        setRequests(nextRequests);
       } catch (nextError) {
-        if (!cancelled) {
-          setError(nextError instanceof Error ? nextError.message : "Could not load your queue");
-        }
+        if (generation !== loadGenRef.current || abortController.signal.aborted) return;
+        setError(nextError instanceof Error ? nextError.message : "Could not load your queue");
       } finally {
-        if (!cancelled) {
+        if (generation === loadGenRef.current) {
           setLoading(false);
         }
       }
@@ -147,11 +155,12 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
       venueId,
       onEvent: () => {
         void loadQueue({ showLoading: false });
-      }
+      },
+      onStatusChange: setSseStatus
     });
 
     return () => {
-      cancelled = true;
+      loadAbortRef.current?.abort();
       disconnectRealtime();
       window.clearInterval(intervalId);
     };
@@ -201,6 +210,10 @@ export function StaffDashboard({ currentUser }: { currentUser: CommandUser }) {
           <h1>Staff Dashboard</h1>
         </div>
         <div className="button-row">
+          <span className={`sse-status ${sseStatus}`} title={sseStatus === "connected" ? "Live" : sseStatus === "disconnected" ? "Disconnected" : "Connecting..."}>
+            {sseStatus === "connected" ? <Wifi size={14} /> : <WifiOff size={14} />}
+            <span>{sseStatus === "connected" ? "Live" : sseStatus === "disconnected" ? "Disconnected" : "Connecting..."}</span>
+          </span>
           <button className="command-button" disabled={loading} onClick={() => void refresh()} type="button">
             <RefreshCw size={16} />
             Refresh

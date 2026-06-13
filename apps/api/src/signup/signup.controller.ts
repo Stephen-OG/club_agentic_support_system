@@ -2,6 +2,7 @@ import { Body, Controller, Headers, Post, UnauthorizedException } from "@nestjs/
 import { Throttle } from "@nestjs/throttler";
 import { ApiCreatedResponse, ApiTags } from "@nestjs/swagger";
 import { AppAuthService } from "../auth/app-auth.service";
+import { Idempotent } from "../common/idempotency/idempotent.decorator";
 import { SetupRequestDto } from "./dto/signup-request.dto";
 import type { SetupResponseDto } from "./dto/signup-response.dto";
 import { SetupService } from "./signup.service";
@@ -15,6 +16,7 @@ export class SetupController {
   ) {}
 
   @Post()
+  @Idempotent()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiCreatedResponse({ description: "Creates organization, owner profile, and first venue" })
   async initialize(

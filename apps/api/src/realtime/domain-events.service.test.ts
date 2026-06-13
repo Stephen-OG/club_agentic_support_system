@@ -3,6 +3,10 @@ import { describe, it } from "node:test";
 import { firstValueFrom, take, toArray } from "rxjs";
 import { DomainEventsService } from "./domain-events.service";
 
+function mockPrisma() {
+  return { eventOutbox: { create: async () => ({}) } } as never;
+}
+
 describe("DomainEventsService", () => {
   function withoutGeneratedEventIds(events: unknown[]) {
     return events.map((event) => {
@@ -12,7 +16,7 @@ describe("DomainEventsService", () => {
   }
 
   it("streams venue events only to matching venue subscribers", async () => {
-    const service = new DomainEventsService();
+    const service = new DomainEventsService(mockPrisma());
     const venueEvents = firstValueFrom(service.streamForVenue("venue_1").pipe(take(2), toArray()));
 
     service.publish({
@@ -53,7 +57,7 @@ describe("DomainEventsService", () => {
   });
 
   it("streams guest conversation events only to matching conversations", async () => {
-    const service = new DomainEventsService();
+    const service = new DomainEventsService(mockPrisma());
     const conversationEvents = firstValueFrom(service.streamForConversation("conversation_1").pipe(take(1), toArray()));
 
     service.publish({
@@ -84,7 +88,7 @@ describe("DomainEventsService", () => {
 
   it("publishes local events to the Redis bus with generated event ids", async () => {
     const published: unknown[] = [];
-    const service = new DomainEventsService({
+    const service = new DomainEventsService(mockPrisma(), {
       publish: async (event: unknown) => {
         published.push(event);
       },
@@ -104,7 +108,7 @@ describe("DomainEventsService", () => {
 
   it("fans remote Redis bus events into local subscribers", async () => {
     let redisHandler: ((event: any) => void) | null = null;
-    const service = new DomainEventsService({
+    const service = new DomainEventsService(mockPrisma(), {
       publish: async () => undefined,
       subscribe: async (handler: (event: any) => void) => {
         redisHandler = handler;

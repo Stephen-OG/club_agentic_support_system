@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from "@nest
 import { CurrentAuth } from "../auth/auth-context.decorator";
 import type { AuthContext } from "../auth/auth-context";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
+import { Idempotent } from "../common/idempotency/idempotent.decorator";
 import { CreateStaffUserDto } from "./dto/create-staff-user.dto";
 import { StaffService } from "./staff.service";
 
@@ -26,6 +27,7 @@ export class StaffController {
   }
 
   @Post("team")
+  @Idempotent()
   @ApiCreatedResponse({ description: "Creates an app auth user and staff membership" })
   createStaffUser(@CurrentAuth() auth: AuthContext, @Body() input: CreateStaffUserDto) {
     return this.staff.createStaffUser(auth, input);

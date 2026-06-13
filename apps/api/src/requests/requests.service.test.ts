@@ -863,6 +863,7 @@ describe("RequestsService lifecycle", () => {
     };
     const published: unknown[] = [];
     const service = new RequestsService(prisma as never, createVenueAccess() as never, {
+      writeOutbox: async () => {},
       publish: (event: unknown) => {
         published.push(event);
       }
@@ -1137,6 +1138,7 @@ describe("RequestsService lifecycle", () => {
     };
     const published: unknown[] = [];
     const service = new RequestsService(prisma as never, createVenueAccess() as never, {
+      writeOutbox: async () => {},
       publish: (event: unknown) => {
         published.push(event);
       }

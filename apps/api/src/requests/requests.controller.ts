@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import type { AuthContext } from "../auth/auth-context";
 import { CurrentAuth } from "../auth/auth-context.decorator";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
+import { Idempotent } from "../common/idempotency/idempotent.decorator";
 import { GuestRequestActionDto } from "./dto/guest-request-action.dto";
 import { ListVenueRequestsDto } from "./dto/list-venue-requests.dto";
 import { UpdateRequestStatusDto } from "./dto/update-request-status.dto";
@@ -27,6 +28,7 @@ export class RequestsController {
   }
 
   @Patch("requests/:requestId/status")
+  @Idempotent()
   @ApiOkResponse({ description: "Updates a support request lifecycle status" })
   updateStatus(
     @CurrentAuth() auth: AuthContext,
@@ -44,6 +46,7 @@ export class PublicRequestsController {
   constructor(private readonly requests: RequestsService) {}
 
   @Patch(":requestId/action")
+  @Idempotent()
   @Throttle({ public_qr: { limit: 10, ttl: 60000 } })
   @ApiOkResponse({ description: "Applies a guest request action" })
   applyGuestAction(@Param("requestId", ParseUUIDPipe) requestId: string, @Body() input: GuestRequestActionDto) {

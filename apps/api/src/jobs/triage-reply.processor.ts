@@ -2,12 +2,13 @@ import { Processor, WorkerHost } from "@nestjs/bullmq";
 import { Injectable, Logger, Optional } from "@nestjs/common";
 import type { Job } from "bullmq";
 import { RequestStatus as PrismaRequestStatus, SenderType } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import type { RequestPriority } from "@madupe/shared";
 import { PrismaService } from "../database/prisma.service";
 import { AiTriageService } from "../triage/ai-triage.service";
 import { PriorityClassifierService } from "../triage/priority-classifier.service";
 import { encryptMessageCreateData } from "../security/message-crypto";
-import { DomainEventsService } from "../realtime/domain-events.service";
+import { DomainEventsService, type DomainEventType } from "../realtime/domain-events.service";
 
 export type TriageReplyJobData = {
   conversationId: string;
@@ -105,6 +106,7 @@ export class TriageReplyProcessor extends WorkerHost {
             agentPolicyVersion: request.agentPolicyVersion === "v1-backend-routing" ? undefined : "v1-semi-autonomous"
           }
         });
+        await this.writeOutbox("request.updated", venueId, conversationId, request.id);
         this.publishRequestUpdated(venueId, conversationId, request.id);
       }
 
@@ -138,6 +140,7 @@ export class TriageReplyProcessor extends WorkerHost {
           }
         })
       });
+      await this.writeOutbox("message.created", venueId, conversationId, request?.id ?? null, message.id);
       this.publishMessageCreated(venueId, conversationId, request?.id ?? null, message.id);
     } catch (error) {
       this.logger.error(
@@ -166,6 +169,7 @@ export class TriageReplyProcessor extends WorkerHost {
             }
           })
         });
+        await this.writeOutbox("message.created", venueId, conversationId, null, message.id);
         this.publishMessageCreated(venueId, conversationId, null, message.id);
       } catch {
         this.logger.error(`Failed to write fallback reply for conversation ${conversationId}`);
@@ -183,6 +187,27 @@ export class TriageReplyProcessor extends WorkerHost {
     });
 
     return request !== null;
+  }
+
+  private async writeOutbox(type: DomainEventType, venueId: string, conversationId: string, requestId: string | null, messageId?: string) {
+    try {
+      await this.prisma.eventOutbox.create({
+        data: {
+          eventType: type,
+          venueId,
+          payload: {
+            type,
+            venueId,
+            ...(requestId ? { requestId } : {}),
+            conversationId,
+            ...(messageId ? { messageId } : {}),
+            occurredAt: new Date().toISOString()
+          } as Prisma.InputJsonValue
+        }
+      });
+    } catch (err) {
+      this.logger.warn(`Failed to write outbox event: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
   }
 
   private publishRequestUpdated(venueId: string, conversationId: string, requestId: string) {

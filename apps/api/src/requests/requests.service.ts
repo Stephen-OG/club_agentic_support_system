@@ -316,6 +316,27 @@ export class RequestsService {
         });
       }
 
+      if (updatedRequest) {
+        await this.events?.writeOutbox(tx, {
+          type: "request.updated",
+          venueId: updatedRequest.venueId,
+          requestId: updatedRequest.id,
+          conversationId: updatedRequest.conversationId,
+          occurredAt: new Date().toISOString()
+        });
+
+        if (createdMessage) {
+          await this.events?.writeOutbox(tx, {
+            type: "message.created",
+            venueId: updatedRequest.venueId,
+            requestId: updatedRequest.id,
+            conversationId: updatedRequest.conversationId,
+            messageId: createdMessage.id,
+            occurredAt: new Date().toISOString()
+          });
+        }
+      }
+
       return { message: createdMessage, request: updatedRequest };
     });
 
@@ -446,6 +467,25 @@ export class RequestsService {
           metadata: { ...metadata }
         }
       });
+
+      if (updatedRequest) {
+        await this.events?.writeOutbox(tx, {
+          type: "request.updated",
+          venueId: updatedRequest.venueId,
+          requestId: updatedRequest.id,
+          conversationId: updatedRequest.conversationId,
+          occurredAt: new Date().toISOString()
+        });
+
+        await this.events?.writeOutbox(tx, {
+          type: "message.created",
+          venueId: updatedRequest.venueId,
+          requestId: updatedRequest.id,
+          conversationId: updatedRequest.conversationId,
+          messageId: message.id,
+          occurredAt: new Date().toISOString()
+        });
+      }
 
       return {
         request: updatedRequest!,

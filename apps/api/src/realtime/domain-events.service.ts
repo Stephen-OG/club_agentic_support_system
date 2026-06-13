@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { Injectable, Logger, OnModuleInit, Optional } from "@nestjs/common";
+import type { Prisma } from "@prisma/client";
 import { Observable, Subject } from "rxjs";
 import { filter, finalize, tap, timeout } from "rxjs/operators";
+import { PrismaService } from "../database/prisma.service";
 import { RedisDomainEventBusService } from "./redis-domain-event-bus.service";
 
 export type DomainEventType = "request.created" | "request.updated" | "request.escalated" | "message.created";
@@ -17,13 +19,31 @@ export type DomainEvent = {
   actorStaffId?: string;
 };
 
+type PrismaTransaction = Prisma.TransactionClient;
+
+const eventFields = ["eventId", "type", "venueId", "occurredAt", "requestId", "conversationId", "messageId", "actorStaffId"] as const;
+
+function pickEventPayload(event: DomainEvent) {
+  const payload: Record<string, unknown> = {};
+  for (const field of eventFields) {
+    const value = (event as any)[field];
+    if (value !== undefined) {
+      payload[field] = value;
+    }
+  }
+  return payload as Prisma.InputJsonValue;
+}
+
 @Injectable()
 export class DomainEventsService implements OnModuleInit {
   private readonly events = new Subject<DomainEvent>();
   private readonly logger = new Logger(DomainEventsService.name);
   private activeSubscriptions = new Set<string>();
 
-  constructor(@Optional() private readonly redisBus?: RedisDomainEventBusService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly redisBus?: RedisDomainEventBusService
+  ) {}
 
   private trackSubscription(id: string) {
     this.activeSubscriptions.add(id);
@@ -36,6 +56,16 @@ export class DomainEventsService implements OnModuleInit {
   async onModuleInit() {
     await this.redisBus?.subscribe((event) => {
       this.events.next(event);
+    });
+  }
+
+  async writeOutbox(tx: PrismaTransaction, event: DomainEvent) {
+    await tx.eventOutbox.create({
+      data: {
+        eventType: event.type,
+        venueId: event.venueId,
+        payload: pickEventPayload(event)
+      }
     });
   }
 

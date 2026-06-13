@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from "@nest
 import { CurrentAuth } from "../auth/auth-context.decorator";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import type { AuthContext } from "../auth/auth-context";
+import { Idempotent } from "../common/idempotency/idempotent.decorator";
 import { CreateServicePointDto } from "./dto/create-service-point.dto";
 import { CreateVenueLocationDto } from "./dto/create-venue-location.dto";
 import { CreateVenueDto } from "./dto/create-venue.dto";
@@ -24,12 +25,14 @@ export class AdminVenuesController {
   }
 
   @Post("venues")
+  @Idempotent()
   @ApiCreatedResponse({ description: "Creates a venue in the authenticated workspace" })
   createVenue(@CurrentAuth() auth: AuthContext, @Body() input: CreateVenueDto) {
     return this.servicePoints.createVenue(auth, input);
   }
 
   @Post("venues/:venueId/service-points")
+  @Idempotent()
   @ApiCreatedResponse({ description: "Creates a QR service point in a venue" })
   createServicePoint(
     @CurrentAuth() auth: AuthContext,
@@ -71,6 +74,7 @@ export class AdminVenuesController {
   }
 
   @Patch("venues/:venueId/opening-hours")
+  @Idempotent()
   @ApiOkResponse({ description: "Updates the daily opening schedule for a venue" })
   updateVenueOpeningHours(
     @CurrentAuth() auth: AuthContext,

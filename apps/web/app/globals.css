@@ -1791,6 +1791,28 @@ body {
   opacity: 0.55;
 }
 
+.sse-status {
+  align-items: center;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  display: flex;
+  font-size: var(--label-small);
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.sse-status.connected {
+  color: var(--green-500);
+}
+
+.sse-status.disconnected,
+.sse-status.connecting {
+  color: var(--orange-400);
+}
+
 .auth-form input:focus,
 .command-form input:focus,
 .command-form select:focus,

@@ -4,6 +4,7 @@ import { DatabaseModule } from "../database/database.module";
 import { VenuesModule } from "../venues/venues.module";
 import { DomainEventsService } from "./domain-events.service";
 import { DOMAIN_EVENT_CONSUMER_ADAPTER, DomainEventConsumerService } from "./domain-event-consumers.service";
+import { EventOutboxRelayService } from "./event-outbox-relay.service";
 import { RealtimeController } from "./realtime.controller";
 import { createRedisDomainEventConsumerAdapter } from "./redis-domain-event-consumer.adapter";
 import { RedisDomainEventBusService } from "./redis-domain-event-bus.service";
@@ -15,6 +16,7 @@ import { RedisDomainEventBusService } from "./redis-domain-event-bus.service";
   providers: [
     DomainEventConsumerService,
     DomainEventsService,
+    EventOutboxRelayService,
     RedisDomainEventBusService,
     {
       provide: DOMAIN_EVENT_CONSUMER_ADAPTER,

@@ -1,4 +1,5 @@
 import type { AppAuthClient } from "@/lib/app-auth/browser";
+import { createIdempotencyKey, claimIdempotencyKey, releaseIdempotencyKey } from "@/lib/idempotency";
 
 export const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
 
@@ -21,12 +22,40 @@ export type ApiRequestInit = RequestInit & {
   accessToken?: string;
 };
 
-function buildHeaders(initHeaders: HeadersInit | undefined, token?: string) {
-  return {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(initHeaders || {})
+const mutationMethods = new Set(["POST", "PATCH", "PUT", "DELETE"]);
+
+function isMutationMethod(method: string | undefined): boolean {
+  return mutationMethods.has((method || "GET").toUpperCase());
+}
+
+function buildHeaders(initHeaders: HeadersInit | undefined, token?: string, method?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json"
   };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  if (initHeaders) {
+    const entries = initHeaders instanceof Headers
+      ? Array.from(initHeaders.entries())
+      : Array.isArray(initHeaders)
+        ? initHeaders
+        : Object.entries(initHeaders);
+
+    for (const [key, value] of entries) {
+      headers[key] = value;
+    }
+  }
+
+  if (isMutationMethod(method) && !headers["Idempotency-Key"]) {
+    const key = createIdempotencyKey();
+    claimIdempotencyKey(key);
+    headers["Idempotency-Key"] = key;
+  }
+
+  return headers;
 }
 
 async function parseResponse<T>(response: Response) {
@@ -61,31 +90,43 @@ export async function apiRequest<T>(authClient: AppAuthClient, path: string, ini
   const requestInit = { ...init };
   delete requestInit.accessToken;
 
+  const method = requestInit.method;
+  const headers = buildHeaders(requestInit.headers, token, method);
+  const idempotencyKey = headers["Idempotency-Key"];
+
   let response: Response;
 
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...requestInit,
-      headers: buildHeaders(requestInit.headers, token)
+      headers
     });
   } catch {
+    if (idempotencyKey) releaseIdempotencyKey(idempotencyKey);
     throw createApiUnreachableError();
   }
 
+  if (idempotencyKey) releaseIdempotencyKey(idempotencyKey);
   return parseResponse<T>(response);
 }
 
 export async function publicApiRequest<T>(path: string, init: RequestInit = {}) {
+  const method = init.method;
+  const headers = buildHeaders(init.headers, undefined, method);
+  const idempotencyKey = headers["Idempotency-Key"];
+
   let response: Response;
 
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...init,
-      headers: buildHeaders(init.headers)
+      headers
     });
   } catch {
+    if (idempotencyKey) releaseIdempotencyKey(idempotencyKey);
     throw createApiUnreachableError();
   }
 
+  if (idempotencyKey) releaseIdempotencyKey(idempotencyKey);
   return parseResponse<T>(response);
 }

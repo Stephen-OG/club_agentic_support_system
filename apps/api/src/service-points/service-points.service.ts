@@ -1115,15 +1115,37 @@ export class ServicePointsService {
         orderBy: { createdAt: "asc" }
       });
 
+      const messageId = this.latestMessageId(messages, SenderType.GUEST, supportRequest.id);
+      const realtimeEventType = "request.created" as DomainEventType;
+
+      await this.events?.writeOutbox(tx, {
+        type: realtimeEventType,
+        venueId: qrPoint.venueId,
+        requestId: supportRequest.id,
+        conversationId: conversation.id,
+        occurredAt: new Date().toISOString()
+      });
+
+      if (messageId) {
+        await this.events?.writeOutbox(tx, {
+          type: "message.created",
+          venueId: qrPoint.venueId,
+          requestId: supportRequest.id,
+          conversationId: conversation.id,
+          messageId,
+          occurredAt: new Date().toISOString()
+        });
+      }
+
       const response = this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), qrPoint, venue, {
         replyPending: false,
         request: supportRequest
       });
 
       return {
-        messageId: this.latestMessageId(messages, SenderType.GUEST, supportRequest.id),
+        messageId,
         request: supportRequest,
-        realtimeEventType: "request.created" as DomainEventType,
+        realtimeEventType,
         response
       };
     });
@@ -1488,9 +1510,31 @@ export class ServicePointsService {
         orderBy: { createdAt: "asc" }
       });
 
+      const messageId = this.latestMessageId(messages, SenderType.GUEST, supportRequest.id);
+      const publishEventType = eventType as DomainEventType;
+
+      await this.events?.writeOutbox(tx, {
+        type: publishEventType,
+        venueId: venue.id,
+        requestId: supportRequest.id,
+        conversationId: conversation.id,
+        occurredAt: new Date().toISOString()
+      });
+
+      if (messageId) {
+        await this.events?.writeOutbox(tx, {
+          type: "message.created",
+          venueId: venue.id,
+          requestId: supportRequest.id,
+          conversationId: conversation.id,
+          messageId,
+          occurredAt: new Date().toISOString()
+        });
+      }
+
       return {
         eventType: hasOpenRequest ? "request.updated" : "request.created",
-        messageId: this.latestMessageId(messages, SenderType.GUEST, supportRequest.id),
+        messageId,
         request: supportRequest,
         response: this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), qrPoint, venue, {
           replyPending: true,

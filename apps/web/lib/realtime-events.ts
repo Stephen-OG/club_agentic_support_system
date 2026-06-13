@@ -12,9 +12,12 @@ export type ClientDomainEvent = {
   occurredAt?: string;
 };
 
+export type SseStatus = "connecting" | "connected" | "disconnected";
+
 type ConnectOptions = {
   onEvent: (event: ClientDomainEvent) => void;
   onError?: () => void;
+  onStatusChange?: (status: SseStatus) => void;
 };
 
 type StaffConnectOptions = ConnectOptions & {
@@ -98,11 +101,13 @@ async function connectSseStreamWithReconnect(input: string, options: ConnectOpti
   let attempt = 0;
 
   while (!options.signal.aborted) {
+    options.onStatusChange?.("connecting");
     await connectSseStream(input, options);
     if (options.signal.aborted) {
       break;
     }
 
+    options.onStatusChange?.("disconnected");
     await new Promise((resolve) => setTimeout(resolve, sseReconnectDelayMs(attempt)));
     attempt += 1;
   }
@@ -120,6 +125,8 @@ async function connectSseStream(input: string, options: ConnectOptions & { heade
       options.onError?.();
       return;
     }
+
+    options.onStatusChange?.("connected");
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();

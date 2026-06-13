@@ -115,6 +115,8 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
   const knownRequestIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedRequestsRef = useRef(false);
   const hasLoadedOperationsRef = useRef(false);
+  const loadGenRef = useRef(0);
+  const loadAbortRef = useRef<AbortController | null>(null);
   const [venues, setVenues] = useState<CommandVenue[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState("");
   const [requests, setRequests] = useState<CommandSupportRequest[]>([]);
@@ -174,14 +176,22 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
       return;
     }
 
+    const generation = ++loadGenRef.current;
+
+    loadAbortRef.current?.abort();
+    const abortController = new AbortController();
+    loadAbortRef.current = abortController;
+
     try {
-      const nextRequests = await apiRequest<CommandSupportRequest[]>(authClient, `/venues/${venueId}/requests`);
+      const nextRequests = await apiRequest<CommandSupportRequest[]>(authClient, `/venues/${venueId}/requests`, {
+        signal: abortController.signal
+      });
+      if (generation !== loadGenRef.current) return;
       notifyForNewRequests(nextRequests);
       setRequests(nextRequests);
       setLastUpdatedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     } catch {
-      // Poll failures are expected when the session token rotates;
-      // the manual Refresh button still surfaces errors to the user.
+      if (abortController.signal.aborted) return;
     }
   }, [notifyForNewRequests, authClient]);
 
@@ -272,6 +282,7 @@ export function OperationsCommand({ currentUser }: { currentUser: CommandUser })
       : () => undefined;
 
     return () => {
+      loadAbortRef.current?.abort();
       disconnectRealtime();
       window.clearInterval(intervalId);
     };

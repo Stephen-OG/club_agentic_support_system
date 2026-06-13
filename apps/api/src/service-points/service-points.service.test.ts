@@ -177,6 +177,7 @@ describe("ServicePointsService public QR workflow", () => {
       prisma as never,
       {} as never,
       {
+        writeOutbox: async () => {},
         publish: (event: unknown) => {
           published.push(event);
         }
@@ -1732,6 +1733,7 @@ describe("ServicePointsService public QR workflow", () => {
       prisma as never,
       {} as never,
       {
+        writeOutbox: async () => {},
         publish: (event: unknown) => {
           published.push(event);
         }

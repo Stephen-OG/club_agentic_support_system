@@ -112,6 +112,10 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const isSendingRef = useRef(false);
+  const intakeGenRef = useRef(0);
+  const conversationGenRef = useRef(0);
+  const intakeAbortRef = useRef<AbortController | null>(null);
+  const conversationAbortRef = useRef<AbortController | null>(null);
   const conversationStorageKey = `qr-chat:${qrToken}:conversationId`;
   const sessionStorageKey = `qr-chat:${qrToken}:sessionId`;
 
@@ -178,17 +182,22 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   }, [sessionStorageKey]);
 
   useEffect(() => {
-    let cancelled = false;
-
     async function loadIntake() {
+      const generation = ++intakeGenRef.current;
+
+      intakeAbortRef.current?.abort();
+      const abortController = new AbortController();
+      intakeAbortRef.current = abortController;
+
       const result = await publicApiRequest<PublicQrIntakeState>(`/public/qr/${encodeURIComponent(qrToken)}`, {
-        cache: "no-store"
+        cache: "no-store",
+        signal: abortController.signal
       }).catch(() => null);
 
-      if (!result || cancelled) {
-        if (!result && !cancelled) {
-          applyIntakeLoadError();
-        }
+      if (generation !== intakeGenRef.current || abortController.signal.aborted) return;
+
+      if (!result) {
+        applyIntakeLoadError();
         return;
       }
 
@@ -215,7 +224,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
     const interval = window.setInterval(() => void loadIntake(), intakeRefreshMs);
 
     return () => {
-      cancelled = true;
+      intakeAbortRef.current?.abort();
       window.clearInterval(interval);
     };
   }, [applyClosedState, applyIntakeLoadError, conversationId, qrToken]);
@@ -238,7 +247,6 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       return;
     }
 
-    let cancelled = false;
     const activeConversationId = conversationId;
 
     async function loadConversation() {
@@ -246,15 +254,24 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         return;
       }
 
+      const generation = ++conversationGenRef.current;
+
+      conversationAbortRef.current?.abort();
+      const abortController = new AbortController();
+      conversationAbortRef.current = abortController;
+
       const result = await publicApiRequest<PublicQrConversationState>(
         `/public/qr/${encodeURIComponent(qrToken)}/conversations/${encodeURIComponent(activeConversationId)}`,
         {
           cache: "no-store",
-          headers: createGuestSessionHeaders(guestSessionId)
+          headers: createGuestSessionHeaders(guestSessionId),
+          signal: abortController.signal
         }
       ).catch(() => null);
 
-      if (!result || cancelled) {
+      if (generation !== conversationGenRef.current || abortController.signal.aborted) return;
+
+      if (!result) {
         return;
       }
 
@@ -299,7 +316,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
     });
 
     return () => {
-      cancelled = true;
+      conversationAbortRef.current?.abort();
       disconnectRealtime();
       window.clearInterval(interval);
     };
