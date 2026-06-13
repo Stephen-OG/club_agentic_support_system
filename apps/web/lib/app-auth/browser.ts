@@ -192,6 +192,8 @@ async function authRequest(path: string, body: Record<string, unknown>) {
   }
 }
 
+let pendingRefresh: Promise<AppAuthSession | null> | null = null;
+
 function readStoredSession() {
   if (typeof window === "undefined") {
     return null;
@@ -225,11 +227,22 @@ async function readValidSession() {
     return null;
   }
 
+  if (pendingRefresh) {
+    return pendingRefresh;
+  }
+
+  pendingRefresh = refreshSession(session.refresh_token);
+  const refreshed = await pendingRefresh;
+  pendingRefresh = null;
+  return refreshed;
+}
+
+async function refreshSession(refreshToken: string) {
   try {
     const response = await fetch(`${apiBaseUrl}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: session.refresh_token })
+      body: JSON.stringify({ refresh_token: refreshToken })
     });
 
     if (!response.ok) {
@@ -241,6 +254,7 @@ async function readValidSession() {
     writeSession(refreshed, "TOKEN_REFRESHED");
     return refreshed;
   } catch {
+    const session = readStoredSession();
     return session;
   }
 }

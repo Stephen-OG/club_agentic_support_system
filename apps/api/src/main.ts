@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { ValidationPipe } from "@nestjs/common";
+import { BadRequestException, ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
@@ -51,7 +51,11 @@ async function bootstrap() {
     new ValidationPipe({
       forbidNonWhitelisted: true,
       transform: true,
-      whitelist: true
+      whitelist: true,
+      exceptionFactory: (errors) => {
+        const message = errors.map((e) => Object.values(e.constraints ?? {}).join(", ")).join("; ");
+        return new BadRequestException(message || "Validation failed");
+      }
     })
   );
 

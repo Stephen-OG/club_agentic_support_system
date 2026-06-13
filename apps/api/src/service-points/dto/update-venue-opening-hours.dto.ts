@@ -1,7 +1,8 @@
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsString, Matches, Max, Min, ValidateNested } from "class-validator";
 
 export class VenueOpeningHourDto {
+  @Transform(({ value }) => (typeof value === "string" ? Number(value) : value))
   @IsInt()
   @Min(0)
   @Max(6)
@@ -15,6 +16,7 @@ export class VenueOpeningHourDto {
   @Matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/)
   closesAt!: string;
 
+  @Transform(({ value }) => value === true || value === "true")
   @IsBoolean()
   isClosed!: boolean;
 }

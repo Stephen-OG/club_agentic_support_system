@@ -2,7 +2,7 @@ import type { CommandRequestStatus } from "./auth/types";
 
 export type OperationsBucket = "active" | "completed";
 export type OperationsStatusTone = "blue" | "green" | "red" | "yellow" | "neutral";
-export const operationsPollIntervalMs = 5000;
+export const operationsPollIntervalMs = 30000;
 
 export type RequestOperationAction = {
   label: "Acknowledge" | "Complete";

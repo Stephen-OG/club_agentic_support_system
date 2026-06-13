@@ -1,6 +1,6 @@
 import type { CommandRequestStatus } from "./auth/types";
 
-export const staffQueuePollIntervalMs = 5000;
+export const staffQueuePollIntervalMs = 30000;
 export type StaffQueueBucket = "active" | "completed";
 
 const completedStatuses = new Set<CommandRequestStatus>(["COMPLETED", "RESOLVED", "CANCELLED"]);
