@@ -42,6 +42,24 @@ type PublicGuestMessageResult = {
   servicePoint: unknown;
 };
 
+function expectedPublicSupportRequest(request: any) {
+  return {
+    id: request.id,
+    title: request.title,
+    category: request.category,
+    summary: request.summary ?? null,
+    priority: request.priority,
+    status: request.status,
+    guestLocationLabel: request.guestLocationLabel ?? null,
+    guestLocationSource: request.guestLocationSource ?? null,
+    createdAt: request.createdAt ?? null,
+    updatedAt: request.updatedAt ?? null,
+    acknowledgedAt: request.acknowledgedAt ?? null,
+    completedAt: request.completedAt ?? null,
+    resolvedAt: request.resolvedAt ?? null
+  };
+}
+
 describe("ServicePointsService public QR workflow", () => {
   it("persists a public QR guest message and returns conversation state", async () => {
     const servicePoint = {
@@ -172,7 +190,7 @@ describe("ServicePointsService public QR workflow", () => {
 
     assert.equal(result.conversationId, conversation.id);
     assert.deepEqual(result.messages, storedMessages);
-    assert.deepEqual(result.request, supportRequest);
+    assert.deepEqual(result.request, expectedPublicSupportRequest(supportRequest));
     assert.deepEqual(result.servicePoint, publicServicePoint);
     assert.deepEqual(result.qrPoint, publicServicePoint);
     assert.deepEqual(
@@ -629,7 +647,7 @@ describe("ServicePointsService public QR workflow", () => {
 
     assert.equal(result.conversationId, conversation.id);
     assert.deepEqual(result.messages, storedMessages);
-    assert.deepEqual(result.request, supportRequest);
+    assert.deepEqual(result.request, expectedPublicSupportRequest(supportRequest));
     assert.deepEqual(result.servicePoint, publicServicePoint);
     assert.deepEqual(result.qrPoint, publicServicePoint);
     assert.equal(calls.some((call) => call.model === "conversation.create"), false);
@@ -795,7 +813,7 @@ describe("ServicePointsService public QR workflow", () => {
 
     assert.equal(result.conversationId, conversation.id);
     assert.deepEqual(result.messages, storedMessages);
-    assert.deepEqual(result.request, newSupportRequest);
+    assert.deepEqual(result.request, expectedPublicSupportRequest(newSupportRequest));
     assert.deepEqual(result.servicePoint, publicServicePoint);
     const createCall = calls.find((call) => call.model === "supportRequest.create") as { args: { data: { summary: string } } };
     assert.equal(createCall.args.data.summary, "Could we get more water?");
@@ -916,7 +934,7 @@ describe("ServicePointsService public QR workflow", () => {
     });
 
     assert.equal(createCount, 1);
-    assert.deepEqual((result as any).request, newRequest);
+    assert.deepEqual((result as any).request, expectedPublicSupportRequest(newRequest));
   });
 
   it("throws NotFoundException when the requested conversation is not scoped to the service point", async () => {
@@ -1060,10 +1078,38 @@ describe("ServicePointsService public QR workflow", () => {
     ];
     const request = {
       id: "request_public_state_1",
+      venueId: servicePoint.venueId,
+      qrPointId: servicePoint.id,
       conversationId: "conversation_public_state_1",
       title: "Guest support request",
+      category: "service",
+      summary: "Can we get towels?",
+      priority: "NORMAL",
       status: RequestStatus.NEW,
+      assignedToId: "staff_private_1",
+      agentConfidence: 0.9,
+      agentSuggestedAction: "send towels",
+      assignedTo: {
+        id: "staff_private_1",
+        email: "staff@example.com",
+        displayName: "Private Staff"
+      },
       qrPoint: servicePoint
+    };
+    const publicRequest = {
+      id: request.id,
+      title: request.title,
+      category: request.category,
+      summary: request.summary,
+      priority: request.priority,
+      status: request.status,
+      guestLocationLabel: null,
+      guestLocationSource: null,
+      createdAt: null,
+      updatedAt: null,
+      acknowledgedAt: null,
+      completedAt: null,
+      resolvedAt: null
     };
     const conversation = {
       id: "conversation_public_state_1",
@@ -1108,10 +1154,14 @@ describe("ServicePointsService public QR workflow", () => {
       conversationId: conversation.id,
       messages,
       replyPending: true,
-      request,
+      request: publicRequest,
       qrPoint: publicServicePoint,
       servicePoint: publicServicePoint
     });
+    assert.equal("assignedTo" in result.request!, false);
+    assert.equal("assignedToId" in result.request!, false);
+    assert.equal("qrPoint" in result.request!, false);
+    assert.equal("qrToken" in result.request!, false);
     assert.deepEqual(calls, [
       {
         model: "qrPoint.findFirst",
@@ -1281,10 +1331,36 @@ describe("ServicePointsService public QR workflow", () => {
     ];
     const request = {
       id: "request_venue_state_1",
+      venueId: venue.id,
+      qrPointId: servicePoint.id,
       conversationId: "conversation_venue_state_1",
       title: "Guest support request",
+      category: "facilities",
+      summary: "Guest needs help",
+      priority: "HIGH",
       status: RequestStatus.IN_PROGRESS,
+      assignedToId: "staff_private_2",
+      assignedTo: {
+        id: "staff_private_2",
+        email: "ops@example.com",
+        displayName: "Ops Private"
+      },
       qrPoint: servicePoint
+    };
+    const publicRequest = {
+      id: request.id,
+      title: request.title,
+      category: request.category,
+      summary: request.summary,
+      priority: request.priority,
+      status: request.status,
+      guestLocationLabel: null,
+      guestLocationSource: null,
+      createdAt: null,
+      updatedAt: null,
+      acknowledgedAt: null,
+      completedAt: null,
+      resolvedAt: null
     };
     const conversation = {
       id: "conversation_venue_state_1",
@@ -1335,11 +1411,15 @@ describe("ServicePointsService public QR workflow", () => {
       conversationId: conversation.id,
       messages,
       replyPending: false,
-      request,
+      request: publicRequest,
       qrPoint: publicServicePoint,
       servicePoint: publicServicePoint,
       venue: { id: venue.id, name: venue.name, slug: venue.slug }
     });
+    assert.equal("assignedTo" in result.request!, false);
+    assert.equal("assignedToId" in result.request!, false);
+    assert.equal("qrPoint" in result.request!, false);
+    assert.equal("qrToken" in result.request!, false);
     assert.deepEqual(calls, [
       {
         model: "venue.findFirst",
@@ -1666,7 +1746,7 @@ describe("ServicePointsService public QR workflow", () => {
 
     assert.equal((result as any).conversationId, conversation.id);
     assert.deepEqual((result as any).messages, storedMessages);
-    assert.deepEqual((result as any).request, supportRequest);
+    assert.deepEqual((result as any).request, expectedPublicSupportRequest(supportRequest));
     assert.deepEqual(
       published.map((event) => ({ ...(event as any), occurredAt: "Any<Date>" })),
       [
@@ -1986,7 +2066,7 @@ describe("ServicePointsService public QR workflow", () => {
     });
 
     assert.equal(requestCreated, true);
-    assert.deepEqual((result as any).request, supportRequest);
+    assert.deepEqual((result as any).request, expectedPublicSupportRequest(supportRequest));
   });
 
   it("does not append a duplicate fallback reply when service-point triage enqueue fails", async () => {
@@ -2142,7 +2222,7 @@ describe("ServicePointsService public QR workflow", () => {
       sessionId: "session_open_request_chat"
     });
 
-    assert.equal((result as any).request, supportRequest);
+    assert.deepEqual((result as any).request, expectedPublicSupportRequest(supportRequest));
     assert.equal(createdMessages.at(-1)?.data.body, "I am keeping this with your open request. If you need anything else, send it here and the team will see it.");
   });
 
@@ -2271,7 +2351,7 @@ describe("ServicePointsService public QR workflow", () => {
     assert.equal(requestCreated, true);
     assert.equal(requestCreateArgs.data.title, "Menu request");
     assert.equal(requestCreateArgs.data.category, "menu");
-    assert.deepEqual((result as any).request, supportRequest);
+    assert.deepEqual((result as any).request, expectedPublicSupportRequest(supportRequest));
     assert.equal((result as any).replyPending, false);
   });
 
@@ -2362,7 +2442,7 @@ describe("ServicePointsService public QR workflow", () => {
     assert.equal(requestCreateArgs.data.title, "Menu request");
     assert.equal(requestCreateArgs.data.category, "menu");
     assert.equal(requestCreateArgs.data.guestLocationLabel, null);
-    assert.deepEqual((result as any).request, supportRequest);
+    assert.deepEqual((result as any).request, expectedPublicSupportRequest(supportRequest));
     assert.equal((result as any).replyPending, true);
   });
 

@@ -617,6 +617,28 @@ export class ServicePointsService {
     return rest;
   }
 
+  private publicSupportRequest(request: any) {
+    if (!request) {
+      return null;
+    }
+
+    return {
+      id: request.id,
+      title: request.title,
+      category: request.category,
+      summary: request.summary ?? null,
+      priority: request.priority,
+      status: request.status,
+      guestLocationLabel: request.guestLocationLabel ?? null,
+      guestLocationSource: request.guestLocationSource ?? null,
+      createdAt: request.createdAt ?? null,
+      updatedAt: request.updatedAt ?? null,
+      acknowledgedAt: request.acknowledgedAt ?? null,
+      completedAt: request.completedAt ?? null,
+      resolvedAt: request.resolvedAt ?? null
+    };
+  }
+
   private publicChatAvailability(
     venue: { timezone: string; hours?: VenueOpeningHourWindow[] | null } | null | undefined
   ) {
@@ -709,7 +731,7 @@ export class ServicePointsService {
       conversationId,
       messages,
       replyPending: options?.replyPending ?? false,
-      request: options?.request ?? null,
+      request: this.publicSupportRequest(options?.request),
       qrPoint: publicServicePoint,
       servicePoint: publicServicePoint,
       chatAvailability: this.publicChatAvailability((venue as any)),
@@ -1100,13 +1122,14 @@ export class ServicePointsService {
 
       return {
         messageId: this.latestMessageId(messages, SenderType.GUEST, supportRequest.id),
+        request: supportRequest,
         realtimeEventType: "request.created" as DomainEventType,
         response
       };
     });
 
-    this.publishRequestEvent(transactionResult.realtimeEventType, transactionResult.response.request as any);
-    this.publishMessageEvent(transactionResult.response.request as any, transactionResult.messageId);
+    this.publishRequestEvent(transactionResult.realtimeEventType, transactionResult.request as any);
+    this.publishMessageEvent(transactionResult.request as any, transactionResult.messageId);
 
     const result = transactionResult.response;
 
@@ -1468,6 +1491,7 @@ export class ServicePointsService {
       return {
         eventType: hasOpenRequest ? "request.updated" : "request.created",
         messageId: this.latestMessageId(messages, SenderType.GUEST, supportRequest.id),
+        request: supportRequest,
         response: this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), qrPoint, venue, {
           replyPending: true,
           request: supportRequest
@@ -1475,8 +1499,8 @@ export class ServicePointsService {
       };
     });
 
-    this.publishRequestEvent(transactionResult.eventType as DomainEventType, transactionResult.response.request as any);
-    this.publishMessageEvent(transactionResult.response.request as any, transactionResult.messageId);
+    this.publishRequestEvent(transactionResult.eventType as DomainEventType, transactionResult.request as any);
+    this.publishMessageEvent(transactionResult.request as any, transactionResult.messageId);
     const result = transactionResult.response;
 
     try {
@@ -1575,7 +1599,7 @@ export class ServicePointsService {
       conversationId: conversation.id,
       messages: this.publicConversationMessages(conversation.messages),
       replyPending: this.requiresAsyncReply(conversation.messages),
-      request: conversation.requests[0] ?? null,
+      request: this.publicSupportRequest(conversation.requests[0]),
       qrPoint: publicServicePoint,
       servicePoint: publicServicePoint,
       chatAvailability: this.publicChatAvailability((qrPoint as any).venue),
@@ -1645,7 +1669,7 @@ export class ServicePointsService {
       conversationId: conversation.id,
       messages: this.publicConversationMessages(conversation.messages),
       replyPending: this.requiresAsyncReply(conversation.messages),
-      request: conversation.requests[0] ?? null,
+      request: this.publicSupportRequest(conversation.requests[0]),
       qrPoint: publicServicePoint,
       servicePoint: publicServicePoint,
       chatAvailability: this.publicChatAvailability(venue),

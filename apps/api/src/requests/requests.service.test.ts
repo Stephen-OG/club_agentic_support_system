@@ -395,6 +395,19 @@ describe("RequestsService lifecycle", () => {
           return request;
         }
       },
+      teamRole: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "teamRole.findFirst", args });
+          return {
+            id: "membership-1",
+            staffProfileId: "11111111-1111-4111-8111-111111111111",
+            organizationId: request.venue.organizationId,
+            venueId: request.venueId,
+            role: "STAFF",
+            isActive: true
+          };
+        }
+      },
       $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => {
         calls.push({ model: "$transaction", args: "callback" });
         return callback(tx);
@@ -468,6 +481,12 @@ describe("RequestsService lifecycle", () => {
           return request;
         }
       },
+      teamRole: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "teamRole.findFirst", args });
+          return { id: "membership-1" };
+        }
+      },
       $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => {
         calls.push({ model: "$transaction", args: "callback" });
         return callback(tx);
@@ -481,7 +500,7 @@ describe("RequestsService lifecycle", () => {
     });
 
     assert.deepEqual(result, updatedRequest);
-    const updateCall = calls[2] as { args: { data: { completedAt?: unknown } } };
+    const updateCall = calls[3] as { args: { data: { completedAt?: unknown } } };
     assert.ok(updateCall.args.data.completedAt instanceof Date);
     updateCall.args.data.completedAt = "Any<Date>";
     assert.deepEqual(calls, [
@@ -490,6 +509,31 @@ describe("RequestsService lifecycle", () => {
         args: {
           where: { id: request.id },
           include: { venue: true }
+        }
+      },
+      {
+        model: "teamRole.findFirst",
+        args: {
+          where: {
+            staffProfileId: "11111111-1111-4111-8111-111111111111",
+            organizationId: request.venue.organizationId,
+            isActive: true,
+            OR: [
+              {
+                venueId: request.venueId,
+                role: {
+                  in: ["OWNER", "ADMIN", "MANAGER", "STAFF", "SECURITY"]
+                }
+              },
+              {
+                venueId: null,
+                role: {
+                  in: ["OWNER", "ADMIN"]
+                }
+              }
+            ]
+          },
+          select: { id: true }
         }
       },
       {
@@ -548,6 +592,80 @@ describe("RequestsService lifecycle", () => {
               status: "completed"
             }
           }
+        }
+      }
+    ]);
+  });
+
+  it("rejects assigning a request to staff without an active venue role", async () => {
+    const request = {
+      id: "request-1",
+      venueId: "venue-1",
+      qrPointId: "qr-1",
+      conversationId: "conversation-1",
+      status: RequestStatus.IN_PROGRESS,
+      assignedToId: null,
+      venue: { id: "venue-1", organizationId: auth.organizationId }
+    };
+    const calls: Array<{ model: string; args: unknown }> = [];
+    const prisma = {
+      supportRequest: {
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "supportRequest.findUnique", args });
+          return request;
+        }
+      },
+      teamRole: {
+        findFirst: async (args: unknown) => {
+          calls.push({ model: "teamRole.findFirst", args });
+          return null;
+        }
+      },
+      $transaction: async () => {
+        throw new Error("status update must not start for an invalid assignee");
+      }
+    };
+    const service = new RequestsService(prisma as never, createVenueAccess() as never);
+
+    await assert.rejects(
+      service.updateStatus(auth, request.id, {
+        status: "completed",
+        assignedToId: "22222222-2222-4222-8222-222222222222"
+      }),
+      BadRequestException
+    );
+
+    assert.deepEqual(calls, [
+      {
+        model: "supportRequest.findUnique",
+        args: {
+          where: { id: request.id },
+          include: { venue: true }
+        }
+      },
+      {
+        model: "teamRole.findFirst",
+        args: {
+          where: {
+            staffProfileId: "22222222-2222-4222-8222-222222222222",
+            organizationId: request.venue.organizationId,
+            isActive: true,
+            OR: [
+              {
+                venueId: request.venueId,
+                role: {
+                  in: ["OWNER", "ADMIN", "MANAGER", "STAFF", "SECURITY"]
+                }
+              },
+              {
+                venueId: null,
+                role: {
+                  in: ["OWNER", "ADMIN"]
+                }
+              }
+            ]
+          },
+          select: { id: true }
         }
       }
     ]);

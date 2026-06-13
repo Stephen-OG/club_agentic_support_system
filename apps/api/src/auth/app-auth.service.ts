@@ -10,7 +10,8 @@ const accessTokenTtlSeconds = 60 * 15;
 const refreshTokenTtlMs = 1000 * 60 * 60 * 24 * 30;
 const emailVerificationTtlMs = 1000 * 60 * 60 * 24;
 const passwordResetTtlMs = 1000 * 60 * 60;
-const staffInvitationTtlMs = 1000 * 60 * 60 * 24 * 7;
+const staffInvitationTtlMs = 1000 * 60 * 60 * 24;
+const maxEmailCodeAttempts = 5;
 
 export type AppSessionUser = {
   id: string;
@@ -587,18 +588,27 @@ export class AppAuthService {
     return record;
   }
 
-  private async consumeEmailCodeForUser(authUserId: string, code: string) {
-    const record = await this.prisma.authEmailToken.findUnique({
-      where: { tokenHash: this.hashToken(code) }
+  private async consumeEmailCodeForUser(authUserId: string, code: string, type: AuthEmailTokenType = AuthEmailTokenType.EMAIL_VERIFICATION) {
+    const record = await this.prisma.authEmailToken.findFirst({
+      where: {
+        authUserId,
+        type,
+        usedAt: null,
+        expiresAt: { gt: new Date() }
+      },
+      orderBy: { createdAt: "desc" }
     });
 
-    if (
-      !record ||
-      record.authUserId !== authUserId ||
-      record.type !== AuthEmailTokenType.EMAIL_VERIFICATION ||
-      record.usedAt ||
-      record.expiresAt <= new Date()
-    ) {
+    if (!record) {
+      throw new UnauthorizedException("Invalid or expired code");
+    }
+
+    if (record.lockedAt || record.attemptCount >= maxEmailCodeAttempts) {
+      throw new UnauthorizedException("Invalid or expired code");
+    }
+
+    if (!this.hashesMatch(record.tokenHash, this.hashToken(code))) {
+      await this.recordInvalidEmailCodeAttempt(record);
       throw new UnauthorizedException("Invalid or expired code");
     }
 
@@ -623,26 +633,24 @@ export class AppAuthService {
       throw new UnauthorizedException("Invalid or expired code");
     }
 
-    const record = await this.prisma.authEmailToken.findUnique({
-      where: { tokenHash: this.hashToken(code) }
-    });
+    return this.consumeEmailCodeForUser(user.id, code, AuthEmailTokenType.PASSWORD_RESET);
+  }
 
-    if (
-      !record ||
-      record.authUserId !== user.id ||
-      record.type !== AuthEmailTokenType.PASSWORD_RESET ||
-      record.usedAt ||
-      record.expiresAt <= new Date()
-    ) {
-      throw new UnauthorizedException("Invalid or expired code");
-    }
+  private hashesMatch(a: string, b: string) {
+    const left = Buffer.from(a, "hex");
+    const right = Buffer.from(b, "hex");
+    return left.length === right.length && timingSafeEqual(left, right);
+  }
 
+  private async recordInvalidEmailCodeAttempt(record: { id: string; attemptCount: number }) {
+    const attemptCount = record.attemptCount + 1;
     await this.prisma.authEmailToken.update({
       where: { id: record.id },
-      data: { usedAt: new Date() }
+      data: {
+        attemptCount,
+        ...(attemptCount >= maxEmailCodeAttempts ? { lockedAt: new Date() } : {})
+      }
     });
-
-    return record;
   }
 
   private buildAppUrl(path: string) {

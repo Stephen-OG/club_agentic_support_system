@@ -108,7 +108,7 @@ export class StaffService {
       throw new ConflictException("A staff profile already exists for this email");
     }
 
-    const temporaryPassword = input.temporaryPassword || this.generateTemporaryPassword();
+    const temporaryPassword = this.generateTemporaryPassword();
     const authUser = await this.appAuth.createTemporaryPasswordUser({
       email,
       password: temporaryPassword,

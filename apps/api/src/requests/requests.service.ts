@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common";
-import { RequestStatus as PrismaRequestStatus, SenderType } from "@prisma/client";
+import { RequestStatus as PrismaRequestStatus, SenderType, StaffRole } from "@prisma/client";
 import {
   canTransitionRequest,
   createGuestStatusMessage,
@@ -58,6 +58,8 @@ const terminalRequestStatuses = [
   PrismaRequestStatus.RESOLVED,
   PrismaRequestStatus.CANCELLED
 ];
+const venueAssignableRoles = [StaffRole.OWNER, StaffRole.ADMIN, StaffRole.MANAGER, StaffRole.STAFF, StaffRole.SECURITY];
+const organizationAssignableRoles = [StaffRole.OWNER, StaffRole.ADMIN];
 
 type GuestActionInput = GuestRequestActionDto & {
   requestId: string;
@@ -243,6 +245,10 @@ export class RequestsService {
     const toStatus = input.status;
     const actor = this.actorFromAuth(auth);
 
+    if (input.assignedToId) {
+      await this.assertAssignableStaff(input.assignedToId, request.venue.organizationId, request.venueId);
+    }
+
     const result = await this.prisma.$transaction(async (tx) => {
       const fromStatus = sharedStatusByPrismaStatus[request.status];
 
@@ -319,6 +325,35 @@ export class RequestsService {
     }
 
     return result.request!
+  }
+
+  private async assertAssignableStaff(staffProfileId: string, organizationId: string, venueId: string) {
+    const membership = await this.prisma.teamRole.findFirst({
+      where: {
+        staffProfileId,
+        organizationId,
+        isActive: true,
+        OR: [
+          {
+            venueId,
+            role: {
+              in: venueAssignableRoles
+            }
+          },
+          {
+            venueId: null,
+            role: {
+              in: organizationAssignableRoles
+            }
+          }
+        ]
+      },
+      select: { id: true }
+    });
+
+    if (!membership) {
+      throw new BadRequestException("Assigned staff member cannot work this venue");
+    }
   }
 
   async applyGuestAction(input: GuestActionInput) {

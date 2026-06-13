@@ -177,17 +177,16 @@ describe("AppAuthService", () => {
         }
       },
       authEmailToken: {
-        findUnique: async ({ where }: any) =>
-          where.tokenHash === codeHash
-            ? {
-                id: "token-1",
-                authUserId: user.id,
-                type: "EMAIL_VERIFICATION",
-                tokenHash: codeHash,
-                usedAt: null,
-                expiresAt: new Date(Date.now() + 60_000)
-              }
-            : null,
+        findFirst: async () => ({
+          id: "token-1",
+          authUserId: user.id,
+          type: "EMAIL_VERIFICATION",
+          tokenHash: codeHash,
+          usedAt: null,
+          expiresAt: new Date(Date.now() + 60_000),
+          attemptCount: 0,
+          lockedAt: null
+        }),
         update: async ({ where, data }: any) => {
           tokenUpdates.push({ where, data });
           return { id: where.id, ...data };
@@ -558,17 +557,16 @@ describe("AppAuthService", () => {
         }
       },
       authEmailToken: {
-        findUnique: async ({ where }: any) =>
-          where.tokenHash === codeHash
-            ? {
-                id: "token-1",
-                authUserId: user.id,
-                type: "PASSWORD_RESET",
-                tokenHash: codeHash,
-                usedAt: null,
-                expiresAt: new Date(Date.now() + 60_000)
-              }
-            : null,
+        findFirst: async () => ({
+          id: "token-1",
+          authUserId: user.id,
+          type: "PASSWORD_RESET",
+          tokenHash: codeHash,
+          usedAt: null,
+          expiresAt: new Date(Date.now() + 60_000),
+          attemptCount: 0,
+          lockedAt: null
+        }),
         update: async () => {
           throw new Error("token should not be consumed for unverified users");
         }
@@ -624,17 +622,16 @@ describe("AppAuthService", () => {
         }
       },
       authEmailToken: {
-        findUnique: async ({ where }: any) =>
-          where.tokenHash === codeHash
-            ? {
-                id: "token-1",
-                authUserId: user.id,
-                type: "PASSWORD_RESET",
-                tokenHash: codeHash,
-                usedAt: null,
-                expiresAt: new Date(Date.now() + 60_000)
-              }
-            : null,
+        findFirst: async () => ({
+          id: "token-1",
+          authUserId: user.id,
+          type: "PASSWORD_RESET",
+          tokenHash: codeHash,
+          usedAt: null,
+          expiresAt: new Date(Date.now() + 60_000),
+          attemptCount: 0,
+          lockedAt: null
+        }),
         update: async ({ where, data }: any) => {
           tokenUpdates.push({ where, data });
           return { id: where.id, ...data };
@@ -669,6 +666,76 @@ describe("AppAuthService", () => {
     } finally {
       restore();
     }
+  });
+
+  it("locks password reset codes after repeated invalid attempts", async () => {
+    const serviceForHash = new AppAuthService({} as any);
+    const correctCodeHash = (serviceForHash as any).hashToken("654321");
+    const user = {
+      id: "auth-1",
+      email: "alex@example.com",
+      displayName: "Alex",
+      emailVerifiedAt: new Date(),
+      mustChangePassword: false,
+      tokenVersion: 1,
+      passwordHash: await (serviceForHash as any).hashPassword("Old-Password1")
+    };
+    const tokenUpdates: any[] = [];
+    const token = {
+      id: "token-1",
+      authUserId: user.id,
+      type: "PASSWORD_RESET",
+      tokenHash: correctCodeHash,
+      usedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      attemptCount: 4,
+      lockedAt: null
+    };
+    const service = new AppAuthService({
+      authUser: {
+        findUnique: async ({ where }: any) => (where.email === "alex@example.com" ? user : null),
+        update: async () => {
+          throw new Error("password must not be updated after invalid reset attempts");
+        }
+      },
+      authEmailToken: {
+        findFirst: async () => token,
+        update: async ({ where, data }: any) => {
+          tokenUpdates.push({ where, data });
+          Object.assign(token, data);
+          return { ...token };
+        }
+      },
+      authSession: {
+        create: async () => {
+          throw new Error("session must not be created after invalid reset attempts");
+        }
+      }
+    } as any);
+
+    await assert.rejects(
+      () =>
+        service.resetPassword({
+          email: "alex@example.com",
+          code: "000000",
+          password: "New-Secure-Password1"
+        }),
+      UnauthorizedException
+    );
+
+    assert.equal(tokenUpdates[0].where.id, "token-1");
+    assert.equal(tokenUpdates[0].data.attemptCount, 5);
+    assert.ok(tokenUpdates[0].data.lockedAt instanceof Date);
+
+    await assert.rejects(
+      () =>
+        service.resetPassword({
+          email: "alex@example.com",
+          code: "654321",
+          password: "New-Secure-Password1"
+        }),
+      UnauthorizedException
+    );
   });
 
   it("signs in with a short-lived JWT access token and hashed refresh token", async () => {

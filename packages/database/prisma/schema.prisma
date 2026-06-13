@@ -111,10 +111,13 @@ model AuthEmailToken {
   tokenHash  String             @unique
   expiresAt  DateTime
   usedAt     DateTime?
+  attemptCount Int              @default(0)
+  lockedAt     DateTime?
   createdAt  DateTime           @default(now())
 
   @@index([authUserId, type, expiresAt])
   @@index([usedAt])
+  @@index([lockedAt])
 }
 
 model AuthSession {

@@ -16,8 +16,4 @@ export class CreateStaffUserDto {
   @IsOptional()
   @Matches(postgresUuidPattern, { message: "venueId must be a Postgres UUID" })
   venueId?: string;
-
-  @IsOptional()
-  @IsString()
-  temporaryPassword?: string;
 }

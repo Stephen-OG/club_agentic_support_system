@@ -48,6 +48,7 @@ describe("StaffService", () => {
 
   it("sends a staff invitation email after creating app auth credentials", async () => {
     const invitations: unknown[] = [];
+    const createdAuthUsers: any[] = [];
     const service = new StaffService(
       {
         staffProfile: {
@@ -67,7 +68,10 @@ describe("StaffService", () => {
           })
       } as any,
       {
-        createTemporaryPasswordUser: async () => ({ id: "auth-1", email: "sam@example.com" }),
+        createTemporaryPasswordUser: async (input: any) => {
+          createdAuthUsers.push(input);
+          return { id: "auth-1", email: "sam@example.com" };
+        },
         sendStaffInvitationEmail: async (input: unknown) => {
           invitations.push(input);
         }
@@ -80,8 +84,10 @@ describe("StaffService", () => {
       role: "staff",
       temporaryPassword: "Madupe-temporary-1!",
       venueId: "venue-1"
-    });
+    } as any);
 
+    assert.notEqual(createdAuthUsers[0].password, "Madupe-temporary-1!");
+    assert.match(createdAuthUsers[0].password, /^Madupe-[a-f0-9]{14}!$/);
     assert.deepEqual(invitations, [
       {
         authUserId: "auth-1",
