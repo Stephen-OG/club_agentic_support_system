@@ -127,6 +127,7 @@ export type CommandSupportRequest = {
   conversationId: string;
   assignedToId: string | null;
   title: string;
+  sequenceNumber?: number | null;
   category: string;
   summary: string | null;
   priority: CommandRequestPriority;
@@ -167,6 +168,7 @@ export type PublicQrConversationState = {
   messages: CommandMessage[];
   replyPending?: boolean;
   request: CommandSupportRequest | null;
+  requests?: CommandSupportRequest[];
   qrPoint?: PublicServicePointSummary;
   servicePoint?: PublicServicePointSummary;
   venue?: PublicVenueSummary;

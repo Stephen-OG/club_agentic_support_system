@@ -671,6 +671,85 @@ describe("RequestsService lifecycle", () => {
     ]);
   });
 
+  it("waits to ask for a rating until every active request in the conversation is completed", async () => {
+    const request = {
+      id: "request-water",
+      venueId: "venue-1",
+      qrPointId: "qr-1",
+      conversationId: "conversation-1",
+      status: RequestStatus.IN_PROGRESS,
+      sequenceNumber: 2,
+      venue: { id: "venue-1", organizationId: auth.organizationId }
+    };
+    const updatedRequest = {
+      ...request,
+      status: RequestStatus.COMPLETED,
+      completedAt: new Date("2026-06-13T14:00:00.000Z")
+    };
+    const calls: Array<{ model: string; args: unknown }> = [];
+    const tx = {
+      supportRequest: {
+        updateMany: async (args: unknown) => {
+          calls.push({ model: "supportRequest.updateMany", args });
+          return { count: 1 };
+        },
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "supportRequest.findUnique", args });
+          return updatedRequest;
+        },
+        count: async (args: unknown) => {
+          calls.push({ model: "supportRequest.count", args });
+          return 1;
+        }
+      },
+      requestEvent: {
+        create: async (args: unknown) => {
+          calls.push({ model: "requestEvent.create", args });
+          return args;
+        }
+      },
+      message: {
+        create: async (args: unknown) => {
+          calls.push({ model: "message.create", args });
+          return args;
+        }
+      },
+      conversation: {
+        update: async (args: unknown) => {
+          calls.push({ model: "conversation.update", args });
+          return args;
+        }
+      }
+    };
+    const prisma = {
+      supportRequest: {
+        findUnique: async (args: unknown) => {
+          calls.push({ model: "root.supportRequest.findUnique", args });
+          return request;
+        }
+      },
+      $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)
+    };
+    const service = new RequestsService(prisma as never, createVenueAccess() as never);
+
+    await service.updateStatus(auth, request.id, { status: "completed" });
+
+    assert.equal(calls.some((call) => call.model === "message.create"), false);
+    assert.equal(calls.some((call) => call.model === "conversation.update"), false);
+    assert.deepEqual(
+      calls.find((call) => call.model === "supportRequest.count")?.args,
+      {
+        where: {
+          conversationId: request.conversationId,
+          id: { not: request.id },
+          status: {
+            notIn: [RequestStatus.COMPLETED, RequestStatus.RESOLVED, RequestStatus.CANCELLED]
+          }
+        }
+      }
+    );
+  });
+
   it("does not create a guest-visible acknowledged message", async () => {
     const request = {
       id: "request_status_message_1",

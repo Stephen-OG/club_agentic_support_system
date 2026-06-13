@@ -304,6 +304,7 @@ model SupportRequest {
   assignedToId          String?             @db.Uuid
   assignedTo            StaffProfile?       @relation("AssignedRequests", fields: [assignedToId], references: [id], onDelete: SetNull)
   title                 String
+  sequenceNumber        Int                 @default(1)
   category              String              @default("general")
   summary               String?
   priority              RequestPriority     @default(NORMAL)
@@ -330,6 +331,7 @@ model SupportRequest {
   @@index([assignedToId, status])
   @@index([conversationId, createdAt])
   @@index([qrPointId, createdAt])
+  @@unique([conversationId, sequenceNumber])
 }
 
 model RequestAssignment {

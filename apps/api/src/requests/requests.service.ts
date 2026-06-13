@@ -283,7 +283,7 @@ export class RequestsService {
         }
       });
 
-      await this.closeConversationIfTerminal(tx, request.conversationId, toStatus);
+      await this.closeConversationIfTerminal(tx, request.conversationId, request.id, toStatus);
 
       await tx.requestEvent.create({
         data: {
@@ -297,7 +297,9 @@ export class RequestsService {
         }
       });
 
-      const guestMessage = createGuestStatusMessage(toStatus);
+      const shouldCreateGuestMessage =
+        toStatus !== "completed" || (await this.countActiveSiblingRequests(tx, request.conversationId, request.id)) === 0;
+      const guestMessage = shouldCreateGuestMessage ? this.createRequestStatusMessage(toStatus, request) : undefined;
       let createdMessage: { id: string } | null = null;
       if (guestMessage) {
         createdMessage = await tx.message.create({
@@ -443,7 +445,7 @@ export class RequestsService {
         where: { id: input.requestId }
       });
 
-      await this.closeConversationIfTerminal(tx, request.conversationId, nextStatus);
+      await this.closeConversationIfTerminal(tx, request.conversationId, request.id, nextStatus);
 
       const message = await tx.message.create({
         data: encryptMessageCreateData({
@@ -520,11 +522,19 @@ export class RequestsService {
   }
 
   private async closeConversationIfTerminal(
-    tx: { conversation: { update: (args: { where: { id: string }; data: { status: string; closedAt: Date } }) => Promise<unknown> } },
+    tx: {
+      conversation: { update: (args: { where: { id: string }; data: { status: string; closedAt: Date } }) => Promise<unknown> };
+      supportRequest?: { count?: (...args: any[]) => Promise<number> };
+    },
     conversationId: string,
+    requestId: string,
     status: RequestStatus
   ) {
     if (!terminalConversationStatuses.has(status)) {
+      return;
+    }
+
+    if ((await this.countActiveSiblingRequests(tx, conversationId, requestId)) > 0) {
       return;
     }
 
@@ -535,6 +545,41 @@ export class RequestsService {
         closedAt: new Date()
       }
     });
+  }
+
+  private async countActiveSiblingRequests(
+    tx: { supportRequest?: { count?: (...args: any[]) => Promise<number> } },
+    conversationId: string,
+    requestId: string
+  ) {
+    if (!tx.supportRequest?.count) {
+      return 0;
+    }
+
+    return tx.supportRequest.count({
+      where: {
+        conversationId,
+        id: { not: requestId },
+        status: {
+          notIn: [PrismaRequestStatus.COMPLETED, PrismaRequestStatus.RESOLVED, PrismaRequestStatus.CANCELLED]
+        }
+      }
+    });
+  }
+
+  private createRequestStatusMessage(status: RequestStatus, request: { sequenceNumber?: number | null }) {
+    const message = createGuestStatusMessage(status);
+    if (!message) {
+      return undefined;
+    }
+
+    return this.prefixRequestNumber(message, request.sequenceNumber);
+  }
+
+  private prefixRequestNumber(message: string, sequenceNumber?: number | null) {
+    return Number.isInteger(sequenceNumber) && sequenceNumber && sequenceNumber > 0
+      ? `Request ${sequenceNumber}: ${message}`
+      : message;
   }
 
   private guestActionMessage(action: GuestActionInput["action"], rating?: number) {

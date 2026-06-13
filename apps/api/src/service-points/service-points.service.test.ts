@@ -56,7 +56,8 @@ function expectedPublicSupportRequest(request: any) {
     updatedAt: request.updatedAt ?? null,
     acknowledgedAt: request.acknowledgedAt ?? null,
     completedAt: request.completedAt ?? null,
-    resolvedAt: request.resolvedAt ?? null
+    resolvedAt: request.resolvedAt ?? null,
+    ...("sequenceNumber" in request ? { sequenceNumber: request.sequenceNumber } : {})
   };
 }
 
@@ -83,6 +84,7 @@ describe("ServicePointsService public QR workflow", () => {
       title: "High priority guest request",
       category: "facilities",
       summary: "There is a spill by our table",
+      sequenceNumber: 1,
       priority: RequestPriority.HIGH,
       deterministicPriority: RequestPriority.HIGH,
       status: RequestStatus.NEW
@@ -217,6 +219,7 @@ describe("ServicePointsService public QR workflow", () => {
     assert.equal(calls.some((call) => call.model === "supportRequest.create"), true);
     const createRequestCall = calls.find((call) => call.model === "supportRequest.create") as { args: { data: Record<string, unknown> } };
     assert.equal(createRequestCall.args.data.assignedToId, undefined);
+    assert.equal(createRequestCall.args.data.sequenceNumber, 1);
     assert.equal(createRequestCall.args.data.agentSuggestedAction, "Route to operations queue: venue facilities support.");
     const createEventCall = calls.find((call) => call.model === "requestEvent.create") as { args: { data: { metadata: unknown } } };
     assert.deepEqual((createEventCall.args.data.metadata as Record<string, unknown>).assignmentRouting, {
@@ -547,6 +550,7 @@ describe("ServicePointsService public QR workflow", () => {
       summary: "Could we get more water?",
       priority: RequestPriority.NORMAL,
       deterministicPriority: RequestPriority.NORMAL,
+      sequenceNumber: 1,
       status: RequestStatus.NEW
     };
     const storedMessages = [
@@ -705,11 +709,13 @@ describe("ServicePointsService public QR workflow", () => {
       summary: "Could we get more water?",
       priority: RequestPriority.NORMAL,
       deterministicPriority: RequestPriority.NORMAL,
+      sequenceNumber: 1,
       status: RequestStatus.NEW
     };
     const newSupportRequest = {
       ...supportRequest,
       id: "request_followup_2",
+      sequenceNumber: 2,
       summary: "Could we get more water?"
     };
     const conversation = {
@@ -816,7 +822,8 @@ describe("ServicePointsService public QR workflow", () => {
     assert.deepEqual(result.messages, storedMessages);
     assert.deepEqual(result.request, expectedPublicSupportRequest(newSupportRequest));
     assert.deepEqual(result.servicePoint, publicServicePoint);
-    const createCall = calls.find((call) => call.model === "supportRequest.create") as { args: { data: { summary: string } } };
+    const createCall = calls.find((call) => call.model === "supportRequest.create") as { args: { data: { sequenceNumber: number; summary: string } } };
+    assert.equal(createCall.args.data.sequenceNumber, 2);
     assert.equal(createCall.args.data.summary, "Could we get more water?");
     assert.deepEqual(
       calls
@@ -1156,6 +1163,7 @@ describe("ServicePointsService public QR workflow", () => {
       messages,
       replyPending: true,
       request: publicRequest,
+      requests: [publicRequest],
       qrPoint: publicServicePoint,
       servicePoint: publicServicePoint
     });
@@ -1216,9 +1224,8 @@ describe("ServicePointsService public QR workflow", () => {
                 qrPoint: true
               },
               orderBy: {
-                createdAt: "desc"
-              },
-              take: 1
+                sequenceNumber: "asc"
+              }
             }
           }
         }
@@ -1413,6 +1420,7 @@ describe("ServicePointsService public QR workflow", () => {
       messages,
       replyPending: false,
       request: publicRequest,
+      requests: [publicRequest],
       qrPoint: publicServicePoint,
       servicePoint: publicServicePoint,
       venue: { id: venue.id, name: venue.name, slug: venue.slug }
@@ -1484,9 +1492,8 @@ describe("ServicePointsService public QR workflow", () => {
                 qrPoint: true
               },
               orderBy: {
-                createdAt: "desc"
-              },
-              take: 1
+                sequenceNumber: "asc"
+              }
             }
           }
         }
@@ -1635,6 +1642,7 @@ describe("ServicePointsService public QR workflow", () => {
             qrPointId: servicePoint.id,
             conversationId: conversation.id,
             title: "Guest support request",
+            sequenceNumber: 1,
             category: "general",
             summary: "Could we get more water?",
             priority: RequestPriority.NORMAL,

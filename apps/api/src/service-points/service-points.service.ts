@@ -24,6 +24,7 @@ import { classifyOpenRequestGuestMessage } from "./guest-followup-intent";
 import type { UpdateServicePointDto } from "./dto/update-service-point.dto";
 import type { UpdateVenueOpeningHoursDto } from "./dto/update-venue-opening-hours.dto";
 import { getVenueChatAvailability, type VenueOpeningHourWindow } from "./venue-hours";
+import { itemizeGuestRequestMessage } from "./request-itemizer";
 
 const prismaPriorityBySharedPriority: Record<RequestPriority, PrismaRequestPriority> = {
   low: PrismaRequestPriority.LOW,
@@ -599,6 +600,12 @@ export class ServicePointsService {
     return locationLabel ? `Of course, I have let the team know for ${locationLabel}.` : "Of course, I have let the team know.";
   }
 
+  private numberedRequestReply(reply: string, sequenceNumber?: number | null) {
+    return Number.isInteger(sequenceNumber) && sequenceNumber && sequenceNumber > 0
+      ? `Request ${sequenceNumber}: ${reply}`
+      : reply;
+  }
+
   private locationPrompt(venueName: string) {
     return `Where are you in ${venueName}? Please send a table number, bar area, VIP booth, or nearby landmark so the team can find you.`;
   }
@@ -631,6 +638,7 @@ export class ServicePointsService {
       status: request.status,
       guestLocationLabel: request.guestLocationLabel ?? null,
       guestLocationSource: request.guestLocationSource ?? null,
+      ...(Number.isInteger(request.sequenceNumber) ? { sequenceNumber: request.sequenceNumber } : {}),
       createdAt: request.createdAt ?? null,
       updatedAt: request.updatedAt ?? null,
       acknowledgedAt: request.acknowledgedAt ?? null,
@@ -724,14 +732,16 @@ export class ServicePointsService {
     messages: Array<unknown>,
     servicePoint: any,
     venue: { id: string; name: string; slug: string } | null | undefined,
-    options?: { request?: unknown; replyPending?: boolean }
+    options?: { request?: unknown; requests?: unknown[]; replyPending?: boolean }
   ) {
     const publicServicePoint = this.publicServicePoint(servicePoint);
+    const publicRequests = options?.requests?.map((request) => this.publicSupportRequest(request)).filter(Boolean);
     return {
       conversationId,
       messages,
       replyPending: options?.replyPending ?? false,
       request: this.publicSupportRequest(options?.request),
+      ...(publicRequests?.length ? { requests: publicRequests } : {}),
       qrPoint: publicServicePoint,
       servicePoint: publicServicePoint,
       chatAvailability: this.publicChatAvailability((venue as any)),
@@ -773,6 +783,11 @@ export class ServicePointsService {
         clearTimeout(timeout);
       }
     }
+  }
+
+  private nextRequestSequenceNumber(latestRequest: { sequenceNumber?: number | null } | null | undefined) {
+    const latestSequence = latestRequest?.sequenceNumber;
+    return Number.isInteger(latestSequence) && latestSequence && latestSequence > 0 ? latestSequence + 1 : 1;
   }
 
   /**
@@ -895,6 +910,7 @@ export class ServicePointsService {
 
     const latestPreflightRequest = Array.isArray((existingConversation as any)?.requests) ? (existingConversation as any).requests[0] : null;
     const hasOpenPreflightRequest = latestPreflightRequest ? this.isActiveRequestStatus(latestPreflightRequest.status) : false;
+    const nextSequenceNumber = this.nextRequestSequenceNumber(latestPreflightRequest);
     const openRequestIntent = hasOpenPreflightRequest ? classifyOpenRequestGuestMessage(input.message) : null;
     const nonRequestReply = !hasOpenPreflightRequest
       ? this.nonRequestReply(input.message, venue?.name || qrPoint.label)
@@ -1037,12 +1053,14 @@ export class ServicePointsService {
     }
 
     // --- Async path: needs AI triage — save guest message + support request, enqueue job ---
-    const deterministicPriority = this.priorityClassifier.classifyOrDefault(input.message);
+    const requestItems = itemizeGuestRequestMessage(input.message);
+    const primaryMessage = requestItems[0] ?? input.message;
+    const deterministicPriority = this.priorityClassifier.classifyOrDefault(primaryMessage);
     const prismaPriority = prismaPriorityBySharedPriority[deterministicPriority];
-    const requestDraft = this.requestDraftForGuestMessage(input.message);
+    const requestDraft = this.requestDraftForGuestMessage(primaryMessage);
     const assignmentRoute = determineAssignmentRoute({
       category: requestDraft.category,
-      message: input.message,
+      message: primaryMessage,
       priority: deterministicPriority
     });
 
@@ -1059,56 +1077,92 @@ export class ServicePointsService {
 
       const status = RequestStatus.NEW;
 
-      const supportRequest = await tx.supportRequest.create({
-        data: {
-          venueId: qrPoint.venueId,
-          qrPointId: qrPoint.id,
-          conversationId: conversation.id,
-          title: requestDraft.title,
-          category: requestDraft.category,
-          summary: requestDraft.summary,
-          priority: prismaPriority,
-          deterministicPriority: prismaPriority,
-          status,
-          agentSuggestedAction: assignmentSuggestedAction(assignmentRoute),
-          agentPolicyVersion: "v1-backend-routing"
-        }
-      });
+      const supportRequests = [];
+      for (const [index, itemMessage] of requestItems.entries()) {
+        const itemPriority = this.priorityClassifier.classifyOrDefault(itemMessage);
+        const itemPrismaPriority = prismaPriorityBySharedPriority[itemPriority];
+        const itemDraft = this.requestDraftForGuestMessage(itemMessage);
+        const itemRoute = determineAssignmentRoute({
+          category: itemDraft.category,
+          message: itemMessage,
+          priority: itemPriority
+        });
+        const supportRequest = await tx.supportRequest.create({
+          data: {
+            venueId: qrPoint.venueId,
+            qrPointId: qrPoint.id,
+            conversationId: conversation.id,
+            title: itemDraft.title,
+            sequenceNumber: nextSequenceNumber + index,
+            category: itemDraft.category,
+            summary: itemDraft.summary,
+            priority: itemPrismaPriority,
+            deterministicPriority: itemPrismaPriority,
+            status,
+            agentSuggestedAction: assignmentSuggestedAction(itemRoute),
+            agentPolicyVersion: "v1-backend-routing"
+          }
+        });
+        supportRequests.push(supportRequest);
+      }
+      const supportRequest = supportRequests.at(-1)!;
 
       // Save the guest message
-      await tx.message.create({
-        data: encryptMessageCreateData({
-          venueId: qrPoint.venueId,
-          qrPointId: qrPoint.id,
-          conversationId: conversation.id,
-          requestId: supportRequest.id,
-          sender: SenderType.GUEST,
-          body: input.message,
-          metadata: { source: "public_qr", qrToken: token }
-        })
-      });
+      for (const [index, itemMessage] of requestItems.entries()) {
+        const itemRequest = supportRequests[index]!;
+        const itemPriority = this.priorityClassifier.classifyOrDefault(itemMessage);
+        await tx.message.create({
+          data: encryptMessageCreateData({
+            venueId: qrPoint.venueId,
+            qrPointId: qrPoint.id,
+            conversationId: conversation.id,
+            requestId: itemRequest.id,
+            sender: SenderType.GUEST,
+            body: itemMessage,
+            metadata: {
+              source: "public_qr",
+              qrToken: token,
+              ...(requestItems.length > 1 ? { requestSequenceNumber: itemRequest.sequenceNumber } : {})
+            }
+          })
+        });
 
-      await tx.message.create({
-        data: encryptMessageCreateData({
-          venueId: qrPoint.venueId,
-          qrPointId: qrPoint.id,
-          conversationId: conversation.id,
-          requestId: supportRequest.id,
-          sender: SenderType.ASSISTANT,
-          body: this.requestAcknowledgementReply(deterministicPriority, qrPoint.label),
-          metadata: { source: "public_qr", qrToken: token, intent: "request_acknowledgement" }
-        })
-      });
+        await tx.message.create({
+          data: encryptMessageCreateData({
+            venueId: qrPoint.venueId,
+            qrPointId: qrPoint.id,
+            conversationId: conversation.id,
+            requestId: itemRequest.id,
+            sender: SenderType.ASSISTANT,
+            body: requestItems.length > 1
+              ? this.numberedRequestReply(this.requestAcknowledgementReply(itemPriority, qrPoint.label), itemRequest.sequenceNumber)
+              : this.requestAcknowledgementReply(itemPriority, qrPoint.label),
+            metadata: {
+              source: "public_qr",
+              qrToken: token,
+              intent: "request_acknowledgement",
+              ...(requestItems.length > 1 ? { requestSequenceNumber: itemRequest.sequenceNumber } : {})
+            }
+          })
+        });
+      }
 
-      await tx.requestEvent.create({
-        data: {
-          venueId: qrPoint.venueId,
-          requestId: supportRequest.id,
-          type: "request.created",
-          toStatus: supportRequest.status,
-          metadata: { source: "public_qr", qrToken: token, assignmentRouting: assignmentRoute }
-        }
-      });
+      for (const [index, itemRequest] of supportRequests.entries()) {
+        await tx.requestEvent.create({
+          data: {
+            venueId: qrPoint.venueId,
+            requestId: itemRequest.id,
+            type: "request.created",
+            toStatus: itemRequest.status,
+            metadata: {
+              source: "public_qr",
+              qrToken: token,
+              assignmentRouting: assignmentRoute,
+              ...(requestItems.length > 1 ? { requestSequenceNumber: itemRequest.sequenceNumber, requestItem: requestItems[index] } : {})
+            }
+          }
+        });
+      }
 
       const messages = await tx.message.findMany({
         where: { conversationId: conversation.id },
@@ -1118,13 +1172,15 @@ export class ServicePointsService {
       const messageId = this.latestMessageId(messages, SenderType.GUEST, supportRequest.id);
       const realtimeEventType = "request.created" as DomainEventType;
 
-      await this.events?.writeOutbox(tx, {
-        type: realtimeEventType,
-        venueId: qrPoint.venueId,
-        requestId: supportRequest.id,
-        conversationId: conversation.id,
-        occurredAt: new Date().toISOString()
-      });
+      for (const itemRequest of supportRequests) {
+        await this.events?.writeOutbox(tx, {
+          type: realtimeEventType,
+          venueId: qrPoint.venueId,
+          requestId: itemRequest.id,
+          conversationId: conversation.id,
+          occurredAt: new Date().toISOString()
+        });
+      }
 
       if (messageId) {
         await this.events?.writeOutbox(tx, {
@@ -1139,18 +1195,22 @@ export class ServicePointsService {
 
       const response = this.buildCommonResponse(conversation.id, decryptMessageRecords(messages), qrPoint, venue, {
         replyPending: false,
-        request: supportRequest
+        request: supportRequest,
+        requests: supportRequests
       });
 
       return {
         messageId,
         request: supportRequest,
+        requests: supportRequests,
         realtimeEventType,
         response
       };
     });
 
-    this.publishRequestEvent(transactionResult.realtimeEventType, transactionResult.request as any);
+    for (const request of transactionResult.requests) {
+      this.publishRequestEvent(transactionResult.realtimeEventType, request as any);
+    }
     this.publishMessageEvent(transactionResult.request as any, transactionResult.messageId);
 
     const result = transactionResult.response;
@@ -1230,6 +1290,7 @@ export class ServicePointsService {
       ? (existingConversation as any).requests[0]
       : null;
     const hasOpenRequest = latestPreflightRequest ? this.isActiveRequestStatus(latestPreflightRequest.status) : false;
+    const nextSequenceNumber = this.nextRequestSequenceNumber(latestPreflightRequest);
     const nonRequestReply = !hasOpenRequest && !input.quickAction ? this.nonRequestReply(input.message, venue.name) : null;
     const locationLabel = input.locationLabel?.trim() || null;
 
@@ -1459,6 +1520,7 @@ export class ServicePointsService {
             guestLocationLabel: locationLabel,
             guestLocationSource: locationLabel ? "guest" : null,
             title: requestDraft.title,
+            sequenceNumber: nextSequenceNumber,
             category: requestDraft.category,
             summary: requestDraft.summary,
             priority: prismaPriority,
@@ -1619,9 +1681,8 @@ export class ServicePointsService {
             qrPoint: true
           },
           orderBy: {
-            createdAt: "desc"
-          },
-          take: 1
+            sequenceNumber: "asc"
+          }
         }
       }
     });
@@ -1643,7 +1704,8 @@ export class ServicePointsService {
       conversationId: conversation.id,
       messages: this.publicConversationMessages(conversation.messages),
       replyPending: this.requiresAsyncReply(conversation.messages),
-      request: this.publicSupportRequest(conversation.requests[0]),
+      request: this.publicSupportRequest(conversation.requests.at(-1)),
+      requests: conversation.requests.map((request) => this.publicSupportRequest(request)),
       qrPoint: publicServicePoint,
       servicePoint: publicServicePoint,
       chatAvailability: this.publicChatAvailability((qrPoint as any).venue),
@@ -1689,9 +1751,8 @@ export class ServicePointsService {
             qrPoint: true
           },
           orderBy: {
-            createdAt: "desc"
-          },
-          take: 1
+            sequenceNumber: "asc"
+          }
         }
       }
     });
@@ -1713,7 +1774,8 @@ export class ServicePointsService {
       conversationId: conversation.id,
       messages: this.publicConversationMessages(conversation.messages),
       replyPending: this.requiresAsyncReply(conversation.messages),
-      request: this.publicSupportRequest(conversation.requests[0]),
+      request: this.publicSupportRequest(conversation.requests.at(-1)),
+      requests: conversation.requests.map((request) => this.publicSupportRequest(request)),
       qrPoint: publicServicePoint,
       servicePoint: publicServicePoint,
       chatAvailability: this.publicChatAvailability(venue),

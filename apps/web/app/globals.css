@@ -3971,6 +3971,41 @@ body {
   overflow-wrap: anywhere;
 }
 
+.qr-chat-page .request-status-list {
+  background: rgba(7, 16, 19, 0.96);
+  border-bottom: 1px solid rgba(89, 221, 255, 0.14);
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.qr-chat-page .request-status-item {
+  align-items: center;
+  border: 1px solid rgba(238, 252, 249, 0.12);
+  border-radius: 8px;
+  color: #f5fff8;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 9px 10px;
+}
+
+.qr-chat-page .request-status-item strong,
+.qr-chat-page .request-status-item em {
+  white-space: nowrap;
+}
+
+.qr-chat-page .request-status-item span {
+  color: rgba(224, 242, 241, 0.82);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.qr-chat-page .request-status-item em {
+  color: rgba(123, 240, 198, 0.86);
+  font-style: normal;
+}
+
 .qr-chat-page .chat-messages {
   background:
     radial-gradient(circle at 13% 8%, rgba(89, 221, 255, 0.12), transparent 28%),

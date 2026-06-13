@@ -26,6 +26,7 @@ type LocalMessage = {
 const satisfactionRatings: SatisfactionRating[] = [1, 2, 3, 4, 5];
 const intakeRefreshMs = 5000;
 const endedRequestStatuses = new Set(["RESOLVED", "CANCELLED"]);
+const activeRequestStatuses = new Set(["NEW", "ACKNOWLEDGED", "ASSIGNED", "IN_PROGRESS", "ESCALATED"]);
 
 function createWelcomeMessage(label: string): LocalMessage {
   return {
@@ -82,6 +83,14 @@ function normalizeMessage(message: CommandMessage): LocalMessage {
   };
 }
 
+function orderedRequests(requests: CommandSupportRequest[]) {
+  return [...requests].sort((left, right) => (left.sequenceNumber ?? 0) - (right.sequenceNumber ?? 0));
+}
+
+function requestDisplayNumber(request: CommandSupportRequest, index: number) {
+  return request.sequenceNumber ?? index + 1;
+}
+
 function reconcileConversationMessages(input: {
   currentMessages: LocalMessage[];
   label: string;
@@ -102,6 +111,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   const [isSending, setIsSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [request, setRequest] = useState<CommandSupportRequest | null>(null);
+  const [requests, setRequests] = useState<CommandSupportRequest[]>([]);
   const [servicePointLabel, setServicePointLabel] = useState("your location");
   const [venueName, setVenueName] = useState<string | null>(null);
   const [messages, setMessages] = useState<LocalMessage[]>([]);
@@ -119,12 +129,26 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   const conversationStorageKey = `qr-chat:${qrToken}:conversationId`;
   const sessionStorageKey = `qr-chat:${qrToken}:sessionId`;
 
-  const statusText = useMemo(() => createGuestRequestStatusLabel(request?.status), [request]);
+  const displayRequests = useMemo(() => orderedRequests(requests.length ? requests : request ? [request] : []), [request, requests]);
+  const hasActiveRequest = displayRequests.some((item) => activeRequestStatuses.has(item.status));
+  const completedAwaitingRating = displayRequests.find((item) => item.status === "COMPLETED") ?? null;
+  const requestForAction = completedAwaitingRating ?? request;
+  const statusText = useMemo(() => {
+    if (displayRequests.length > 1) {
+      if (completedAwaitingRating && !hasActiveRequest) {
+        return "Awaiting rating";
+      }
+
+      return `${displayRequests.filter((item) => activeRequestStatuses.has(item.status)).length} active`;
+    }
+
+    return createGuestRequestStatusLabel(request?.status);
+  }, [completedAwaitingRating, displayRequests, hasActiveRequest, request]);
   const statusClassName = request
     ? `pill status-${request.status.toLowerCase()} priority-${request.priority.toLowerCase()}`
     : "pill";
-  const canCancel = request && !["COMPLETED", "RESOLVED", "CANCELLED"].includes(request.status);
-  const awaitingSatisfaction = request?.status === "COMPLETED";
+  const canCancel = requestForAction && !["COMPLETED", "RESOLVED", "CANCELLED"].includes(requestForAction.status);
+  const awaitingSatisfaction = Boolean(completedAwaitingRating && !hasActiveRequest);
   const chatClosed = chatAvailability?.isOpen === false;
   const showIntroActions = shouldShowGuestIntroActions({
     awaitingSatisfaction,
@@ -288,7 +312,8 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         return;
       }
 
-      if (result.request && endedRequestStatuses.has(result.request.status)) {
+      const nextRequests = result.requests ?? (result.request ? [result.request] : []);
+      if (nextRequests.length > 0 && nextRequests.every((item) => endedRequestStatuses.has(item.status))) {
         applyEndedState(label);
         return;
       }
@@ -302,6 +327,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         })
       );
       setRequest(result.request);
+      setRequests(nextRequests);
     }
 
     void loadConversation();
@@ -350,7 +376,8 @@ export function QrChat({ qrToken }: { qrToken: string }) {
         return;
       }
 
-      if (result.request && endedRequestStatuses.has(result.request.status)) {
+      const nextRequests = result.requests ?? (result.request ? [result.request] : []);
+      if (nextRequests.length > 0 && nextRequests.every((item) => endedRequestStatuses.has(item.status))) {
         applyEndedState(label);
         return;
       }
@@ -365,6 +392,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       );
       setConversationId(result.conversationId);
       setRequest(result.request);
+      setRequests(nextRequests);
     } catch {
       setMessages((current) => [
         ...current.filter((message) => !message.isPending),
@@ -381,7 +409,7 @@ export function QrChat({ qrToken }: { qrToken: string }) {
   }
 
   async function updateRequest(action: ClientRequestAction, rating?: SatisfactionRating) {
-    if (!request || isSending || !guestSessionId) {
+    if (!requestForAction || isSending || !guestSessionId) {
       return;
     }
 
@@ -391,13 +419,17 @@ export function QrChat({ qrToken }: { qrToken: string }) {
       const result = await publicApiRequest<{
         request: CommandSupportRequest;
         message?: CommandMessage;
-      }>(`/public/requests/${request.id}/action`, {
+      }>(`/public/requests/${requestForAction.id}/action`, {
         method: "PATCH",
         body: JSON.stringify({ action, rating, sessionId: guestSessionId })
       });
 
       setRequest(result.request);
-      if (endedRequestStatuses.has(result.request.status)) {
+      const nextRequests = requests.length
+        ? requests.map((item) => item.id === result.request.id ? result.request : item)
+        : [result.request];
+      setRequests(nextRequests);
+      if (nextRequests.every((item) => endedRequestStatuses.has(item.status))) {
         applyEndedState(servicePointLabel);
         return;
       }
@@ -444,6 +476,18 @@ export function QrChat({ qrToken }: { qrToken: string }) {
           </div>
           <span className={statusClassName}>{statusText}</span>
         </div>
+
+        {displayRequests.length > 1 ? (
+          <div className="request-status-list" aria-label="Request statuses">
+            {displayRequests.map((item, index) => (
+              <div className="request-status-item" key={item.id}>
+                <strong>Request {requestDisplayNumber(item, index)}</strong>
+                <span>{item.title}</span>
+                <em>{createGuestRequestStatusLabel(item.status)}</em>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         <div ref={messagesRef} className="chat-messages" aria-live="polite">
           {messages.map((message, index) => (
